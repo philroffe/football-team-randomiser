@@ -2,6 +2,20 @@
 
 <head>
   <%- include ("../partials/header.ejs") %>
+
+<style>
+  .linkbutton a:link {
+  background-color: #EEEEEE;
+  color: #333333;
+  padding: 2px 6px 2px 6px;
+  border-top: 1px solid #CCCCCC;
+  border-right: 1px solid #333333;
+  border-bottom: 1px solid #333333;
+  border-left: 1px solid #CCCCCC;
+  float: left;
+}
+</style>
+
 </head>
 
 <body>
@@ -10,7 +24,9 @@
     <div id="doodleLink">Not Yet Available</div><br>
     <div id="emailTitle">Not Yet Available</div> 
     <pre><div id="emailBody">Not Yet Available</div></pre>
-    <div id="emailLink">Not Yet Available</div> 
+    <button type="button" onclick="generateTeams()">Randomise Again!</button><p>
+
+    <div class="linkbutton" id="emailLink">Not Yet Available</div> 
 
     <script type="text/javascript">
     function generateTeams() {
@@ -20,9 +36,13 @@
       var options = <%- JSON.stringify(doodleTeams.options) %>;
       var players = <%- JSON.stringify(doodleTeams.participants) %>;
 
-      // Get the date next Monday, then find it in the options
+      // Get the date next Monday (and check if today is a Monday too)
       var d = new Date();
-      d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
+      //d = new Date('23 Aug 2021'); // useful for testing
+      if (d.getDay() != 1) {
+        d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
+      }
+
       // loop throught the options and find the index for next Monday
       var nextMondayOptionIndex = -1
       Object.keys(options).forEach(function(key) {
@@ -31,11 +51,11 @@
           nextMondayOptionIndex = key
         }
       });
-      if (nextMondayOptionIndex != -1) {
-        console.log('Found next Monday option:' + nextMondayOptionIndex);
-      } else {
-        console.log('No game this upcoming Monday:' + d);
-      }
+      // if (nextMondayOptionIndex != -1) {
+      //   console.log('Found next Monday option:' + nextMondayOptionIndex);
+      // } else {
+      //   console.log('No game this upcoming Monday:' + d);
+      // }
 
       // Get the players who have ticked this option
       var playersList = []
@@ -69,16 +89,19 @@
           standbyPlayers.push(playersList[i]);
         }
       }
-      console.log("Red :" + redPlayers);
-      console.log("Blue:" + bluePlayers);
-      console.log("StandBy:" + standbyPlayers);
+      // console.log("Red :" + redPlayers);
+      // console.log("Blue:" + bluePlayers);
+      // console.log("StandBy:" + standbyPlayers);
 
       //////////////////////
       // generate email text
       //////////////////////
       var emailHeader = ""
       var emailSubject = ""
-      if (playerCount <= 6) {
+      if (playerCount == 0) {
+        emailHeader = "Only " + playerCount + " players this week - any more or should I cancel?"
+        emailSubject = "NO PLAYERS FOUND - CHECK DATE AND DOODLE LINK IS CORRECT: "
+      } else if (playerCount <= 6) {
         emailHeader = "Only " + playerCount + " players this week - any more or should I cancel?"
         emailSubject = "LOTS of Players Needed"
       } else if (playerCount == 7) {
@@ -142,7 +165,7 @@
       "&to=" + emailTo + 
       "&su=" + fullEmailSubject +
       "&body=" + emailBodyUrlEnc +
-      "\" target=\"_blank\">Click here to send email from a google account... <br> (you can make any edits in the email before sending)</a>" 
+      "\" target=\"_blank\">Generate email (needs a google account)</a>" 
       document.getElementById("emailLink").innerHTML = emailLinkHTML
     }
 
