@@ -25,7 +25,7 @@ express()
     var diffSeconds = (new Date().getTime() - cacheLastRefresh.getTime()) / 1000;
     if (diffSeconds > maxCacheSecs) {
       icalCache = undefined
-      doodleApiUrlCache = undefined
+      doodlePlayersDataCache = undefined
       console.log('CLEARED CACHE as diffSeconds was:' + diffSeconds);
     }
 
