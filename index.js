@@ -29,17 +29,27 @@ express()
       console.log('CLEARED CACHE as diffSeconds was:' + diffSeconds);
     }
 
+    // Get the date next Monday
+    var nextMonday = new Date();
+    nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
+    console.log('Next Monday:' + nextMonday.toISOString());
+
     // get the ical, lookup doodle ID for next Monday, download the players
     if (icalCache == undefined || doodlePlayersDataCache == undefined) {
       // download the ical link
       icalCache = await downloadPage(doodleICalURL)
-      // get the relevant doodle poll URL for next Monday from the ical 
-      var doodleApiUrl = await getDoodlePollLinkFromICal(icalCache);
-      // download poll data from API e.g. https://doodle.com/api/v2.0/polls/v7w3a25wsavxiicq
-      doodlePlayersDataCache = await downloadPage(doodleApiUrl)
-      // Cache the data for one min 
-      cacheLastRefresh = new Date();
-      console.log('Got iCal and Players data: FROM_NEW_DATA');
+
+      // get the relevant doodle poll URL for next Monday from the ical
+      var doodleApiUrl = await getDoodlePollLinkFromICal(icalCache, nextMonday);
+      if (doodleApiUrl) {
+        // download poll data from API e.g. https://doodle.com/api/v2.0/polls/v7w3a25wsavxiicq
+        doodlePlayersDataCache = await downloadPage(doodleApiUrl)
+        // Cache the data for one min 
+        cacheLastRefresh = new Date();
+        console.log('Got iCal and Players data: FROM_NEW_DATA');
+      } else {
+        console.log('No doodle link found for Monday (Is it Bank Holiday?): ' + nextMonday.toISOString());
+      }
     } else {
       console.log('Got iCal and Players data: FROM_CACHE');
     }
@@ -47,8 +57,12 @@ express()
     // render the page from the player data
     try {
       console.log('RENDERING PAGE with data');
-      doodleTeams = JSON.parse(doodlePlayersDataCache);
-      res.render('pages/doodle-get-teams', doodleTeams);
+      if (doodlePlayersDataCache) {
+        doodleTeams = JSON.parse(doodlePlayersDataCache);
+        res.render('pages/doodle-get-teams', doodleTeams);
+      } else {
+        res.render('pages/no-game');
+      }
     } catch (err) {
       console.error(err);
       res.send("Error " + err);
@@ -71,16 +85,11 @@ function downloadPage(url) {
   });
 }
 
-function getDoodlePollLinkFromICal(icalData) {
-  // Get the date next Monday
-  var d = new Date();
-  d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
-  console.log('Next Monday:' + d.toISOString());
-
+function getDoodlePollLinkFromICal(icalData, nextMonday) {
   const events = ical.parseICS(icalData);
   // loop through events and log them
   for (const event of Object.values(events)) {
-    if (datesAreOnSameDay(event.start, d)) {
+    if (datesAreOnSameDay(event.start, nextMonday)) {
       // get the doodle poll ID stored at the end of the description
       doodlePollId = event.description.split("/").pop();
       doodleApiUrl = 'https://doodle.com/api/v2.0/polls/' + doodlePollId

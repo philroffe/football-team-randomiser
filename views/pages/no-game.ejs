@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link rel='stylesheet' id='bootstrap-style-css'  href='https://sheffield.digital/wp-content/themes/sd-litemag/assets/css/bootstrap.min.css?ver=4.9.8' type='text/css' media='all' />
+  <link rel='stylesheet' id='bluth-style-css'  href='https://sheffield.digital/wp-content/themes/sd-litemag/style.css?ver=4.9.8' type='text/css' media='all' />
+
+</head>
+
+<body>
+
+<div id="nextMonday">Not Yet Available</div>
+Maybe it's bank holiday?
+
+  <script type="text/javascript">
+    // Get the date next Monday (and check if today is a Monday too)
+    var nextMonday = new Date();
+    //nextMonday = new Date('11 Aug 2021'); // useful for testing
+    if (nextMonday.getDay() != 1) {
+      nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
+    }
+    var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
+    var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
+    nextMondayText = dayDateFormat.format(nextMonday) + " " + monthDateFormat.format(nextMonday);
+
+    document.getElementById("nextMonday").innerHTML = 'No doodle found for this Monday: ' + nextMondayText
+  </script>
+
+</body>
+</html>
