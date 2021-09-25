@@ -38,9 +38,11 @@ express()
     if (icalCache == undefined || doodlePlayersDataCache == undefined) {
       // download the ical link
       icalCache = await downloadPage(doodleICalURL)
+      //console.log('iCalCache: ' + icalCache);
 
       // get the relevant doodle poll URL for next Monday from the ical
       var doodleApiUrl = await getDoodlePollLinkFromICal(icalCache, nextMonday);
+      console.log('Found doodleApiUrl: ' + doodleApiUrl);
       if (doodleApiUrl) {
         // download poll data from API e.g. https://doodle.com/api/v2.0/polls/v7w3a25wsavxiicq
         doodlePlayersDataCache = await downloadPage(doodleApiUrl)
@@ -87,16 +89,26 @@ function downloadPage(url) {
 
 function getDoodlePollLinkFromICal(icalData, nextMonday) {
   const events = ical.parseICS(icalData);
+  var doodleApiUrl;
+  var lastDoodleApiUrl;
   // loop through events and log them
   for (const event of Object.values(events)) {
+    ///console.log('Event: ' + event.start);
     if (datesAreOnSameDay(event.start, nextMonday)) {
       // get the doodle poll ID stored at the end of the description
       doodlePollId = event.description.split("/").pop();
       doodleApiUrl = 'https://doodle.com/api/v2.0/polls/' + doodlePollId
-      console.log('Got doodle URL: ' + doodleApiUrl);
       return doodleApiUrl
+    } else {
+      // sometimes the doodle ical isn't accurate
+      // so store the last url found in case we need to drop back to it
+      lastDoodlePollId = event.description.split("/").pop();
+      lastDoodleApiUrl = 'https://doodle.com/api/v2.0/polls/' + lastDoodlePollId
     }
   };
+  // ideally we'll never get here.  But if we do, then return the last url found
+  console.log('Got doodle URL: ' + doodleApiUrl);
+  return lastDoodleApiUrl;
 }
 
 function datesAreOnSameDay(first, second) {
