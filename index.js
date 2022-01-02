@@ -11,6 +11,7 @@ var icalCache;
 var doodlePlayersDataCache;
 var cacheLastRefresh = new Date();
 var maxCacheSecs = 60;
+var nextMonday = new Date();
 
 // URL of the ical from doodle (which can be used to get the link for a given date)
 var doodleICalURL = "https://doodle.com/ics/mydoodle/crpabaivl67ttpj2ajnviovmp061axsr.ics"
@@ -29,20 +30,32 @@ express()
       console.log('CLEARED CACHE as diffSeconds was:' + diffSeconds);
     }
 
-    // Get the date next Monday
-    var nextMonday = new Date();
-    nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
-    console.log('Next Monday:' + nextMonday.toISOString());
-
     // get the ical, lookup doodle ID for next Monday, download the players
     if (icalCache == undefined || doodlePlayersDataCache == undefined) {
       // download the ical link
       icalCache = await downloadPage(doodleICalURL)
       //console.log('iCalCache: ' + icalCache);
 
+      // Get the date next Monday
+      nextMonday = new Date();
+      if ((nextMonday.getDay() == 1) && (nextMonday.getHours() >= 19)) {
+        // date is a Monday after kick-off time (6-7pm), so jump forward a day to force the next week
+        nextMonday.setDate(nextMonday.getDate() + 1);
+        console.log('Currently a Monday after kick-off so adding a day to:' + nextMonday.toISOString());
+      }
+      nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
+      console.log('Next Monday:' + nextMonday.toISOString());
+
       // get the relevant doodle poll URL for next Monday from the ical
       var doodleApiUrl = await getDoodlePollLinkFromICal(icalCache, nextMonday);
+      if (doodleApiUrl == undefined) {
+        // game not found, so try the week after (caters for Bank holidays etc)
+        nextMonday.setDate(nextMonday.getDate() + 7);
+        console.log('Next Monday not found.  Trying the one after: ' + nextMonday.toISOString());
+        doodleApiUrl = await getDoodlePollLinkFromICal(icalCache, nextMonday);
+      }
       console.log('Found doodleApiUrl: ' + doodleApiUrl);
+      
       if (doodleApiUrl) {
         // download poll data from API e.g. https://doodle.com/api/v2.0/polls/v7w3a25wsavxiicq
         doodlePlayersDataCache = await downloadPage(doodleApiUrl)
@@ -61,6 +74,7 @@ express()
       console.log('RENDERING PAGE with data');
       if (doodlePlayersDataCache) {
         doodleTeams = JSON.parse(doodlePlayersDataCache);
+        doodleTeams.nextMonday = nextMonday.toISOString();
         res.render('pages/doodle-get-teams', doodleTeams);
       } else {
         res.render('pages/no-game');
@@ -104,6 +118,7 @@ function getDoodlePollLinkFromICal(icalData, nextMonday) {
       // so store the last url found in case we need to drop back to it
       lastDoodlePollId = event.description.split("/").pop();
       lastDoodleApiUrl = 'https://doodle.com/api/v2.0/polls/' + lastDoodlePollId
+      lastDoodleApiUrl = undefined
     }
   };
   // ideally we'll never get here.  But if we do, then return the last url found

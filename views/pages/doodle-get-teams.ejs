@@ -27,6 +27,8 @@ pre {
 
     <script type="text/javascript">
     var doodleId = "<%= doodleTeams.id %>";
+    var nextMondayText = "<%= doodleTeams.nextMonday %>";
+    var nextMondayDate = new Date(nextMondayText);
     var doodleLink = "https://doodle.com/poll/" + doodleId
     var optionDates = ""
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
@@ -36,13 +38,6 @@ pre {
       var options = <%- JSON.stringify(doodleTeams.options) %>;
       var players = <%- JSON.stringify(doodleTeams.participants) %>;
 
-      // Get the date next Monday (and check if today is a Monday too)
-      var d = new Date();
-      //d = new Date('11 Aug 2021'); // useful for testing
-      if (d.getDay() != 1) {
-        d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
-      }
-
       // loop throught the options and find the index for next Monday
       var nextMondayOptionIndex = -1
       optionDates = "Dates"
@@ -51,7 +46,7 @@ pre {
         // Generate a 
         optionDateText = dayDateFormat.format(optionDate) + " " + monthDateFormat.format(optionDate);
 
-        if (datesAreOnSameDay(optionDate, d)) {
+        if (datesAreOnSameDay(optionDate, nextMondayDate)) {
           optionDates += " : <b><u>" + optionDateText + " </u></b>"
           // store the index for this Monday - used to get the players
           nextMondayOptionIndex = key
@@ -62,7 +57,7 @@ pre {
       // if (nextMondayOptionIndex != -1) {
       //   console.log('Found next Monday option:' + nextMondayOptionIndex);
       // } else {
-      //   console.log('No game this upcoming Monday:' + d);
+      //   console.log('No game this upcoming Monday:' + nextMondayDate);
       // }
 
       // Get the players who have ticked this option
@@ -145,7 +140,7 @@ pre {
         emailSubject = "Teams"
       }
 
-      fullEmailSubject = emailSubject + " - Mon " + dayDateFormat.format(d) + " " + monthDateFormat.format(d) + " [Footie, Goodwin, 6pm Mondays]\n"
+      fullEmailSubject = emailSubject + " - Mon " + dayDateFormat.format(nextMondayDate) + " " + monthDateFormat.format(nextMondayDate) + " [Footie, Goodwin, 6pm Mondays]\n"
       fullEmailText = "Hi all,\n\n" + emailHeader + "\n\nTeams below... (any changes let me know asap)\n\n"
 
       fullEmailText += "REDS\n"
