@@ -116,8 +116,10 @@ function getDoodlePollLinkFromICal(icalData, nextMonday) {
     } else {
       // sometimes the doodle ical isn't accurate
       // so store the last url found in case we need to drop back to it
-      lastDoodlePollId = event.description.split("/").pop();
-      lastDoodleApiUrl = 'https://doodle.com/api/v2.0/polls/' + lastDoodlePollId
+      //lastDoodlePollId = event.description.split("/").pop();
+      //lastDoodleApiUrl = 'https://doodle.com/api/v2.0/polls/' + lastDoodlePollId
+
+      //using the last url wasn's accurate, so forcing undefined (which allows a new lookup with a different date if needed)
       lastDoodleApiUrl = undefined
     }
   };
