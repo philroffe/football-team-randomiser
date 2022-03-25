@@ -5,36 +5,47 @@ const https = require('https')
 const ical = require('node-ical');
 const request = require('request');
 
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
 // store a cache of the data for X seconds
 // useful to allow a quick refresh of the screen to randomise players
-var icalCache;
-var doodlePlayersDataCache;
-var cacheLastRefresh = new Date();
-var maxCacheSecs = 60;
 var nextMonday = new Date();
-
-// URL of the ical from doodle (which can be used to get the link for a given date)
-var doodleICalURL = "https://doodle.com/ics/mydoodle/crpabaivl67ttpj2ajnviovmp061axsr.ics"
+var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
 
 express()
 .use(express.static(path.join(__dirname, 'public')))
+.use(express.urlencoded({ extended: true }))
+.use(express.json())
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
-.get('/doodle', async (req, res) => {
-    // Check if cache needs clearing
-    var diffSeconds = (new Date().getTime() - cacheLastRefresh.getTime()) / 1000;
-    if (diffSeconds > maxCacheSecs) {
-      icalCache = undefined
-      doodlePlayersDataCache = undefined
-      console.log('CLEARED CACHE as diffSeconds was:' + diffSeconds);
-    }
+.get('/teams', async (req, res) => {
+      try {
+        console.log('RENDERING POLL PAGE with data');
+        const client = await pool.connect();
+        const dbresult = await client.query('SELECT * FROM games');
+        //console.log('dbresult=' + JSON.stringify(dbresult));
 
-    // get the ical, lookup doodle ID for next Monday, download the players
-    if (icalCache == undefined || doodlePlayersDataCache == undefined) {
-      // download the ical link
-      icalCache = await downloadPage(doodleICalURL)
-      //console.log('iCalCache: ' + icalCache);
+        // TODO; this is a workaround and should be replaced with "WHERE" in sql above
+        var rowdata = null;
+        for (var i = 0; i < dbresult.rows.length; i++) { 
+          if (dbresult.rows[i].gamedetails.pollMonth == monthDateNumericFormat.format(nextMonday)) {
+            rowdata = dbresult.rows[i];
+          }
+        }
+        console.log('rowdata=' + JSON.stringify(rowdata));
+
+        if (!rowdata) {
+          rowdata = { "status": "NEW", "pollYear": "2022", "pollMonth": "March", "players": {} };
+        }
+
+
 
       // Get the date next Monday
       nextMonday = new Date();
@@ -46,88 +57,77 @@ express()
       nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
       console.log('Next Monday:' + nextMonday.toISOString());
 
-      // get the relevant doodle poll URL for next Monday from the ical
-      var doodleApiUrl = await getDoodlePollLinkFromICal(icalCache, nextMonday);
-      if (doodleApiUrl == undefined) {
-        // game not found, so try the week after (caters for Bank holidays etc)
-        nextMonday.setDate(nextMonday.getDate() + 7);
-        console.log('Next Monday not found.  Trying the one after: ' + nextMonday.toISOString());
-        doodleApiUrl = await getDoodlePollLinkFromICal(icalCache, nextMonday);
-      }
-      console.log('Found doodleApiUrl: ' + doodleApiUrl);
-      
-      if (doodleApiUrl) {
-        // download poll data from API e.g. https://doodle.com/api/v2.0/polls/v7w3a25wsavxiicq
-        doodlePlayersDataCache = await downloadPage(doodleApiUrl)
-        // Cache the data for one min 
-        cacheLastRefresh = new Date();
-        console.log('Got iCal and Players data: FROM_NEW_DATA');
-      } else {
-        console.log('No doodle link found for Monday (Is it Bank Holiday?): ' + nextMonday.toISOString());
-      }
-    } else {
-      console.log('Got iCal and Players data: FROM_CACHE');
-    }
 
-    // render the page from the player data
-    try {
-      console.log('RENDERING PAGE with data');
-      if (doodlePlayersDataCache) {
-        doodleTeams = JSON.parse(doodlePlayersDataCache);
-        doodleTeams.nextMonday = nextMonday.toISOString();
-        res.render('pages/doodle-get-teams', doodleTeams);
-      } else {
-        res.render('pages/no-game');
+        // combine database data with supplimentary game data
+        const gameInfo = '{MayNotBeNeeded:0}';
+        //var pageData = JSON.stringify({ gameInfo: gameInfo, data: rowdata });
+        var pageData = { gameInfo: gameInfo, data: rowdata, nextMonday: nextMonday.toISOString() };
+        res.render('pages/poll-generate-teams', { pageData: pageData} );
+        //res.render('pages/poll', { gameInfo: JSON.stringify(gameInfo), data: pageData } );
+        client.release();
+      } catch (err) {
+        console.error(err);
+        res.send("Error " + err);
       }
+    })
+.get('/poll', async (req, res) => {
+      try {
+        console.log('RENDERING POLL PAGE with data');
+        const client = await pool.connect();
+        const dbresult = await client.query('SELECT * FROM games');
+        //console.log('dbresult=' + JSON.stringify(dbresult));
+
+        // TODO; this is a workaround and should be replaced with "WHERE" in sql above
+        var rowdata = null;
+        for (var i = 0; i < dbresult.rows.length; i++) { 
+          if (dbresult.rows[i].gamedetails.pollMonth == monthDateNumericFormat.format(nextMonday)) {
+            rowdata = dbresult.rows[i];
+          }
+        }
+        console.log('rowdata=' + JSON.stringify(rowdata));
+
+        if (!rowdata) {
+          rowdata = { "status": "NEW", "pollYear": "2022", "pollMonth": "March", "players": {} };
+        }
+
+        // combine database data with supplimentary game data
+        const gameInfo = '{MayNotBeNeeded:0}';
+        //var pageData = JSON.stringify({ gameInfo: gameInfo, data: rowdata });
+        var pageData = { gameInfo: gameInfo, data: rowdata };
+        res.render('pages/poll', { pageData: pageData} );
+        //res.render('pages/poll', { gameInfo: JSON.stringify(gameInfo), data: pageData } );
+        client.release();
+      } catch (err) {
+        console.error(err);
+        res.send("Error " + err);
+      }
+    })
+  .post('/save-result', async (req, res) => {
+    console.log('Got POST query:', req.body);
+    var gameMonth = req.body.gameMonth;
+    var gameYear = req.body.gameYear;
+    var players = req.body.players;
+    
+    gameId = gameYear + gameMonth;
+    var gamedetails = { "pollYear": gameYear, "pollMonth": gameMonth, "players": players };
+    gamedetailsJson = JSON.stringify(gamedetails);
+    console.log('Inserting DB data:', gamedetailsJson);
+
+    try {
+      const client = await pool.connect();
+      //const client = pool.connect();
+      const result = await client.query(`INSERT INTO games( gameid, gamedetails)
+        VALUES ('${gameId}', '${gamedetailsJson}')
+        ON CONFLICT (gameid) DO UPDATE 
+          SET gamedetails = '${gamedetailsJson}';`)
+      const results = { 'results': (result) ? result.rows : null};
+      console.log('Got DB results:', results);
+      //res.sendStatus(200);
+      res.json({'result': 'OK'})
+      client.release();      
     } catch (err) {
       console.error(err);
       res.send("Error " + err);
     }
-
   })
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
-
-
-// wrap a request in an promise
-function downloadPage(url) {
-  return new Promise((resolve, reject) => {
-    request(url, (error, response, body) => {
-      if (error) reject(error);
-      if (response.statusCode != 200) {
-        reject('Invalid status code <' + response.statusCode + '>');
-      }
-      resolve(body);
-    });
-  });
-}
-
-function getDoodlePollLinkFromICal(icalData, nextMonday) {
-  const events = ical.parseICS(icalData);
-  var doodleApiUrl;
-  var lastDoodleApiUrl;
-  // loop through events and log them
-  for (const event of Object.values(events)) {
-    ///console.log('Event: ' + event.start);
-    if (datesAreOnSameDay(event.start, nextMonday)) {
-      // get the doodle poll ID stored at the end of the description
-      doodlePollId = event.description.split("/").pop();
-      doodleApiUrl = 'https://doodle.com/api/v2.0/polls/' + doodlePollId
-      return doodleApiUrl
-    } else {
-      // sometimes the doodle ical isn't accurate
-      // so store the last url found in case we need to drop back to it
-      lastDoodlePollId = event.description.split("/").pop();
-      lastDoodleApiUrl = 'https://doodle.com/api/v2.0/polls/' + lastDoodlePollId
-      lastDoodleApiUrl = undefined
-    }
-  };
-  // ideally we'll never get here.  But if we do, then return the last url found
-  console.log('Got doodle URL: ' + doodleApiUrl);
-  return lastDoodleApiUrl;
-}
-
-function datesAreOnSameDay(first, second) {
-  return first.getFullYear() === second.getFullYear() &&
-    first.getMonth() === second.getMonth() &&
-    first.getDate() === second.getDate();
-}

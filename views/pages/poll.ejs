@@ -1,0 +1,340 @@
+<html>
+
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+
+<link rel='stylesheet' id='bootstrap-style-css'  href='https://sheffield.digital/wp-content/themes/sd-litemag/assets/css/bootstrap.min.css?ver=4.9.8' type='text/css' media='all' />
+<link rel='stylesheet' id='bluth-style-css'  href='https://sheffield.digital/wp-content/themes/sd-litemag/style.css?ver=4.9.8' type='text/css' media='all' />
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Oswald">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open Sans">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<style>
+h1,h2,h3,h4,h5,h6 {font-family: "Oswald"}
+body {font-family: "Open Sans"}
+</style>
+
+<style>
+@viewport {
+  width: device-width ;
+  zoom: 1.0 ;
+}
+pre {
+   font-size: 90%;
+}
+.linkborder a:link, .emailHeader {
+  background-color: #D5EDF6;
+  color: #333333;
+  padding: 2px 6px 2px 6px;
+  border-top: 1px solid #D5EDF6;
+  border-right: 1px solid #333333;
+  border-bottom: 1px solid #333333;
+  border-left: 1px solid #D5EDF6;
+}
+.gameheader  {
+  float: left;
+  padding: 2px 6px 2px 0px;
+  margin: 0px;
+}
+
+.gameheader input,button{
+  height: 30px;
+  margin: 0px;
+}
+text {
+  font-size: 10px;
+  width:20em;
+}
+/* Create a custom checkbox */
+.checkmark {
+  top: 0;
+  left: 0;
+  height: 5px;
+  width: 25px;
+  background-color: #eee;
+}
+</style>
+</head>
+<body class="w3-light-grey">
+
+<!-- Navigation bar with social media icons -->
+<div class="w3-bar w3-black w3-hide-small">
+  <a href="/poll" class="w3-bar-item w3-button">Poll</a>
+  <a href="/teams" class="w3-bar-item w3-button">Select Teams</a>
+  <a href="https://goo.gl/maps/LCGbaK5RQD47CxXG8" class="w3-bar-item w3-button w3-right"><i>Map</i>  </a>
+</div>
+
+<div id="year"><h2>Choose Your Poll</h2></div>
+<div id="title">Not Yet Available</div>
+<div id="description">Footie, 6pm every Monday, Far Corner Pitch</div>
+<div id="location">Sport Sheffield, Goodwin, Northumberland Road, Sheffield, S10 2TY | <a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Map</a></div>
+
+
+<p><p><h3>Choose Availability:</h3>
+<div id="divHeader">
+<div id="nameHeader" class="gameheader">Name</div>
+<div id="saveHeader" class="gameheader">Save</div>
+</div>
+<div style="clear:both;"></div>
+
+<form id="playerForm">
+ <div id="dynamicInput"></div>
+    <br><button type="button" onclick="addAnotherName();">(+) Add Player</button>
+        <button type="button" onclick="removeLastName();">(-) Remove Player</button>
+</form>
+
+  <script type="text/javascript">
+    var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
+    var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
+    var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
+
+    var playerCount = 0;
+    var todayDate = new Date();
+    var playerElements = {};
+
+    // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
+    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
+    console.log('Data=' + JSON.stringify(pagedata));
+
+    var players = pagedata.data.gamedetails.players;
+    if (!players) { players = {}; }
+    var gameMonth = pagedata.data.gameMonth;
+    if (!gameMonth) gameMonth = monthDateNumericFormat.format(todayDate);
+    var gameYear = pagedata.data.gameYear;
+    if (!gameYear) gameYear = todayDate.getFullYear();
+
+    //var pollDate = new Date(gameYear + gameMonth + "01 ");
+    var pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
+    //var pollDate = new Date(gameYear + gameMonth + "01 "););
+    console.log(pollDate);
+    var gameMonthString = monthDateFormat.format(todayDate);
+
+
+    function mondaysInMonth(m,y) {
+      var days = new Date(y,m,0).getDate();
+      var mondays =  new Date(m +'/01/'+ y).getDay();
+      if (mondays != 1){
+        mondays = 9 - mondays;
+      }
+      mondays = [mondays];
+      //console.log(mondays);
+      for (var i = mondays[0] + 7; i <= days; i += 7) {
+        mondays.push(i);
+      }
+      return mondays;
+    }
+
+    mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
+
+
+    function getDayOfMonthSuffix(n) {
+        //checkArgument(n >= 1 && n <= 31, "illegal day of month: " + n);
+        if (n >= 11 && n <= 13) {
+            return "th";
+        }
+        switch (n % 10) {
+            case 1:  return "st";
+            case 2:  return "nd";
+            case 3:  return "rd";
+            default: return "th";
+        }
+    }
+
+    document.getElementById("title").innerHTML = monthDateFormat.format(pollDate) + ' ' + gameYear + ' Fixtures [Footie, Goodwin, 6pm Mondays]'
+
+    // auto generate divs for headers for each game week
+    for (var i = 0; i < mondaysDates.length; i ++) {
+      var newWeekHeader = document.createElement("div");
+      newWeekHeader.setAttribute("id", "week" + i + "Header"); 
+      newWeekHeader.setAttribute("class", "gameheader"); 
+      // give it some content and add the text node to the newly created div
+      //const newContent = document.createTextNode(mondaysDates[i] + " " + monthDateFormat.format(pollDate));
+      const newContent = document.createTextNode(mondaysDates[i] + getDayOfMonthSuffix(mondaysDates[i]));
+      newWeekHeader.appendChild(newContent);
+      divHeader.appendChild(newWeekHeader);  
+    }
+
+    console.log(pagedata.data.gamedetails.players);
+    //var players = gamedetails.players; //JSON.stringify()?
+    // now loop through all saved players and pre-populate their availability
+    Object.keys(players).forEach(function(key) {
+      //console.log('player=' + key + "___" + players[key].name);
+      //playerName = players[key].name;
+      //console.log(players[key]);
+      playerName = key
+      playerAvailability = players[key]
+      //playerAvailability = players[key].availability[0]
+      addAnotherName(playerName, playerAvailability)
+    });
+
+/*
+    // now loop through all saved players and pre-populate their availability
+    Object.keys(players).forEach(function(key) {
+      playerName = players[key].name;
+      playerAvailability = players[key].availability[0]
+      addAnotherName(playerName, playerAvailability)
+    });
+*/
+
+//////////////////
+    // add an addition text box and hook up listeners
+    function addAnotherName(playerName, availabilityMap) {
+      playerCount++;
+      if (playerCount > 30) {
+        // set a max list of names (just to protect a little)
+        return;
+      }
+      var form = document.getElementById("dynamicInput")
+      var nameHeader = document.getElementById("nameHeader")
+      
+      // create a player text box
+      var newPlayerName = document.createElement("input"); 
+      newPlayerName.setAttribute("type", "text"); 
+      newPlayerName.setAttribute("id", "player" + playerCount); 
+      newPlayerName.setAttribute("name", "myPlayers[]"); 
+      newPlayerName.style.width = 120;
+      if (playerName) {
+        newPlayerName.setAttribute("value", playerName); 
+      }
+      nameHeader.appendChild(document.createElement("br"));
+      nameHeader.appendChild(newPlayerName);
+      
+      for (var i = 0; i < mondaysDates.length; i ++) {
+        var weekHeader = document.getElementById("week" + i + "Header")
+        var newPlayerWeek = document.createElement("input"); 
+        newPlayerWeek.setAttribute("type", "checkbox"); 
+        newPlayerWeek.setAttribute("class", "checkmark"); 
+        newPlayerWeek.setAttribute("id", playerCount + "playerWeek" + i); 
+        newPlayerWeek.setAttribute("name", playerCount + "myPlayerWeek[]"); 
+        if (availabilityMap && availabilityMap[i]){
+          newPlayerWeek.setAttribute("checked", true); 
+          //console.log(playerName + " " + mondaysDates[i] + "=" + availabilityMap[mondaysDates[i]])
+        }
+        weekHeader.appendChild(document.createElement("br"));
+        weekHeader.appendChild(newPlayerWeek);  
+      }
+
+      // create the corresponding coords hidden text box
+      var newPlayerSaveButton = document.createElement("button");
+      newPlayerSaveButton.type = "button";
+      newPlayerSaveButton.innerHTML = "Save ...";
+      newPlayerSaveButton.style.backgroundColor = "lightgreen";
+      newPlayerSaveButton.setAttribute("id", playerCount + "player" + playerCount + "save");
+      //const currentPlayerCount = playerCount;
+      //newPlayerSaveButton.onclick = function() {savePlayer(currentPlayerCount)};
+      var saveHeader = document.getElementById("saveHeader")
+      saveHeader.appendChild(document.createElement("br"));
+      saveHeader.appendChild(newPlayerSaveButton);
+      if (playerName) {
+        newPlayerSaveButton.innerHTML = "<span>&#10003;</span>"; //Tick
+        newPlayerSaveButton.style.backgroundColor = "lightgrey";
+        newPlayerSaveButton.setAttribute("disabled", true); 
+      }
+      newPlayerSaveButton.onclick = function() {savePlayer(playerName, newPlayerSaveButton)};
+
+      form.appendChild(document.createElement("br"));  
+      //addEventListeners(newPlayerName);
+  }
+
+
+    function savePlayer(playerName, newPlayerSaveButton) {
+    // now loop through all saved players and pre-populate their availability
+    var allPlayerDetails = {};
+      for (var i = 1; i <= playerCount; i++) {
+        var playerName = document.getElementById("player" + i).value;
+        var playerAvailability = {};
+        for (var j = 0; j < mondaysDates.length; j++) {
+          var playerAvailable = document.getElementById(i + "playerWeek" + j).checked
+          playerAvailability[j] = playerAvailable;
+        }
+        allPlayerDetails[playerName] = playerAvailability;
+      }
+    console.log("0000=" + JSON.stringify(allPlayerDetails))
+    var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "players": allPlayerDetails };
+
+/*
+
+    Object.keys(playerElements).forEach(function(key) {
+      //player = playerElements[key].name;
+      console.log("1playerElements=" + JSON.stringify(playerElements[key]))
+      console.log(document.getElementById("player1").value)
+
+      //document.getElementById("player1").value
+      //document.getElementById("1playerWeek0").checked)
+    });
+      for (var i = 0; i < playerElements.length; i++) {
+        console.log("2playerElements=" + JSON.stringify(playerElements[i]))
+      }
+      
+      var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "players": players };
+
+      //var formData = new FormData(document.querySelector('playerForm'))
+      var nameHeader = document.getElementById("nameHeader")
+      
+      for (var i = 0; i < nameHeader.children.length; i++) {
+        var currentName = nameHeader.children[i].value;
+        var currentAvailability = [];
+
+        for (var j = 0; j < mondaysDates.length; j++) {
+          var weekHeader = document.getElementById(playerCount + "playerWeek" + j)
+      //console.log("weekHeader=" + weekHeader)
+
+          // get whether player has checked they can play this week
+          //var newPlayerWeek = weekHeader.querySelector("playerWeek" + j);
+          //var newPlayerWeek = weekHeader.childNodes.item("playerWeek" + j)
+          //var newPlayerWeek = document.getElementById("week" + mondaysDates[j] + "Header")
+          //var weekAvailability = weekHeader.children[i].checked;
+          var weekAvailability = null
+          // Had to loop as couldn't 
+          for (var k = 0; k< weekHeader.children.length;k++) {
+            if (weekHeader.children[k].getAttribute('id') == i + "playerWeek" + j) {
+              weekAvailability = weekHeader.children[k].checked
+            }
+          }
+          currentAvailability[j]=weekAvailability
+        }
+
+        if (currentName) {
+          console.log(i + "=" + currentName + "===" + weekAvailability + "-----" + currentAvailability)  
+        }
+
+      }
+*/
+
+/*
+      var playerForm = document.getElementById("playerForm");
+      playerForm.options[playerForm.options.length] = new Option(questions[i]);
+
+
+      var formData = new FormData(document.querySelector('form'))
+
+
+      console.log("Getting all Players: " + gameId + " Questions:" + questions);
+      for (i = 0; i < questions.length; i++) {
+        if ((questions[i] != null) && (questions[i] != "") && (questions[i] != "undefined")) {
+          var select = document.getElementById("question");
+          select.options[select.options.length] = new Option(questions[i]);
+          //console.log(questions[i]);
+        }
+      }
+*/
+
+      console.log("SAVING:" + JSON.stringify(gamedetails));
+      const options = {};
+      fetch("/save-result", {
+        method: 'POST',
+        body: JSON.stringify(gamedetails),
+        headers: { 'Content-Type': 'application/json' }
+       })
+       .then( res => res.json() )
+       .then( data => console.log(data) );
+      //newPlayerSaveButton.style.backgroundColor = "lightgrey";
+      //newPlayerSaveButton.innerHTML = "<span>&#10003;</span>"; //Tick
+      //newPlayerSaveButton.setAttribute("disabled", true); 
+    }
+
+  </script>
+
+</body>
+</html>
