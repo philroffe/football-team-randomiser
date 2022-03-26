@@ -27,7 +27,7 @@ express()
 .get('/', (req, res) => res.render('pages/index'))
 .get('/teams', async (req, res) => {
       try {
-        console.log('RENDERING POLL PAGE with data');
+        console.log('Rendereing TEAMS page with data');
         const client = await pool.connect();
         const dbresult = await client.query('SELECT * FROM games');
         //console.log('dbresult=' + JSON.stringify(dbresult));
@@ -45,18 +45,15 @@ express()
           rowdata = { "status": "NEW", "pollYear": "2022", "pollMonth": "March", "players": {} };
         }
 
-
-
-      // Get the date next Monday
-      nextMonday = new Date();
-      if ((nextMonday.getDay() == 1) && (nextMonday.getHours() >= 19)) {
-        // date is a Monday after kick-off time (6-7pm), so jump forward a day to force the next week
-        nextMonday.setDate(nextMonday.getDate() + 1);
-        console.log('Currently a Monday after kick-off so adding a day to:' + nextMonday.toISOString());
-      }
-      nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
-      console.log('Next Monday:' + nextMonday.toISOString());
-
+        // Get the date next Monday
+        nextMonday = new Date();
+        if ((nextMonday.getDay() == 1) && (nextMonday.getHours() >= 19)) {
+          // date is a Monday after kick-off time (6-7pm), so jump forward a day to force the next week
+          nextMonday.setDate(nextMonday.getDate() + 1);
+          console.log('Currently a Monday after kick-off so adding a day to:' + nextMonday.toISOString());
+        }
+        nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
+        console.log('Next Monday:' + nextMonday.toISOString());
 
         // combine database data with supplimentary game data
         const gameInfo = '{MayNotBeNeeded:0}';
@@ -72,23 +69,30 @@ express()
     })
 .get('/poll', async (req, res) => {
       try {
-        console.log('RENDERING POLL PAGE with data');
+        console.log('Rendereing POLL page with data' + req.query.date);
+        var requestedDate = new Date();
+        if (req.query.date) {
+          requestedDate = new Date(req.query.date);
+        } else {
+          // if date not specified just default to beginning of this month
+          requestedDate.setDate(1);
+        }
+        var requestedDateMonth = requestedDate.toISOString().split('T')[0]
+        //console.log("PPP=" + monthDateNumericFormat.format(requestedDate))
+
         const client = await pool.connect();
-        const dbresult = await client.query('SELECT * FROM games');
+        const dbresult = await client.query('SELECT * FROM games WHERE gameid=\'' + requestedDateMonth + '\'');
         //console.log('dbresult=' + JSON.stringify(dbresult));
 
-        // TODO; this is a workaround and should be replaced with "WHERE" in sql above
-        var rowdata = null;
-        for (var i = 0; i < dbresult.rows.length; i++) { 
-          if (dbresult.rows[i].gamedetails.pollMonth == monthDateNumericFormat.format(nextMonday)) {
-            rowdata = dbresult.rows[i];
-          }
+        //if (!rowdata) {
+        if (dbresult.rowCount == 1) {
+          rowdata = dbresult.rows[0];
+        } else {
+          //rowdata = { "status": "NEW", "pollYear": "2022", "pollMonth": "02", "players": {} };
+          // create a blank entry to render the poll page
+          rowdata = { "status": "NO_DATABASE_ENTRY", "gameid": requestedDateMonth, "gamedetails":{"players":{}}}
         }
         console.log('rowdata=' + JSON.stringify(rowdata));
-
-        if (!rowdata) {
-          rowdata = { "status": "NEW", "pollYear": "2022", "pollMonth": "March", "players": {} };
-        }
 
         // combine database data with supplimentary game data
         const gameInfo = '{MayNotBeNeeded:0}';
@@ -108,7 +112,7 @@ express()
     var gameYear = req.body.gameYear;
     var players = req.body.players;
     
-    gameId = gameYear + gameMonth;
+    gameId = gameYear + "-" + gameMonth + "-01";
     var gamedetails = { "pollYear": gameYear, "pollMonth": gameMonth, "players": players };
     gamedetailsJson = JSON.stringify(gamedetails);
     console.log('Inserting DB data:', gamedetailsJson);
@@ -121,7 +125,7 @@ express()
         ON CONFLICT (gameid) DO UPDATE 
           SET gamedetails = '${gamedetailsJson}';`)
       const results = { 'results': (result) ? result.rows : null};
-      console.log('Got DB results:', results);
+      console.log('Got DB results2:', results);
       //res.sendStatus(200);
       res.json({'result': 'OK'})
       client.release();      

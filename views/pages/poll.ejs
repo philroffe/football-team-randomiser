@@ -54,6 +54,11 @@ text {
   width: 25px;
   background-color: #eee;
 }
+.gameMonthInput {
+  font-size: 80%; 
+  height: 30px;
+  margin: 0px 0px 0px 20px;
+}
 </style>
 </head>
 <body class="w3-light-grey">
@@ -65,51 +70,63 @@ text {
   <a href="https://goo.gl/maps/LCGbaK5RQD47CxXG8" class="w3-bar-item w3-button w3-right"><i>Map</i>  </a>
 </div>
 
-<div id="year"><h2>Choose Your Poll</h2></div>
+<div id="year">
+  <h3>Choose Your Poll: 
+  <input type="month" class="gameMonthInput" id="gameMonthInput" name="start" min="2022-03" value="2022-04">
+  </h3>
+</div>
+
+<div id="description">Footie, 6pm every Monday, John Hawley Pitch (<a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Far Corner - see pin on map</a>)</div>
+<div id="location">Sport Sheffield, Goodwin, Northumberland Road, Sheffield, S10 2TY</div>
+
+
+<p><p><h3>Add/Edit Availability:</h3>
 <div id="title">Not Yet Available</div>
-<div id="description">Footie, 6pm every Monday, Far Corner Pitch</div>
-<div id="location">Sport Sheffield, Goodwin, Northumberland Road, Sheffield, S10 2TY | <a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Map</a></div>
-
-
-<p><p><h3>Choose Availability:</h3>
 <div id="divHeader">
 <div id="nameHeader" class="gameheader">Name</div>
-<div id="saveHeader" class="gameheader">Save</div>
 </div>
+<div id="editHeader" class="gameheader">Save</div>
 <div style="clear:both;"></div>
 
 <form id="playerForm">
  <div id="dynamicInput"></div>
-    <br><button type="button" onclick="addAnotherName();">(+) Add Player</button>
-        <button type="button" onclick="removeLastName();">(-) Remove Player</button>
 </form>
+<button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
+<button id="savePlayers" onclick="savePlayers()" disabled=true>Save Players</button>
+<button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
 
   <script type="text/javascript">
-    var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
+    var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });
     var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
     var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
 
     var playerCount = 0;
     var todayDate = new Date();
     var playerElements = {};
+    var saving = true;
 
     // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
     var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
     console.log('Data=' + JSON.stringify(pagedata));
 
-    var players = pagedata.data.gamedetails.players;
-    if (!players) { players = {}; }
-    var gameMonth = pagedata.data.gameMonth;
-    if (!gameMonth) gameMonth = monthDateNumericFormat.format(todayDate);
-    var gameYear = pagedata.data.gameYear;
-    if (!gameYear) gameYear = todayDate.getFullYear();
+    var selectedMonthDate = new Date(pagedata.data.gameid);
+    var gameMonth = monthDateNumericFormat.format(selectedMonthDate);
+    var gameYear = selectedMonthDate.getFullYear();
 
     //var pollDate = new Date(gameYear + gameMonth + "01 ");
     var pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
     //var pollDate = new Date(gameYear + gameMonth + "01 "););
     console.log(pollDate);
     var gameMonthString = monthDateFormat.format(todayDate);
+    // update the header month input selector
+    document.getElementById("gameMonthInput").value = gameYear + "-" + gameMonth
+    document.getElementById("gameMonthInput").addEventListener('change', function() {
+      var selectedDate = document.getElementById("gameMonthInput").value
+      document.location.href = 'http://localhost:5000/poll?date=' + selectedDate + '-01'
+    });
 
+    var players = pagedata.data.gamedetails.players;
+    if (!players) { players = {}; }
 
     function mondaysInMonth(m,y) {
       var days = new Date(y,m,0).getDate();
@@ -141,7 +158,7 @@ text {
         }
     }
 
-    document.getElementById("title").innerHTML = monthDateFormat.format(pollDate) + ' ' + gameYear + ' Fixtures [Footie, Goodwin, 6pm Mondays]'
+    document.getElementById("title").innerHTML = "<b>" + monthDateFormat.format(pollDate) + ' ' + gameYear + "</b>"
 
     // auto generate divs for headers for each game week
     for (var i = 0; i < mondaysDates.length; i ++) {
@@ -165,21 +182,11 @@ text {
       playerName = key
       playerAvailability = players[key]
       //playerAvailability = players[key].availability[0]
-      addAnotherName(playerName, playerAvailability)
+      addPlayer(playerName, playerAvailability)
     });
 
-/*
-    // now loop through all saved players and pre-populate their availability
-    Object.keys(players).forEach(function(key) {
-      playerName = players[key].name;
-      playerAvailability = players[key].availability[0]
-      addAnotherName(playerName, playerAvailability)
-    });
-*/
-
-//////////////////
     // add an addition text box and hook up listeners
-    function addAnotherName(playerName, availabilityMap) {
+    function addPlayer(playerName, availabilityMap) {
       playerCount++;
       if (playerCount > 30) {
         // set a max list of names (just to protect a little)
@@ -196,6 +203,7 @@ text {
       newPlayerName.style.width = 120;
       if (playerName) {
         newPlayerName.setAttribute("value", playerName); 
+        newPlayerName.setAttribute("disabled", true); 
       }
       nameHeader.appendChild(document.createElement("br"));
       nameHeader.appendChild(newPlayerName);
@@ -205,120 +213,97 @@ text {
         var newPlayerWeek = document.createElement("input"); 
         newPlayerWeek.setAttribute("type", "checkbox"); 
         newPlayerWeek.setAttribute("class", "checkmark"); 
-        newPlayerWeek.setAttribute("id", playerCount + "playerWeek" + i); 
+        newPlayerWeek.setAttribute("id", "player" + playerCount + "Week" + i); 
         newPlayerWeek.setAttribute("name", playerCount + "myPlayerWeek[]"); 
         if (availabilityMap && availabilityMap[i]){
           newPlayerWeek.setAttribute("checked", true); 
           //console.log(playerName + " " + mondaysDates[i] + "=" + availabilityMap[mondaysDates[i]])
         }
+        if (playerName) {
+          newPlayerWeek.setAttribute("disabled", true); 
+        }
         weekHeader.appendChild(document.createElement("br"));
-        weekHeader.appendChild(newPlayerWeek);  
+        weekHeader.appendChild(newPlayerWeek);
       }
 
-      // create the corresponding coords hidden text box
-      var newPlayerSaveButton = document.createElement("button");
-      newPlayerSaveButton.type = "button";
-      newPlayerSaveButton.innerHTML = "Save ...";
-      newPlayerSaveButton.style.backgroundColor = "lightgreen";
-      newPlayerSaveButton.setAttribute("id", playerCount + "player" + playerCount + "save");
-      //const currentPlayerCount = playerCount;
-      //newPlayerSaveButton.onclick = function() {savePlayer(currentPlayerCount)};
-      var saveHeader = document.getElementById("saveHeader")
-      saveHeader.appendChild(document.createElement("br"));
-      saveHeader.appendChild(newPlayerSaveButton);
+      // create the edit button
+      var newPlayerEditButton = document.createElement("button");
+      newPlayerEditButton.type = "button";
+      newPlayerEditButton.innerHTML = "Edit ...";
+      newPlayerEditButton.style.backgroundColor = "lightgreen";
+      newPlayerEditButton.setAttribute("id", "player" + playerCount + "Edit");
+
+      var editHeader = document.getElementById("editHeader")
+      editHeader.appendChild(document.createElement("br"));
+      editHeader.appendChild(newPlayerEditButton);
       if (playerName) {
-        newPlayerSaveButton.innerHTML = "<span>&#10003;</span>"; //Tick
-        newPlayerSaveButton.style.backgroundColor = "lightgrey";
-        newPlayerSaveButton.setAttribute("disabled", true); 
+        //newPlayerEditButton.innerHTML = "<span>&#10003;</span>"; //Tick
       }
-      newPlayerSaveButton.onclick = function() {savePlayer(playerName, newPlayerSaveButton)};
+      newPlayerEditButton.onclick = function() {editPlayer(playerName, newPlayerEditButton)};
 
-      form.appendChild(document.createElement("br"));  
-      //addEventListeners(newPlayerName);
+      if (!playerName) {
+        // new player so enable the save button
+        document.getElementById("savePlayers").disabled = false; 
+        document.getElementById("savePlayers").style.backgroundColor = "lightgreen";
+        document.getElementById("cancelEdit").disabled = false; 
+        document.getElementById("cancelEdit").style.backgroundColor = "lightgreen";
+        for (var i = 1; i <= playerCount-1; i++) {
+          document.getElementById("player" + i + "Edit").disabled = true; 
+          document.getElementById("player" + i + "Edit").style.backgroundColor = "lightgrey";
+        }
+      // disable the addPlayer botton
+      document.getElementById("addPlayer").disabled = true; 
+      document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
+      }
   }
 
+    function editPlayer(playerName, newPlayerEditButton) {
+      chosenPlayer = newPlayerEditButton.id.split('Edit')[0]
+      console.log("EDITING Player: " + playerName + " ChosenPlayer:" + chosenPlayer);
+      // disable everything
+      for (var i = 1; i <= playerCount; i++) {
+        document.getElementById("player" + i).disabled = true; 
+        for (var j = 0; j < mondaysDates.length; j++) {
+          document.getElementById("player" + i + "Week" + j).disabled = true; 
+        }
+        document.getElementById("player" + i + "Edit").disabled = true; 
+        document.getElementById("player" + i + "Edit").style.backgroundColor = "lightgrey";
+      }
 
-    function savePlayer(playerName, newPlayerSaveButton) {
-    // now loop through all saved players and pre-populate their availability
-    var allPlayerDetails = {};
+      // renable only the chosen Player
+      document.getElementById(chosenPlayer).disabled = false; 
+      for (var j = 0; j < mondaysDates.length; j++) {
+        document.getElementById(chosenPlayer + "Week" + j).disabled = false; 
+      }
+      document.getElementById(chosenPlayer + "Edit").disabled = false; 
+      document.getElementById(chosenPlayer + "Edit").style.backgroundColor = "lightgreen";
+      // enable the save button
+      document.getElementById("savePlayers").disabled = false; 
+      document.getElementById("savePlayers").style.backgroundColor = "lightgreen";
+      document.getElementById("cancelEdit").disabled = false; 
+      document.getElementById("cancelEdit").style.backgroundColor = "lightgreen";
+      // disable the addPlayer botton
+      document.getElementById("addPlayer").disabled = true; 
+      document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
+
+    }
+
+    function savePlayers() {
+      // now loop through all saved players and pre-populate their availability
+      var allPlayerDetails = {};
       for (var i = 1; i <= playerCount; i++) {
         var playerName = document.getElementById("player" + i).value;
-        var playerAvailability = {};
-        for (var j = 0; j < mondaysDates.length; j++) {
-          var playerAvailable = document.getElementById(i + "playerWeek" + j).checked
-          playerAvailability[j] = playerAvailable;
-        }
-        allPlayerDetails[playerName] = playerAvailability;
-      }
-    console.log("0000=" + JSON.stringify(allPlayerDetails))
-    var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "players": allPlayerDetails };
-
-/*
-
-    Object.keys(playerElements).forEach(function(key) {
-      //player = playerElements[key].name;
-      console.log("1playerElements=" + JSON.stringify(playerElements[key]))
-      console.log(document.getElementById("player1").value)
-
-      //document.getElementById("player1").value
-      //document.getElementById("1playerWeek0").checked)
-    });
-      for (var i = 0; i < playerElements.length; i++) {
-        console.log("2playerElements=" + JSON.stringify(playerElements[i]))
-      }
-      
-      var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "players": players };
-
-      //var formData = new FormData(document.querySelector('playerForm'))
-      var nameHeader = document.getElementById("nameHeader")
-      
-      for (var i = 0; i < nameHeader.children.length; i++) {
-        var currentName = nameHeader.children[i].value;
-        var currentAvailability = [];
-
-        for (var j = 0; j < mondaysDates.length; j++) {
-          var weekHeader = document.getElementById(playerCount + "playerWeek" + j)
-      //console.log("weekHeader=" + weekHeader)
-
-          // get whether player has checked they can play this week
-          //var newPlayerWeek = weekHeader.querySelector("playerWeek" + j);
-          //var newPlayerWeek = weekHeader.childNodes.item("playerWeek" + j)
-          //var newPlayerWeek = document.getElementById("week" + mondaysDates[j] + "Header")
-          //var weekAvailability = weekHeader.children[i].checked;
-          var weekAvailability = null
-          // Had to loop as couldn't 
-          for (var k = 0; k< weekHeader.children.length;k++) {
-            if (weekHeader.children[k].getAttribute('id') == i + "playerWeek" + j) {
-              weekAvailability = weekHeader.children[k].checked
-            }
+        if (playerName && playerName != "") {
+          var playerAvailability = {};
+          for (var j = 0; j < mondaysDates.length; j++) {
+            var playerAvailable = document.getElementById("player" + i + "Week" + j).checked
+            playerAvailability[j] = playerAvailable;
           }
-          currentAvailability[j]=weekAvailability
-        }
-
-        if (currentName) {
-          console.log(i + "=" + currentName + "===" + weekAvailability + "-----" + currentAvailability)  
-        }
-
-      }
-*/
-
-/*
-      var playerForm = document.getElementById("playerForm");
-      playerForm.options[playerForm.options.length] = new Option(questions[i]);
-
-
-      var formData = new FormData(document.querySelector('form'))
-
-
-      console.log("Getting all Players: " + gameId + " Questions:" + questions);
-      for (i = 0; i < questions.length; i++) {
-        if ((questions[i] != null) && (questions[i] != "") && (questions[i] != "undefined")) {
-          var select = document.getElementById("question");
-          select.options[select.options.length] = new Option(questions[i]);
-          //console.log(questions[i]);
+          allPlayerDetails[playerName] = playerAvailability;
         }
       }
-*/
+      console.log("0000=" + JSON.stringify(allPlayerDetails))
+      var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "players": allPlayerDetails };
 
       console.log("SAVING:" + JSON.stringify(gamedetails));
       const options = {};
@@ -329,9 +314,28 @@ text {
        })
        .then( res => res.json() )
        .then( data => console.log(data) );
-      //newPlayerSaveButton.style.backgroundColor = "lightgrey";
-      //newPlayerSaveButton.innerHTML = "<span>&#10003;</span>"; //Tick
-      //newPlayerSaveButton.setAttribute("disabled", true); 
+
+/** (either disable everything, or might just be easier to reload the page)
+
+      // disable everything
+      for (var i = 1; i <= playerCount; i++) {
+        document.getElementById("player" + i).disabled = true; 
+        for (var j = 0; j < mondaysDates.length; j++) {
+          document.getElementById("player" + i + "Week" + j).disabled = true; 
+        }
+        document.getElementById("player" + i + "Edit").disabled = false; 
+        document.getElementById("player" + i + "Edit").style.backgroundColor = "lightgreen";
+      }
+      // saved - disable the save button
+      document.getElementById("savePlayers").disabled = true; 
+      document.getElementById("savePlayers").style.backgroundColor = "lightgrey";
+      document.getElementById("cancelEdit").disabled = true; 
+      document.getElementById("cancelEdit").style.backgroundColor = "lightgrey";
+      // re-enable the addPlayer botton
+      document.getElementById("addPlayer").disabled = false; 
+      document.getElementById("addPlayer").style.backgroundColor = "lightgreen";
+*/
+      location.reload();
     }
 
   </script>

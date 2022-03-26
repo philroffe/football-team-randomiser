@@ -7,7 +7,7 @@ GRANT ALL ON DATABASE football TO footballdbrole;
 
 
 CREATE TABLE games (
-     gameid      char(6) PRIMARY KEY,
+     gameid      char(10) PRIMARY KEY,
      created_at  TIMESTAMP DEFAULT NOW(),
      gamedetails jsonb NOT NULL
 );
