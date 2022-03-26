@@ -297,6 +297,9 @@ text {
       document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
 
     }
+    function delay(time) {
+      return new Promise(resolve => setTimeout(resolve, time));
+    }
 
     function savePlayers() {
       // now loop through all saved players and pre-populate their availability
@@ -325,8 +328,9 @@ text {
        .then( res => res.json() )
        .then( data => console.log(data) );
 
-/** (either disable everything, or might just be easier to reload the page)
 
+      //(either disable everything, or might just be easier to reload the page)
+      /*
       // disable everything
       for (var i = 1; i <= playerCount; i++) {
         document.getElementById("player" + i).disabled = true; 
@@ -336,17 +340,20 @@ text {
         document.getElementById("player" + i + "Edit").disabled = false; 
         document.getElementById("player" + i + "Edit").style.backgroundColor = "lightgreen";
       }
+      // re-enable the addPlayer botton
+      document.getElementById("addPlayer").disabled = false; 
+      document.getElementById("addPlayer").style.backgroundColor = "lightgreen";
+      ///////////////
+      */
       // saved - disable the save button
       document.getElementById("savePlayers").disabled = true; 
       document.getElementById("savePlayers").style.backgroundColor = "lightgrey";
       document.getElementById("cancelEdit").disabled = true; 
       document.getElementById("cancelEdit").style.backgroundColor = "lightgrey";
-      // re-enable the addPlayer botton
-      document.getElementById("addPlayer").disabled = false; 
-      document.getElementById("addPlayer").style.backgroundColor = "lightgreen";
-*/
-      location.reload();
+      // need to delay the reload by 500ms - with heroku it seems  to have a race condition on reload
+      delay(200).then(() => location.reload());
     }
+
 
   </script>
 
