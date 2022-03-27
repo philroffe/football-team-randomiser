@@ -76,16 +76,16 @@ text {
   </h3>
 </div>
 
-<div id="description">Footie, 6pm every Monday, John Hawley Pitch (<a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Far Corner - see pin on map</a>)</div>
-<div id="location">Sport Sheffield, Goodwin, Northumberland Road, Sheffield, S10 2TY</div>
+<div id="description">Footie, 6pm every Monday, Goodwin, John Hawley Pitch</div>
+<div id="location"><a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Sport Sheffield, Northumberland Rd, Sheffield, S10 2TY</a></div>
 
 
 <p><p><h3>Add/Edit Availability:</h3>
 <div id="title">Not Yet Available</div>
 <div id="divHeader">
-<div id="nameHeader" class="gameheader">Name</div>
+<div id="nameHeader" class="gameheader"><br>Name</div>
 </div>
-<div id="editHeader" class="gameheader">Save</div>
+<div id="editHeader" class="gameheader"><br></div>
 <div style="clear:both;"></div>
 
 <form id="playerForm">
@@ -113,9 +113,7 @@ text {
     var gameMonth = monthDateNumericFormat.format(selectedMonthDate);
     var gameYear = selectedMonthDate.getFullYear();
 
-    //var pollDate = new Date(gameYear + gameMonth + "01 ");
     var pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
-    //var pollDate = new Date(gameYear + gameMonth + "01 "););
     console.log(pollDate);
     var gameMonthString = monthDateFormat.format(todayDate);
     // update the header month input selector
@@ -165,27 +163,43 @@ text {
       var newWeekHeader = document.createElement("div");
       newWeekHeader.setAttribute("id", "week" + i + "Header"); 
       newWeekHeader.setAttribute("class", "gameheader"); 
-      // give it some content and add the text node to the newly created div
-      //const newContent = document.createTextNode(mondaysDates[i] + " " + monthDateFormat.format(pollDate));
-      const newContent = document.createTextNode(mondaysDates[i] + getDayOfMonthSuffix(mondaysDates[i]));
-      newWeekHeader.appendChild(newContent);
+      // create a totals header...
+      var newWeekTotal = document.createElement("i");
+      newWeekTotal.setAttribute("id", "week" + i + "Total"); 
+      newWeekTotal.innerHTML = "0"; 
+      newWeekHeader.appendChild(newWeekTotal);
+      newWeekHeader.appendChild(document.createElement("br"));
+      // create a date header
+      const weekDateHeader = document.createTextNode(mondaysDates[i] + getDayOfMonthSuffix(mondaysDates[i]));
+      newWeekHeader.appendChild(weekDateHeader);
       divHeader.appendChild(newWeekHeader);  
     }
 
     console.log(pagedata.data.gamedetails.players);
-    //var players = gamedetails.players; //JSON.stringify()?
     // now loop through all saved players and pre-populate their availability
     Object.keys(players).sort().forEach(function(key) {
-      //console.log('player=' + key + "___" + players[key].name);
-      //playerName = players[key].name;
-      //console.log(players[key]);
+      //console.log('player=' + key + "___" + players[key]);
       playerName = key
       playerAvailability = players[key]
-      //playerAvailability = players[key].availability[0]
       addPlayer(playerName, playerAvailability)
     });
+    // populate the weekly total counts
+    calcWeeklyTotals();
 
-    // add an addition text box and hook up listeners
+    // populate the weekly total counts
+    function calcWeeklyTotals() {
+      for (var j = 0; j < mondaysDates.length; j++) {
+        var weekTotalSummary = document.getElementById("week" + j + "Total");
+        weekTotalSummary.innerHTML = 0
+        for (var i = 1; i <= playerCount; i++) {
+          if (document.getElementById("player" + i + "Week" + j).checked) {
+            weekTotalSummary.innerHTML = parseInt(weekTotalSummary.innerHTML) + 1;
+          }
+        }
+      }
+    }
+
+    // add an additional text box and hook up listeners
     function addPlayer(playerName, availabilityMap) {
       playerCount++;
       if (playerCount > 30) {
@@ -239,7 +253,7 @@ text {
       // create the edit button
       var newPlayerEditButton = document.createElement("button");
       newPlayerEditButton.type = "button";
-      newPlayerEditButton.innerHTML = "Edit ...";
+      newPlayerEditButton.innerHTML = "Edit...";
       newPlayerEditButton.style.backgroundColor = "lightgreen";
       newPlayerEditButton.setAttribute("id", "player" + playerCount + "Edit");
 
@@ -265,9 +279,18 @@ text {
       document.getElementById("addPlayer").disabled = true; 
       document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
       }
+      //calcWeeklyTotals();
   }
 
     function editPlayer(playerName, newPlayerEditButton) {
+      if (newPlayerEditButton.innerHTML == "Save") {
+        // button toggled as Save, so save and put back to Edit move
+        savePlayers();
+        newPlayerEditButton.innerHTML = "Edit...";
+        newPlayerEditButton.disabled = true; 
+        calcWeeklyTotals();
+        return;
+      }
       chosenPlayer = newPlayerEditButton.id.split('Edit')[0]
       console.log("EDITING Player: " + playerName + " ChosenPlayer:" + chosenPlayer);
       // disable everything
@@ -296,6 +319,9 @@ text {
       document.getElementById("addPlayer").disabled = true; 
       document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
 
+      // button currently as Edit, so toggle to "save" mode
+      newPlayerEditButton.innerHTML = "Save";
+      calcWeeklyTotals();
     }
     function delay(time) {
       return new Promise(resolve => setTimeout(resolve, time));
