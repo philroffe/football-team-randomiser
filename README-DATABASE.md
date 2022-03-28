@@ -8,15 +8,17 @@ GRANT ALL ON DATABASE football TO footballdbrole;
 
 CREATE TABLE games (
      gameid      char(10) PRIMARY KEY,
-     created_at  TIMESTAMP DEFAULT NOW(),
+     last_updated  TIMESTAMP DEFAULT NOW(),
      gamedetails jsonb NOT NULL
 );
 
-CREATE TABLE history (
+CREATE TABLE game_history (
      id          serial PRIMARY KEY,
      gameid      char(10),
-     created_at  TIMESTAMP DEFAULT NOW(),
-     changed_by  char(10),
-     ip_address  inet,
-     gamedetails jsonb NOT NULL
+     last_updated  TIMESTAMP DEFAULT NOW(),
+     source_ip  inet,
+     gamedetails_pre jsonb NOT NULL,
+     gamedetails_new jsonb NOT NULL,
+     gamedetails_merged jsonb NOT NULL,
+     gamedetails_diff jsonb
 );

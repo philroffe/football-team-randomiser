@@ -113,25 +113,74 @@ express()
     var players = req.body.players;
     
     gameId = gameYear + "-" + gameMonth + "-01";
-    var gamedetails = { "pollYear": gameYear, "pollMonth": gameMonth, "players": players };
-    gamedetailsJson = JSON.stringify(gamedetails);
-    console.log('Inserting DB data:', gamedetailsJson);
+    var gamedetails_new = { "pollYear": gameYear, "pollMonth": gameMonth, "players": players };
+    gamedetailsNewJson = JSON.stringify(gamedetails_new);
+    console.log('Inserting DB data:', gamedetailsNewJson);
+
 
     try {
+      ////// TODO Database LOCK?
       const client = await pool.connect();
-      //const client = pool.connect();
+      const dbresult = await client.query('SELECT * FROM games WHERE gameid=\'' + gameId + '\'');
+
+      if (dbresult.rowCount == 1) {
+        rowdata = dbresult.rows[0];
+      } else {
+        rowdata = { "gamedetails":{"players":{}}}
+      }
+      var gamedetails_pre = rowdata.gamedetails;
+      var gamedetailsPreJson = JSON.stringify(gamedetails_pre);
+      console.log('pre1 Pre (DB):', gamedetails_pre);
+      console.log('pre2 New:', gamedetails_new);
+      // merge the two objects
+      const gamedetails_merged = {
+        ...gamedetails_pre,
+        ...gamedetails_new
+      };
+      console.log('Post - merged:', gamedetails_merged);
+      var gamedetailsDiffJson = JSON.stringify(gamedetails_diff);
+      var gamedetailsMergedJson = JSON.stringify(gamedetails_merged);
+
+      var gamedetails_diff = createJsonDiff(gamedetails_pre, gamedetails_new);
+      gamedetailsDiffJson = JSON.stringify(gamedetails_diff);
+      console.log('Post - Diff:', gamedetails_diff);
+
+      //console.log('IP Addresses:', req.socket.remoteAddress, req.socket.localAddress, req.ip);
+
+      // firstly update the main game table
       const result = await client.query(`INSERT INTO games( gameid, gamedetails)
-        VALUES ('${gameId}', '${gamedetailsJson}')
+        VALUES ('${gameId}', '${gamedetailsNewJson}')
         ON CONFLICT (gameid) DO UPDATE 
-          SET gamedetails = '${gamedetailsJson}';`)
+          SET gamedetails = '${gamedetailsNewJson}';`)
       const results = { 'results': (result) ? result.rows : null};
       console.log('Got DB results2:', results);
+      
+      // now update the table history table
+      const historyresult = await client.query(`INSERT INTO game_history( gameid, gamedetails_pre, 
+        gamedetails_new, gamedetails_merged, gamedetails_diff)
+        VALUES ('${gameId}', '${gamedetailsPreJson}', 
+        '${gamedetailsNewJson}', '${gamedetailsMergedJson}', '${gamedetailsDiffJson}');`)
+      const historyresults = { 'historyresults': (historyresult) ? historyresult.rows : null};
+      console.log('Got History DB results:', historyresults);
+
+      // if you got here without an exception then everything was successful
       //res.sendStatus(200);
       res.json({'result': 'OK'})
-      client.release();      
+      client.release();
     } catch (err) {
       console.error(err);
       res.send("Error " + err);
     }
   })
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
+
+
+function createJsonDiff(obj1, obj2) {
+  var ret = {};
+  for(var i in obj2) {
+    if(!obj1.hasOwnProperty(i) || obj2[i] !== obj1[i]) {
+      ret[i] = obj2[i];
+    }
+  }
+  return ret;
+};
