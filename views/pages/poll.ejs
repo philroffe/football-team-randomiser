@@ -92,7 +92,7 @@ text {
  <div id="dynamicInput"></div>
 </form>
 <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
-<button id="savePlayers" onclick="savePlayers()" disabled=true>Save Players</button>
+<!--<button id="savePlayers" onclick="savePlayers()" disabled=true>Save Players</button>-->
 <button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
 
   <script type="text/javascript">
@@ -123,7 +123,7 @@ text {
       document.location.href = '/poll?date=' + selectedDate + '-01'
     });
 
-    var players = pagedata.data.gamedetails.players;
+    var players = pagedata.data.players;
     if (!players) { players = {}; }
 
     function mondaysInMonth(m,y) {
@@ -156,6 +156,20 @@ text {
         }
     }
 
+
+    function createJsonDiff(obj1, obj2) {
+      var ret = {};
+      for(var i in obj2) {
+
+    console.log("i="+i)
+        if(!obj1.hasOwnProperty(i) || obj2[i] !== obj1[i]) {
+          console.log("iprop="+i)
+          ret[i] = obj2[i];
+        }
+      }
+      return ret;
+    };
+
     document.getElementById("title").innerHTML = "<b>" + monthDateFormat.format(pollDate) + ' ' + gameYear + "</b>"
 
     // auto generate divs for headers for each game week
@@ -175,8 +189,9 @@ text {
       divHeader.appendChild(newWeekHeader);  
     }
 
-    console.log(pagedata.data.gamedetails.players);
+    console.log(pagedata.data.players);
     // now loop through all saved players and pre-populate their availability
+    var allOriginalPlayers = {}
     Object.keys(players).sort().forEach(function(key) {
       //console.log('player=' + key + "___" + players[key]);
       playerName = key
@@ -217,6 +232,7 @@ text {
       newPlayerName.style.width = 120;
       nameHeader.appendChild(document.createElement("br"));
       nameHeader.appendChild(newPlayerName);
+      allOriginalPlayers["player" + playerCount] = playerName
       if (playerName) {
         newPlayerName.setAttribute("value", playerName); 
         newPlayerName.setAttribute("disabled", true); 
@@ -267,8 +283,8 @@ text {
 
       if (!playerName) {
         // new player so enable the save button
-        document.getElementById("savePlayers").disabled = false; 
-        document.getElementById("savePlayers").style.backgroundColor = "lightgreen";
+        //document.getElementById("savePlayers").disabled = false; 
+        //document.getElementById("savePlayers").style.backgroundColor = "lightgreen";
         document.getElementById("cancelEdit").disabled = false; 
         document.getElementById("cancelEdit").style.backgroundColor = "lightgreen";
         for (var i = 1; i <= playerCount-1; i++) {
@@ -285,7 +301,9 @@ text {
     function editPlayer(playerName, newPlayerEditButton) {
       if (newPlayerEditButton.innerHTML == "Save") {
         // button toggled as Save, so save and put back to Edit move
-        savePlayers();
+        chosenPlayer = newPlayerEditButton.id.split('Edit')[0]
+        savePlayer(chosenPlayer);
+        //savePlayers();
         newPlayerEditButton.innerHTML = "Edit...";
         newPlayerEditButton.disabled = true; 
         calcWeeklyTotals();
@@ -311,8 +329,8 @@ text {
       document.getElementById(chosenPlayer + "Edit").disabled = false; 
       document.getElementById(chosenPlayer + "Edit").style.backgroundColor = "lightgreen";
       // enable the save button
-      document.getElementById("savePlayers").disabled = false; 
-      document.getElementById("savePlayers").style.backgroundColor = "lightgreen";
+      //document.getElementById("savePlayers").disabled = false; 
+      //document.getElementById("savePlayers").style.backgroundColor = "lightgreen";
       document.getElementById("cancelEdit").disabled = false; 
       document.getElementById("cancelEdit").style.backgroundColor = "lightgreen";
       // disable the addPlayer botton
@@ -325,6 +343,97 @@ text {
     }
     function delay(time) {
       return new Promise(resolve => setTimeout(resolve, time));
+    }
+
+    function savePlayer(playerId) {
+      var playerName = document.getElementById(playerId).value;
+      console.log("SAVING Player: " + playerName + " ChosenPlayer:" + playerId);
+
+      // check if player is new, edited, or deleted
+      console.log("LOOKUP: " + playerId + " Original Name: " + allOriginalPlayers[playerId]);
+      if (allOriginalPlayers[playerId]) {
+        console.log("EDITED: " + playerId + " Original Name: " + allOriginalPlayers[playerId]);
+      } else {
+        console.log("NEW: " + playerId + " Original Name: " + allOriginalPlayers[playerId]);
+      }
+
+
+      // now loop through all saved players and pre-populate their availability
+      var allPlayerDetails = {};
+      /*
+      for (var i = 1; i <= playerCount; i++) {
+        var playerName = document.getElementById("player" + i).value;
+        if (playerName && playerName != "") {
+          var playerAvailability = {};
+          for (var j = 0; j < mondaysDates.length; j++) {
+            var playerAvailable = document.getElementById("player" + i + "Week" + j).checked
+            playerAvailability[j] = playerAvailable;
+          }
+          allPlayerDetails[playerName] = playerAvailability;
+        }
+      }
+      console.log("0000=" + JSON.stringify(allPlayerDetails))
+      */
+      var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "players": allPlayerDetails };
+
+
+      /**
+      console.log("SAVING:" + JSON.stringify(gamedetails));
+      const options = {};
+      fetch("/save-result", {
+        method: 'POST',
+        body: JSON.stringify(gamedetails),
+        headers: { 'Content-Type': 'application/json' }
+       })
+       .then( res => res.json() )
+       .then( data => console.log(data) );
+       */
+
+       // get the diif 
+       var gamedetails_pre = pagedata.data.players
+       var gamedetails_new = allPlayerDetails
+       var gamedetails_diff = createJsonDiff(gamedetails_pre, gamedetails_new);
+       gamedetailsDiffJson = JSON.stringify(gamedetails_diff);
+       console.log('Post - Diff pre:', gamedetails_pre);
+       console.log('Post - Diff new:', gamedetails_new);
+       console.log('Post - Diff:', gamedetails_diff);
+       console.log('Post - DiffJson:', gamedetailsDiffJson);
+
+      console.log("SAVING:" + JSON.stringify(gamedetails));
+      /*
+      const options = {};
+      fetch("/save-result", {
+        method: 'POST',
+        body: JSON.stringify(gamedetails),
+        headers: { 'Content-Type': 'application/json' }
+       })
+       .then( res => res.json() )
+       .then( data => console.log(data) );
+       */
+
+      //(either disable everything, or might just be easier to reload the page)
+      /*
+      // disable everything
+      for (var i = 1; i <= playerCount; i++) {
+        document.getElementById("player" + i).disabled = true; 
+        for (var j = 0; j < mondaysDates.length; j++) {
+          document.getElementById("player" + i + "Week" + j).disabled = true; 
+        }
+        document.getElementById("player" + i + "Edit").disabled = false; 
+        document.getElementById("player" + i + "Edit").style.backgroundColor = "lightgreen";
+      }
+      // re-enable the addPlayer botton
+      document.getElementById("addPlayer").disabled = false; 
+      document.getElementById("addPlayer").style.backgroundColor = "lightgreen";
+      ///////////////
+      */
+      // saved - disable the save button
+      //document.getElementById("savePlayers").disabled = true; 
+      //document.getElementById("savePlayers").style.backgroundColor = "lightgrey";
+      document.getElementById("cancelEdit").disabled = true; 
+      document.getElementById("cancelEdit").style.backgroundColor = "lightgrey";
+      // need to delay the reload by 500ms - with heroku it seems  to have a race condition on reload
+      //delay(200).then(() => location.reload());
     }
 
     function savePlayers() {
@@ -344,6 +453,7 @@ text {
       console.log("0000=" + JSON.stringify(allPlayerDetails))
       var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "players": allPlayerDetails };
 
+      /**
       console.log("SAVING:" + JSON.stringify(gamedetails));
       const options = {};
       fetch("/save-result", {
@@ -353,7 +463,29 @@ text {
        })
        .then( res => res.json() )
        .then( data => console.log(data) );
+       */
 
+       // get the diif 
+       var gamedetails_pre = pagedata.data.players
+       var gamedetails_new = allPlayerDetails
+       var gamedetails_diff = createJsonDiff(gamedetails_pre, gamedetails_new);
+       gamedetailsDiffJson = JSON.stringify(gamedetails_diff);
+       console.log('Post - Diff pre:', gamedetails_pre);
+       console.log('Post - Diff new:', gamedetails_new);
+       console.log('Post - Diff:', gamedetails_diff);
+       console.log('Post - DiffJson:', gamedetailsDiffJson);
+
+      console.log("SAVING:" + JSON.stringify(gamedetails));
+      /*
+      const options = {};
+      fetch("/save-result", {
+        method: 'POST',
+        body: JSON.stringify(gamedetails),
+        headers: { 'Content-Type': 'application/json' }
+       })
+       .then( res => res.json() )
+       .then( data => console.log(data) );
+       */
 
       //(either disable everything, or might just be easier to reload the page)
       /*
@@ -372,12 +504,12 @@ text {
       ///////////////
       */
       // saved - disable the save button
-      document.getElementById("savePlayers").disabled = true; 
-      document.getElementById("savePlayers").style.backgroundColor = "lightgrey";
+      //document.getElementById("savePlayers").disabled = true; 
+      //document.getElementById("savePlayers").style.backgroundColor = "lightgrey";
       document.getElementById("cancelEdit").disabled = true; 
       document.getElementById("cancelEdit").style.backgroundColor = "lightgrey";
       // need to delay the reload by 500ms - with heroku it seems  to have a race condition on reload
-      delay(200).then(() => location.reload());
+      //delay(200).then(() => location.reload());
     }
 
 
