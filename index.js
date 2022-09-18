@@ -5,24 +5,14 @@ const https = require('https')
 const ical = require('node-ical');
 const request = require('request');
 
-const { Pool } = require('pg');
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
-
-
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
 // the project specified by the GOOGLE_CLOUD_PROJECT environment variable. See
 // https://github.com/GoogleCloudPlatform/google-cloud-node/blob/master/docs/authentication.md
 // These environment variables are set automatically on Google App Engine
-const {Datastore} = require('@google-cloud/datastore');
-// Instantiate a datastore client
-const datastore = new Datastore({
-  projectId: 'long-door-651',
+const Firestore = require('@google-cloud/firestore');
+const firestore = new Firestore({
+  projectId: 'long-door-651'
 });
 
 // store a cache of the data for X seconds
@@ -57,30 +47,33 @@ express()
     // combine database data with any additional page data
     var pageData = { data: rowdata };
     res.render('pages/poll', { pageData: pageData } );
-    //client.release();
-    } catch (err) {
-      console.error(err);
-      res.send("Error " + err);
-    }
-  })
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
 .post('/save-result', async (req, res) => {
     console.log('Got POST query:', req.body);
     var gameMonth = req.body.gameMonth;
     var gameYear = req.body.gameYear;
     var players = req.body.players;
     var saveType = req.body.saveType;
-    var originalPlayerName = req.body.originalPlayerName;
+    var originalPlayerName = (originalPlayerName === undefined) ? "" : req.body.originalPlayerName;
+
     
     gameId = gameYear + "-" + gameMonth + "-01";
     var timestamp = new Date();
-    var gamedetails_new = { "gameid": gameId, "timestamp": timestamp, 
+    const gamedetails_new = { "gameid": gameId, "timestamp": timestamp, 
     "pollYear": gameYear, "pollMonth": gameMonth, "players": players, 
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": req.ip };
     gamedetailsNewJson = JSON.stringify(gamedetails_new);
     console.log('Inserting DB data:', gamedetailsNewJson);
 
+    console.log('Inserting DB data:', gamedetailsNewJson);
     try {
-      await datastore.save({ key: datastore.key("games_" + gameId), data: gamedetails_new})
+      //await datastore.save({ key: datastore.key("games_" + gameId), data: gamedetails_new})
+      const docRef = firestore.collection("games_" + gameId).doc(timestamp.toString());
+      await docRef.set(gamedetails_new);
       // if you got here without an exception then everything was successful
       //res.sendStatus(200);
       res.json({'result': 'OK'})
@@ -127,15 +120,15 @@ async function queryDatabaseAndBuildPlayerList(reqDate) {
     //console.log("requestedDateMonth=" + requestedDateMonth)
 
     // Query database and get all players for games matching this month
-    const query = datastore.createQuery("games_" + requestedDateMonth)
-      .filter('gameid', '=', requestedDateMonth).order('timestamp', {descending: false});
-    const [dbresult] =  await datastore.runQuery(query);
-    console.log('dbresult=' + JSON.stringify(dbresult));
+    const dbresult = await firestore.collection("games_" + requestedDateMonth).get();
+    //console.log('dbresult=' + JSON.stringify(dbresult));
 
     var rowdata = {};
-    if (dbresult[0]) {
+    if (dbresult.size > 0) {
       // We have data! now build the player list and set it as the players for the front-end
-      rowdata = dbresult[0]
+      rowdata = {}
+      rowdata.status = "FROM_DATABASE"
+      rowdata.gameid = requestedDateMonth
       rowdata.players = buildPlayerList(dbresult);
     } else {
       // create a blank entry to render the poll page
@@ -148,10 +141,11 @@ async function queryDatabaseAndBuildPlayerList(reqDate) {
 function buildPlayerList(dbresult) {
   //loop through all rows and merge the player data into one map
   var playerdata = {};
-  for (var i = 0; i < dbresult.length; i++) { 
-    players = dbresult[i].players;
-    saveType = dbresult[i].saveType;
-    originalPlayerName = dbresult[i].originalPlayerName;
+  dbresult.forEach((doc) => {
+    //console.log(doc.id, '=>', doc.data());
+    players = doc.data().players;
+    saveType = doc.data().saveType;
+    originalPlayerName = doc.data().originalPlayerName;
     // loop through the player saved info and generate latest playerdata
     Object.keys(players).sort().forEach(function(key) {
       //console.log('player=' + key + "___" + players[key]);
@@ -175,7 +169,7 @@ function buildPlayerList(dbresult) {
           text = "Looking forward to the Weekend";
       }
     });
-  }
+  });
   console.log('AllPlayers=' + JSON.stringify(playerdata));
   return playerdata;
 }
