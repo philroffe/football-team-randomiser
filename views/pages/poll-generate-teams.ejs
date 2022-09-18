@@ -40,7 +40,7 @@ pre {
     var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
     console.log('Data=' + JSON.stringify(pagedata));
 
-    var players = pagedata.data.gamedetails.players;
+    var players = pagedata.data.players;
     if (!players) { players = {}; }
     var gameMonth = pagedata.data.gameMonth;
     if (!gameMonth) gameMonth = monthDateNumericFormat.format(todayDate);
