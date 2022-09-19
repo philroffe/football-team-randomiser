@@ -12,7 +12,8 @@ const request = require('request');
 // These environment variables are set automatically on Google App Engine
 const Firestore = require('@google-cloud/firestore');
 const firestore = new Firestore({
-  projectId: 'long-door-651'
+  projectId: 'tensile-spirit-360708',
+  //keyFilename: './keyfile.json',
 });
 
 // store a cache of the data for X seconds
