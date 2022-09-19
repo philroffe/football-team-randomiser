@@ -29,7 +29,9 @@ pre {
     var nextMondayText = "<%= pageData.nextMonday %>";
     var nextMondayDate = new Date(nextMondayText);
     var todayDate = new Date();
-    var pollLink = "https://sheltered-sands-68543.herokuapp.com/poll"
+    //var pollLink = "https://sheltered-sands-68543.herokuapp.com/poll"
+    var pollLink = window.location.protocol + "//" + window.location.host + "/poll"; 
+    //var pollLink = "https://tensile-spirit-360708.nw.r.appspot.com/poll"
     var optionDates = ""
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
     var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
