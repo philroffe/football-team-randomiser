@@ -383,7 +383,7 @@ text {
         allPlayerDetails[playerName] = playerAvailability;
       }
 
-      var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "players": allPlayerDetails, "saveType": saveType, "originalPlayerName": originalPlayerName };
+      var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "playerName": playerName, "playerAvailability": playerAvailability, "saveType": saveType, "originalPlayerName": originalPlayerName };
 
       console.log("SAVING:" + JSON.stringify(gamedetails));
       const options = {};

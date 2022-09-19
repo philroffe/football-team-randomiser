@@ -13,7 +13,7 @@ const request = require('request');
 const Firestore = require('@google-cloud/firestore');
 const firestore = new Firestore({
   projectId: 'tensile-spirit-360708',
-  //keyFilename: './keyfile.json',
+  keyFilename: './keyfile.json',
 });
 
 // store a cache of the data for X seconds
@@ -57,7 +57,8 @@ express()
     console.log('Got POST query:', req.body);
     var gameMonth = req.body.gameMonth;
     var gameYear = req.body.gameYear;
-    var players = req.body.players;
+    var playerName = req.body.playerName;
+    var playerAvailability = req.body.playerAvailability;
     var saveType = req.body.saveType;
     var originalPlayerName = (originalPlayerName === undefined) ? "" : req.body.originalPlayerName;
 
@@ -65,16 +66,17 @@ express()
     gameId = gameYear + "-" + gameMonth + "-01";
     var timestamp = new Date();
     const gamedetails_new = { "gameid": gameId, "timestamp": timestamp, 
-    "pollYear": gameYear, "pollMonth": gameMonth, "players": players, 
+    "playerName": playerName, "playerAvailability": playerAvailability, 
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": req.ip };
-    gamedetailsNewJson = JSON.stringify(gamedetails_new);
-    console.log('Inserting DB data:', gamedetailsNewJson);
 
-    console.log('Inserting DB data:', gamedetailsNewJson);
+    console.log('Inserting DB data:', JSON.stringify(gamedetails_new));
     try {
       //await datastore.save({ key: datastore.key("games_" + gameId), data: gamedetails_new})
-      const docRef = firestore.collection("games_" + gameId).doc(timestamp.toString());
+      const docRef = firestore.collection("games_" + gameId).doc(playerName + "_" + timestamp.toISOString());
       await docRef.set(gamedetails_new);
+
+      var playerSummary = await queryDatabaseAndBuildPlayerList(gameId);
+      await firestore.collection("games_" + gameId).doc("_summary").set(playerSummary);
       // if you got here without an exception then everything was successful
       //res.sendStatus(200);
       res.json({'result': 'OK'})
@@ -83,6 +85,76 @@ express()
       res.send("Error " + err);
     }
   })
+.get('/dbconvert', async (req, res) => {
+  try {
+    console.log('Performing DBConvert from postgresql to firebase: ' + req.query.date);
+    //var gameId = req.query.date;
+    var saveType = "NEW"
+    var originalPlayerName = "";
+
+    // read postgresql data
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    const client = await pool.connect();
+    const dbresult = await client.query('SELECT * FROM games');
+    //console.log('dbresult=' + JSON.stringify(dbresult));
+    // TODO; this is a workaround and should be replaced with "WHERE" in sql above
+    var rowdata = null;
+    var timestamp = new Date();
+    var varAllPlayers = []
+    for (var i = 0; i < dbresult.rows.length; i++) { 
+      //if (dbresult.rows[i].gamedetails.pollMonth == monthDateNumericFormat.format(timestamp)) {
+        rowdata = dbresult.rows[i];
+        console.log(JSON.stringify(rowdata));
+        var gameId = rowdata.gameid;
+        var gamedetails = rowdata.gamedetails;
+        var players = gamedetails.players;
+        Object.keys(players).sort().forEach(function(key) {
+          playerName = key
+          playerAvailability = players[key]
+          //thisPlayerAvailability = { [playerName]: playerAvailability }
+
+          // now convert the rowdata to firebase
+          var timestamp = new Date();
+          const gamedetails_new = { "gameid": gameId, "timestamp": timestamp, "playerName": playerName, 
+          "playerAvailability": playerAvailability, 
+          "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": req.ip };
+
+          varAllPlayers.push(gamedetails_new)
+          
+          console.log("==== " + i + key + "====");
+          console.log(JSON.stringify(gamedetails_new));
+        });
+      //}
+    }
+
+    for (var i = 0; i < varAllPlayers.length; i++) {
+    //for (var i = 110; i < 111; i++) {
+      playerName = varAllPlayers[i].playerName
+      gameId = varAllPlayers[i].gameid
+
+      const docRef = firestore.collection("games_" + gameId).doc(playerName + "_" + new Date().toISOString());
+      await docRef.set(varAllPlayers[i]);
+
+      // generate the summary pages if needed
+      //var playerSummary = await queryDatabaseAndBuildPlayerList(gameId);
+      //await firestore.collection("games_" + gameId).doc("_summary").set(playerSummary);
+
+      console.log(gameId + "******DONE**** ==== " + i + JSON.stringify(varAllPlayers[i]) + "====");
+    }
+    
+    // now render the new result
+    var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
+    var pageData = { data: rowdata };
+    res.render('pages/poll', { pageData: pageData } );
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
 
 
@@ -144,14 +216,10 @@ function buildPlayerList(dbresult) {
   var playerdata = {};
   dbresult.forEach((doc) => {
     //console.log(doc.id, '=>', doc.data());
-    players = doc.data().players;
+    playerName = doc.data().playerName;
+    playerAvailability = doc.data().playerAvailability;
     saveType = doc.data().saveType;
     originalPlayerName = doc.data().originalPlayerName;
-    // loop through the player saved info and generate latest playerdata
-    Object.keys(players).sort().forEach(function(key) {
-      //console.log('player=' + key + "___" + players[key]);
-      playerName = key
-      playerAvailability = players[key]
       switch (saveType) {
         case "NEW":
           // console.log('Adding Player=' + playerName);
@@ -167,9 +235,8 @@ function buildPlayerList(dbresult) {
           playerdata[playerName] = playerAvailability
           break;
         default:
-          text = "Looking forward to the Weekend";
+          console.log('WARN - Skipping player:' + playerName + ' Unknown saveType:' + saveType);
       }
-    });
   });
   console.log('AllPlayers=' + JSON.stringify(playerdata));
   return playerdata;
