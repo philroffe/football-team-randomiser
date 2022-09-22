@@ -111,11 +111,16 @@
 
       // check whether a bank holiday
       var isBankHoliday = false;
-      var currentDateHeaderDate = new Date(pollDate.getFullYear() + "-" + (pollDate.getMonth()+1) + "-" + mondaysDates[i] + " 09:00:00");
+      var currentDateHeaderDate = new Date("2022-01-01 12:00:00");
+      currentDateHeaderDate.setYear(pollDate.getFullYear());
+      currentDateHeaderDate.setMonth(pollDate.getMonth())
+      currentDateHeaderDate.setDate(mondaysDates[i])
+      currentDateHeaderDate.setHours(12, 12, 12);
+
       Object.keys(bankHolidaysJson).forEach(function(key) {
         if (key == "england-and-wales") {
-          for (var i = 0; i < bankHolidaysJson[key].events.length; i++) {
-            var bankHolDate = new Date(bankHolidaysJson[key].events[i].date);
+          for (var j = 0; j < bankHolidaysJson[key].events.length; j++) {
+            var bankHolDate = new Date(bankHolidaysJson[key].events[j].date);
             if (bankHolDate.toISOString().split('T')[0] == currentDateHeaderDate.toISOString().split('T')[0]) {
               isBankHoliday = true;
             }
