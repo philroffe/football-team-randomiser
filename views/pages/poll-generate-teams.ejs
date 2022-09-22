@@ -41,20 +41,20 @@
     <div class="linkborder" style="float:left;" id="emailLinkDesktop">Not Yet Available</div>
   </div>
 
-    <script type="text/javascript">
-    var nextMondayText = "<%= pageData.nextMonday %>";
-    var nextMondayDate = new Date(nextMondayText);
-    //var todayDate = new Date();
-    var todayDate = nextMondayDate;
-    //var pollLink = "https://sheltered-sands-68543.herokuapp.com/poll"
-    var pollLink = window.location.protocol + "//" + window.location.host + "/poll"; 
-    //var pollLink = "https://tensile-spirit-360708.nw.r.appspot.com/poll"
-    var optionDates = ""
-    var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
-    var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
-    var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
+  <script type="text/javascript">
+  var nextMondayText = "<%= pageData.nextMonday %>";
+  var nextMondayDate = new Date(nextMondayText);
+  //var todayDate = new Date();
+  var todayDate = nextMondayDate;
+  var pollLink = "https://sheltered-sands-68543.herokuapp.com/poll";
+  var optionDates = "";
+  var pollDate = "";
+  var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
+  var monthDateLongFormat = new Intl.DateTimeFormat('en', { month: 'long' });
+  var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
+  var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
 
-    function generateTeams() {
+  function generateTeams() {
     // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
     var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
     console.log('Data=' + JSON.stringify(pagedata));
@@ -66,10 +66,9 @@
     var gameYear = pagedata.data.gameYear;
     if (!gameYear) gameYear = todayDate.getFullYear();
 
-    var pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
+    pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
     console.log(pollDate);
     var gameMonthString = monthDateFormat.format(todayDate);
-
 
     function mondaysInMonth(m,y) {
       var days = new Date(y,m,0).getDate();
@@ -88,183 +87,184 @@
     mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
     options = mondaysDates
 
-      console.log("options:" + options);
+    console.log("options:" + options);
 
-      // loop throught the options and find the index for next Monday
-      var nextMondayOptionIndex = -1
-      optionDates = "Dates"
-      Object.keys(options).forEach(function(key) {
-        optionDate = new Date(options[key].date);
-        // Generate a 
-        optionDate = new Date(options[key] + " " + monthDateFormat.format(todayDate) + " " + gameYear);
-        optionDateText = dayDateFormat.format(optionDate) + " " + monthDateFormat.format(optionDate);
+    // loop throught the options and find the index for next Monday
+    var nextMondayOptionIndex = -1
+    optionDates = "Dates"
+    Object.keys(options).forEach(function(key) {
+      optionDate = new Date(options[key].date);
+      // Generate a 
+      optionDate = new Date(options[key] + " " + monthDateFormat.format(todayDate) + " " + gameYear);
+      optionDateText = dayDateFormat.format(optionDate) + " " + monthDateFormat.format(optionDate);
 
-        if (datesAreOnSameDay(optionDate, nextMondayDate)) {
-          optionDates += " : <b><u>" + optionDateText + " </u></b>"
-          // store the index for this Monday - used to get the players
-          nextMondayOptionIndex = key
-        } else {
-          optionDates += " : " + optionDateText
-        }
-      });
-      // if (nextMondayOptionIndex != -1) {
-      //   console.log('Found next Monday option:' + nextMondayOptionIndex);
-      // } else {
-      //   console.log('No game this upcoming Monday:' + nextMondayDate);
-      // }
+      if (datesAreOnSameDay(optionDate, nextMondayDate)) {
+        optionDates += " : <b><u>" + optionDateText + " </u></b>"
+        // store the index for this Monday - used to get the players
+        nextMondayOptionIndex = key
+      } else {
+        optionDates += " : " + optionDateText
+      }
+    });
+    // if (nextMondayOptionIndex != -1) {
+    //   console.log('Found next Monday option:' + nextMondayOptionIndex);
+    // } else {
+    //   console.log('No game this upcoming Monday:' + nextMondayDate);
+    // }
 
-      // Get the players who have ticked this option
-      var playersList = []
-      console.log(players);
-      Object.keys(players).forEach(function(key) {
-        playerName = key;
-        playerCanPlay = players[key][nextMondayOptionIndex];
-        //console.log("playerName:" + playerName + " --- " + playerCanPlay);
-        if (playerCanPlay) {
-          playersList.push(playerName);
-        }
-      });
+    // Get the players who have ticked this option
+    var playersList = []
+    console.log(players);
+    Object.keys(players).forEach(function(key) {
+      playerName = key;
+      playerCanPlay = players[key][nextMondayOptionIndex];
+      //console.log("playerName:" + playerName + " --- " + playerCanPlay);
+      if (playerCanPlay) {
+        playersList.push(playerName);
+      }
+    });
 
-      // randomise the player list
-      //console.log(playersList);
-      shuffle(playersList);
-      //console.log(playersList);
+    // randomise the player list
+    //console.log(playersList);
+    shuffle(playersList);
+    //console.log(playersList);
 
-      // divide into reds and blues
-      var redPlayers = []
-      var bluePlayers = []
-      var standbyPlayers = []
-      var playerCount = playersList.length;
-      var maxPlayersPerTeam = Math.floor(playerCount/2)
-      for (var i = 0; i < playerCount; i++) {
-        if (i < 12) {
-          // evens on reds, odds on blues
-          if (i%2 == 0) {
-            if (redPlayers.length < maxPlayersPerTeam) {
-              redPlayers.push(playersList[i]);
-            } else {
-              standbyPlayers.push(playersList[i]);
-            }
+    // divide into reds and blues
+    var redPlayers = []
+    var bluePlayers = []
+    var standbyPlayers = []
+    var playerCount = playersList.length;
+    var maxPlayersPerTeam = Math.floor(playerCount/2)
+    for (var i = 0; i < playerCount; i++) {
+      if (i < 12) {
+        // evens on reds, odds on blues
+        if (i%2 == 0) {
+          if (redPlayers.length < maxPlayersPerTeam) {
+            redPlayers.push(playersList[i]);
           } else {
-            if (bluePlayers.length < maxPlayersPerTeam) {
-              bluePlayers.push(playersList[i]);
-            } else {
-              standbyPlayers.push(playersList[i]);
-            }
+            standbyPlayers.push(playersList[i]);
           }
         } else {
-          standbyPlayers.push(playersList[i]);
+          if (bluePlayers.length < maxPlayersPerTeam) {
+            bluePlayers.push(playersList[i]);
+          } else {
+            standbyPlayers.push(playersList[i]);
+          }
         }
+      } else {
+        standbyPlayers.push(playersList[i]);
       }
+    }
 
-      // console.log("Red :" + redPlayers);
-      // console.log("Blue:" + bluePlayers);
-      // console.log("StandBy:" + standbyPlayers);
+    // console.log("Red :" + redPlayers);
+    // console.log("Blue:" + bluePlayers);
+    // console.log("StandBy:" + standbyPlayers);
 
-      //////////////////////
-      // generate email text
-      //////////////////////
-      var emailHeader = ""
-      var emailSubject = ""
-      if (playerCount == 0) {
-        emailHeader = "Only " + playerCount + " players this week - any more or should I cancel?"
-        emailSubject = "NO PLAYERS FOUND - CHECK DATE AND POLL IS CORRECT: "
-      } else if (playerCount <= 6) {
-        emailHeader = "Only " + playerCount + " players this week - any more or should I cancel?"
-        emailSubject = "LOTS of Players Needed"
-      } else if (playerCount == 7) {
-        emailHeader = "Only " + playerCount + " players so far - 3 needed.\nAnyone?"
-        emailSubject = "3 Players Needed"
-      } else if (playerCount == 8) {
-        emailHeader = "Only " + playerCount + " players so far so 4-a-side as it stands. 2 players needed to make 10.\nAnyone fancy a game?"
-        emailSubject = "2 Players Needed"
-      } else if (playerCount == 9) {
-        emailHeader = playerCount + " players so far this week - 1 needed to make it an even 5-a-side.\nAnyone fancy a game?"
-        emailSubject = "1 Players Needed"
-      } else if (playerCount == 10) {
-        emailHeader = playerCount + " players this week so 5-a-side and game on."
-        emailSubject = "Teams"
-      } else if (playerCount == 11) {
-        emailHeader = playerCount + " players this week - so 5-a-side with 1 on standby (see below), or 1 needed to make it 6-a-side.\nAnyone fancy a game?"
-        emailSubject = "Teams"
-      } else if (playerCount == 12) {
-        emailHeader = playerCount + " players this week, so 6-a-side and game on."
-        emailSubject = "Teams"
-      } else if (playerCount > 12) {
-        emailHeader = playerCount + " players this week, so 6-a-side with some on standby - see names below."
-        emailSubject = "Teams"
-      }
+    //////////////////////
+    // generate email text
+    //////////////////////
+    var emailHeader = ""
+    var emailSubject = ""
+    if (playerCount == 0) {
+      emailHeader = "Only " + playerCount + " players this week - any more or should I cancel?"
+      emailSubject = "NO PLAYERS FOUND - CHECK DATE AND POLL IS CORRECT: "
+    } else if (playerCount <= 6) {
+      emailHeader = "Only " + playerCount + " players this week - any more or should I cancel?"
+      emailSubject = "LOTS of Players Needed"
+    } else if (playerCount == 7) {
+      emailHeader = "Only " + playerCount + " players so far - 3 needed.\nAnyone?"
+      emailSubject = "3 Players Needed"
+    } else if (playerCount == 8) {
+      emailHeader = "Only " + playerCount + " players so far so 4-a-side as it stands. 2 players needed to make 10.\nAnyone fancy a game?"
+      emailSubject = "2 Players Needed"
+    } else if (playerCount == 9) {
+      emailHeader = playerCount + " players so far this week - 1 needed to make it an even 5-a-side.\nAnyone fancy a game?"
+      emailSubject = "1 Players Needed"
+    } else if (playerCount == 10) {
+      emailHeader = playerCount + " players this week so 5-a-side and game on."
+      emailSubject = "Teams"
+    } else if (playerCount == 11) {
+      emailHeader = playerCount + " players this week - so 5-a-side with 1 on standby (see below), or 1 needed to make it 6-a-side.\nAnyone fancy a game?"
+      emailSubject = "Teams"
+    } else if (playerCount == 12) {
+      emailHeader = playerCount + " players this week, so 6-a-side and game on."
+      emailSubject = "Teams"
+    } else if (playerCount > 12) {
+      emailHeader = playerCount + " players this week, so 6-a-side with some on standby - see names below."
+      emailSubject = "Teams"
+    }
 
-      fullEmailSubject = emailSubject + " - Mon " + dayDateFormat.format(nextMondayDate) + " " + monthDateFormat.format(nextMondayDate) + " [Footie, Goodwin, 6pm Mondays]\n"
-      fullEmailText = "Hi all,\n\n" + emailHeader + "\n\nTeams below... (any changes let me know asap)\n\n"
+    fullEmailSubject = emailSubject + " - Mon " + dayDateFormat.format(nextMondayDate) + " " + monthDateFormat.format(nextMondayDate) + " [Footie, Goodwin, 6pm Mondays]\n"
+    fullEmailText = "Hi all,\n\n" + emailHeader + "\n\nTeams below... (any changes let me know asap)\n\n"
 
-      fullEmailText += "REDS\n"
-      for (var i = 0; i < redPlayers.length; i++) {
-        fullEmailText += i+1 + " " + redPlayers[i] + "\n"
-      }
+    fullEmailText += "REDS\n"
+    for (var i = 0; i < redPlayers.length; i++) {
+      fullEmailText += i+1 + " " + redPlayers[i] + "\n"
+    }
+    fullEmailText += "\n"
+    fullEmailText += "BLUES\n"
+    for (var i = 0; i < bluePlayers.length; i++) {
+      fullEmailText += i+1 + " " + bluePlayers[i] + "\n"
+    }
+    if (standbyPlayers.length > 0) {
       fullEmailText += "\n"
-      fullEmailText += "BLUES\n"
-      for (var i = 0; i < bluePlayers.length; i++) {
-        fullEmailText += i+1 + " " + bluePlayers[i] + "\n"
+      fullEmailText += "STANDBY\n"
+      for (var i = 0; i < standbyPlayers.length; i++) {
+        fullEmailText += i+1 + " " + standbyPlayers[i] + "\n"
       }
-      if (standbyPlayers.length > 0) {
-        fullEmailText += "\n"
-        fullEmailText += "STANDBY\n"
-        for (var i = 0; i < standbyPlayers.length; i++) {
-          fullEmailText += i+1 + " " + standbyPlayers[i] + "\n"
-        }
-      }
-      fullEmailText += "\nCheers,\nPhil\n"
-      fullEmailText += "\nMobile: 07960951917\n"
-      fullEmailText += pollLink + "\n"
+    }
+    fullEmailText += "\nCheers,\nPhil\n"
+    fullEmailText += "\nMobile: 07960951917\n"
+    fullEmailText += pollLink + "\n"
 
+  }
+
+  function shuffle(array) {
+    var currentIndex = array.length,  randomIndex;
+
+    // While there remain elements to shuffle...
+    while (currentIndex != 0) {
+      // Pick a remaining element...
+      randomIndex = Math.floor(Math.random() * currentIndex);
+      currentIndex--;
+      // And swap it with the current element.
+      [array[currentIndex], array[randomIndex]] = [
+      array[randomIndex], array[currentIndex]];
     }
 
-    function shuffle(array) {
-      var currentIndex = array.length,  randomIndex;
+    return array;
+  }
 
-      // While there remain elements to shuffle...
-      while (currentIndex != 0) {
-        // Pick a remaining element...
-        randomIndex = Math.floor(Math.random() * currentIndex);
-        currentIndex--;
-        // And swap it with the current element.
-        [array[currentIndex], array[randomIndex]] = [
-        array[randomIndex], array[currentIndex]];
-      }
+  function datesAreOnSameDay(first, second) {
+    return first.getFullYear() === second.getFullYear() &&
+      first.getMonth() === second.getMonth() &&
+      first.getDate() === second.getDate();
+  }
 
-      return array;
-    }
+  function updateDivText() {
+      // generate random new teams
+      generateTeams();
+      //Update div text values
+      document.getElementById("pollLink").innerHTML="Generated from: <a href='" + pollLink + "'>" + monthDateLongFormat.format(pollDate) + "</a>"
+      document.getElementById("optionDates").innerHTML = optionDates
+      document.getElementById("emailTitle").innerHTML = fullEmailSubject
+      document.getElementById("emailBody").innerHTML = fullEmailText
+      // generate email link
+      emailTo = "footie"
+      emailBodyUrlEnc = encodeURI(fullEmailText)
+      emailLinkHTML = "<a href=\"http://mail.google.com/mail/u/?authuser=philroffe@gmail.com&view=cm&fs=1&tf=1" + 
+        "&to=" + emailTo + 
+        "&su=" + fullEmailSubject +
+        "&body=" + emailBodyUrlEnc +
+        "\" target=\"_blank\">Gmail Webmail</a>" 
+        document.getElementById("emailLinkDesktop").innerHTML = emailLinkHTML
 
-    function datesAreOnSameDay(first, second) {
-      return first.getFullYear() === second.getFullYear() &&
-        first.getMonth() === second.getMonth() &&
-        first.getDate() === second.getDate();
-    }
+        emailLinkHTML = "<a href=\"mailto:" + emailTo + "?subject=" + fullEmailSubject + "&body=" + emailBodyUrlEnc + "\">Mobile</a>" 
+        document.getElementById("emailLinkMobile").innerHTML = emailLinkHTML
+  }
+  //generateTeams();
+  updateDivText();
+  </script>
 
-        function updateDivText() {
-          // generate random new teams
-          generateTeams();
-          //Update div text values
-          document.getElementById("pollLink").innerHTML="Generated from: <a href='" + pollLink + "'>" + pollLink + "</a>"
-          document.getElementById("optionDates").innerHTML = optionDates
-          document.getElementById("emailTitle").innerHTML = fullEmailSubject
-          document.getElementById("emailBody").innerHTML = fullEmailText
-          // generate email link
-          emailTo = "footie"
-          emailBodyUrlEnc = encodeURI(fullEmailText)
-          emailLinkHTML = "<a href=\"http://mail.google.com/mail/u/?authuser=philroffe@gmail.com&view=cm&fs=1&tf=1" + 
-          "&to=" + emailTo + 
-          "&su=" + fullEmailSubject +
-          "&body=" + emailBodyUrlEnc +
-          "\" target=\"_blank\">Email (Gmail Webmail)</a>" 
-          document.getElementById("emailLinkDesktop").innerHTML = emailLinkHTML
-
-          emailLinkHTML = "<a href=\"mailto:" + emailTo + "?subject=" + fullEmailSubject + "&body=" + emailBodyUrlEnc + "\">Email (Mobile)</a>" 
-          document.getElementById("emailLinkMobile").innerHTML = emailLinkHTML
-        }
-        //generateTeams();
-        updateDivText();
-      </script>
-    </body>
+  </body>
 </html>

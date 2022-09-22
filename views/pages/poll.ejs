@@ -29,7 +29,7 @@
 </form>
 <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
 <button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
-<p><p>Ready to generate teams for next Monday?<br><a href="/teams">Go here</a>.
+<p><p><a href="/teams">Finished? Generate teams and email here.</a>.
 
   <script type="text/javascript">
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });
@@ -56,8 +56,9 @@
     var pollDate = new Date("01 " + monthDateFormat.format(selectedMonthDate) + " " + gameYear);
     console.log(pollDate);
     var gameMonthString = monthDateFormat.format(nextMondayDate);
-    // update the header month input selector
-    document.getElementById("gameMonthInput").max = "2022-08"
+    var newMaxDate = new Date(nextMondayDate).setMonth(nextMondayDate.getMonth()+1)
+     // update the header month input selector
+    document.getElementById("gameMonthInput").max = "2022-" + monthDateNumericFormat.format(newMaxDate)
     document.getElementById("gameMonthInput").value = gameYear + "-" + gameMonth
     document.getElementById("gameMonthInput").addEventListener('change', function() {
       var selectedDate = document.getElementById("gameMonthInput").value
