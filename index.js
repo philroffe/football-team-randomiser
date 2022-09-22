@@ -108,8 +108,8 @@ express()
       await firestore.collection("games_" + gameId).doc("_summary").set(playerSummary);
       // if you got here without an exception then everything was successful
       //res.sendStatus(200);
-      res.redirect('/poll');
-      //res.json({'result': 'OK'})
+      //res.redirect('/poll');
+      res.json({'result': 'OK'})
     } catch (err) {
       console.error(err);
       res.send("Error " + err);
