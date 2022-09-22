@@ -1,31 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <link rel='stylesheet' id='bootstrap-style-css'  href='https://sheffield.digital/wp-content/themes/sd-litemag/assets/css/bootstrap.min.css?ver=4.9.8' type='text/css' media='all' />
-  <link rel='stylesheet' id='bluth-style-css'  href='https://sheffield.digital/wp-content/themes/sd-litemag/style.css?ver=4.9.8' type='text/css' media='all' />
-
+  <%- include ("../partials/header.ejs") %>
 </head>
 
-<body>
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+    
+    <div id="nextMonday">Not Yet Available</div>
+    Maybe it's bank holiday?
 
-<div id="nextMonday">Not Yet Available</div>
-Maybe it's bank holiday?
+      <script type="text/javascript">
+        // Get the date next Monday (and check if today is a Monday too)
+        var nextMonday = new Date();
+        //nextMonday = new Date('11 Aug 2021'); // useful for testing
+        if (nextMonday.getDay() != 1) {
+          nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
+        }
+        var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
+        var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
+        nextMondayText = dayDateFormat.format(nextMonday) + " " + monthDateFormat.format(nextMonday);
 
-  <script type="text/javascript">
-    // Get the date next Monday (and check if today is a Monday too)
-    var nextMonday = new Date();
-    //nextMonday = new Date('11 Aug 2021'); // useful for testing
-    if (nextMonday.getDay() != 1) {
-      nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
-    }
-    var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
-    var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
-    nextMondayText = dayDateFormat.format(nextMonday) + " " + monthDateFormat.format(nextMonday);
-
-    document.getElementById("nextMonday").innerHTML = 'No doodle found for this Monday: ' + nextMondayText
-  </script>
-
+        document.getElementById("nextMonday").innerHTML = 'No poll found for this Monday: ' + nextMondayText
+      </script>
+  </div>
 </body>
 </html>

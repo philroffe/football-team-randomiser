@@ -1,27 +1,56 @@
-.jumbotron {
-  background: #532F8C;
-  color: white;
-  padding-bottom: 80px; }
-  .jumbotron .btn-primary {
-    background: #845ac7;
-    border-color: #845ac7; }
-    .jumbotron .btn-primary:hover {
-      background: #7646c1; }
-  .jumbotron p {
-    color: #d9ccee;
-    max-width: 75%;
-    margin: 1em auto 2em; }
-  .navbar + .jumbotron {
-    margin-top: -20px; }
-  .jumbotron .lang-logo {
-    display: block;
-    background: #B01302;
-    border-radius: 50%;
-    overflow: hidden;
-    width: 100px;
-    height: 100px;
-    margin: auto;
-    border: 2px solid white; }
-    .jumbotron .lang-logo img {
-      max-width: 100%; }
+pre {
+   font-size: 90%;
+}
+.linkborder a:link, .emailHeader {
+  background-color: #D5EDF6;
+  color: #333333;
+  padding: 2px 6px 2px 6px;
+  border-top: 1px solid #D5EDF6;
+  border-right: 1px solid #333333;
+  border-bottom: 1px solid #333333;
+  border-left: 1px solid #D5EDF6;
+}
+.gameheader  {
+  float: left;
+  padding: 2px 6px 2px 0px;
+  margin: 0px;
+}
+.gameheader input,button {
+  height: 30px;
+  margin: 0px;
+}
+/* Create a custom checkbox */
+.checkmark {
+  top: 0px;
+  left: 0px;
+  height: 5px;
+  width: 25px;
+  background-color: #eee;
+  border: 1px solid black;
+}
+.gameMonthInput {
+  font-size: 80%; 
+  height: 30px;
+  margin: 0px 0px 0px 20px;
+}
 
+input[type=checkbox] {
+   appearance: none;
+   -webkit-appearance: none;
+   -moz-appearance: none;
+   padding: 5px;
+   background-color: #DC7633; /* red */
+}
+input[type=checkbox]:checked {
+   background-color: #7DCEA0; /* green */
+}
+input[type=checkbox]:checked:before {
+   content:"\2713";
+   color: black;
+   padding: initial;
+   font-weight: bold;
+  padding: 2px 6px 2px 0px;
+}
+input[type=checkbox]:checked:disabled:before {
+   color: grey;
+}

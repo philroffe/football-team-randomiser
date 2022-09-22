@@ -20,6 +20,9 @@ const firestore = new Firestore({
 // useful to allow a quick refresh of the screen to randomise players
 var nextMonday = new Date();
 var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
+var bankHolidaysCache = {};
+var cacheLastRefresh = new Date();
+var maxCacheSecs = 86400; // 1 day
 
 express()
 .use(express.static(path.join(__dirname, 'public')))
@@ -42,11 +45,34 @@ express()
       }
     })
 .get('/poll', async (req, res) => {
+  // Check if cache needs clearing
+  var diffSeconds = (new Date().getTime() - cacheLastRefresh.getTime()) / 1000;
+  if (diffSeconds > maxCacheSecs) {
+    bankHolidaysCache = {};
+    console.log('CLEARED CACHE as diffSeconds was:' + diffSeconds);
+  }
   try {
     console.log('Rendering POLL page with data' + req.query.date);
     var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
+    
+    // get the latest bank holidays if not already cached
+    if (bankHolidaysCache && Object.keys(bankHolidaysCache).length === 0) {
+      var bankHolidaysFile;
+      try {
+        bankHolidaysFile = await downloadPage("https://www.gov.uk/bank-holidays.json")
+        bankHolidaysCache = JSON.parse(bankHolidaysFile);
+        console.log("Got NEW bank holidays: " + Object.keys(bankHolidaysCache).length)
+      } catch (err) {
+        bankHolidaysCache = {};
+        console.log("ERROR retrieving NEW bank holidays - proceeding without them...", err)
+      }
+    } else {
+      console.log("Using CACHED bank holidays: " + Object.keys(bankHolidaysCache).length)
+    }
+
     // combine database data with any additional page data
-    var pageData = { data: rowdata };
+    var pageData = { data: rowdata, bankHolidays: bankHolidaysCache };
+
     res.render('pages/poll', { pageData: pageData } );
   } catch (err) {
     console.error(err);
@@ -150,6 +176,7 @@ express()
     var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
     var pageData = { data: rowdata };
     res.render('pages/poll', { pageData: pageData } );
+    client.release();
   } catch (err) {
     console.error(err);
     res.send("Error " + err);
@@ -181,8 +208,35 @@ function getDateNextMonday() {
   return nextMonday;
 }
 
+
+// wrap a request in an promise
+function downloadPage(url) {
+  return new Promise((resolve, reject) => {
+    request(url, (error, response, body) => {
+      if (error) reject(error);
+      if (response && response.statusCode != 200) {
+        reject('Invalid status code <' + response.statusCode + '>');
+      }
+      resolve(body);
+    });
+  });
+}
+
 async function queryDatabaseAndBuildPlayerList(reqDate) {
-  var requestedDate = new Date();
+    // Get the date next Monday
+    nextMonday = new Date();
+    if ((nextMonday.getDay() == 1) && (nextMonday.getHours() >= 19)) {
+      // date is a Monday after kick-off time (6-7pm), so jump forward a day to force the next week
+      nextMonday.setDate(nextMonday.getDate() + 1);
+      console.log('Currently a Monday after kick-off so adding a day to:' + nextMonday.toISOString());
+    }
+    nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
+    console.log('Next Monday:' + nextMonday.toISOString());
+
+    var requestedDate = new Date();
+    var requestedDate = nextMonday;
+
+
     if (reqDate) {
       requestedDate = new Date(reqDate);
     } else {
@@ -203,9 +257,11 @@ async function queryDatabaseAndBuildPlayerList(reqDate) {
       rowdata.status = "FROM_DATABASE"
       rowdata.gameid = requestedDateMonth
       rowdata.players = buildPlayerList(dbresult);
+      rowdata.nextMonday = nextMonday
     } else {
       // create a blank entry to render the poll page
-      rowdata = { "status": "NO_DATABASE_ENTRY", "gameid": requestedDateMonth, "players":{}}
+      rowdata = { "status": "NO_DATABASE_ENTRY", "gameid": requestedDateMonth, "players":{}, "nextMonday": nextMonday}
+  
     }
     console.log('rowdata=' + JSON.stringify(rowdata));
     return rowdata;

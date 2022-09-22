@@ -1,26 +1,16 @@
-<!DOCTYPE html>
 <html>
 <head>
   <%- include ("../partials/header.ejs") %>
 </head>
 
-<body>
-
-<!-- Navigation bar with social media icons -->
-<div class="w3-bar w3-black w3-hide-small">
-  <a href="/" class="w3-bar-item w3-button">Home</a>
-  <a href="/poll" class="w3-bar-item w3-button">Poll</a>
-  <a href="/teams" class="w3-bar-item w3-button">Generate</a>
-  <a href="https://goo.gl/maps/LCGbaK5RQD47CxXG8" class="w3-bar-item w3-button w3-right"><i>Map</i>  </a>
-</div>
-
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+<!-- Page content -->
+<div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
 <div>
-	<h2>6-a-side Footie, Mondays 6pm</h2>
-	<h3>Goodwin, Sport Sheffield</h3>
+	<h3><center>6-a-side Football<br>6pm Mondays<br>
+	Goodwin, Sport Sheffield</center></h3>
 	<p>
-	<a href="/poll">Add your availability</a> | 
-	<a href="/teams">Generate weekly team list</a>
-	<hr>
 	<h4>Want to play?</h4>
 	<ol>
 		<li>Get yourself on the email list - contact the organiser, or one of the players and they'll pass your details on</li>
@@ -44,10 +34,13 @@
 	<h4>Location</h4>
 	John Hawley Pitch, Sport Sheffield
 	<br>Goodwin Sports Centre, Northumberland Road, Sheffield, S10 2TY
-	<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1366.5557408425332!2d-1.49490656164496!3d53.381694398348294!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x993d31e22439819e!2zNTPCsDIyJzU0LjEiTiAxwrAyOSczOS40Ilc!5e1!3m2!1sen!2suk!4v1648281203984!5m2!1sen!2suk" width="500" height="350" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+	<p>
+	<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1366.5557408425332!2d-1.49490656164496!3d53.381694398348294!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x993d31e22439819e!2zNTPCsDIyJzU0LjEiTiAxwrAyOSczOS40Ilc!5e1!3m2!1sen!2suk!4v1648281203984!5m2!1sen!2suk" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
 
 
 </div>
 
-</3ody>
+</div>
+
+</body>
 </html>

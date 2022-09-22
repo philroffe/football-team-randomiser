@@ -1,90 +1,25 @@
 <html>
-
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta charset="UTF-8">
-
-<link rel='stylesheet' id='bootstrap-style-css'  href='https://sheffield.digital/wp-content/themes/sd-litemag/assets/css/bootstrap.min.css?ver=4.9.8' type='text/css' media='all' />
-<link rel='stylesheet' id='bluth-style-css'  href='https://sheffield.digital/wp-content/themes/sd-litemag/style.css?ver=4.9.8' type='text/css' media='all' />
-<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Oswald">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open Sans">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-<style>
-h1,h2,h3,h4,h5,h6 {font-family: "Oswald"}
-body {font-family: "Open Sans"}
-</style>
-
-<style>
-@viewport {
-  width: device-width ;
-  zoom: 1.0 ;
-}
-pre {
-   font-size: 90%;
-}
-.linkborder a:link, .emailHeader {
-  background-color: #D5EDF6;
-  color: #333333;
-  padding: 2px 6px 2px 6px;
-  border-top: 1px solid #D5EDF6;
-  border-right: 1px solid #333333;
-  border-bottom: 1px solid #333333;
-  border-left: 1px solid #D5EDF6;
-}
-.gameheader  {
-  float: left;
-  padding: 2px 6px 2px 0px;
-  margin: 0px;
-}
-
-.gameheader input,button{
-  height: 30px;
-  margin: 0px;
-}
-text {
-  font-size: 10px;
-  width:20em;
-}
-/* Create a custom checkbox */
-.checkmark {
-  top: 0;
-  left: 0;
-  height: 5px;
-  width: 25px;
-  background-color: #eee;
-}
-.gameMonthInput {
-  font-size: 80%; 
-  height: 30px;
-  margin: 0px 0px 0px 20px;
-}
-</style>
+  <%- include ("../partials/header.ejs") %>
 </head>
-<body class="w3-light-grey">
 
-<!-- Navigation bar with social media icons -->
-<div class="w3-bar w3-black w3-hide-small">
-  <a href="/" class="w3-bar-item w3-button">Home</a>
-  <a href="/poll" class="w3-bar-item w3-button">Poll</a>
-  <a href="/teams" class="w3-bar-item w3-button">Generate</a>
-  <a href="https://goo.gl/maps/LCGbaK5RQD47CxXG8" class="w3-bar-item w3-button w3-right"><i>Map</i>  </a>
-</div>
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+<!-- Page content -->
+<div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
 
 <div id="year">
-  <h3>Choose Your Poll: 
+  <h3>Month: 
   <input type="month" class="gameMonthInput" id="gameMonthInput" name="start" min="2022-03" value="2022-04">
   </h3>
 </div>
 
-<div id="description">Footie, 6pm every Monday, Goodwin, John Hawley Pitch</div>
-<div id="location"><a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Sport Sheffield, Northumberland Rd, Sheffield, S10 2TY</a></div>
-
+<div id="description">Footie, 6pm Mondays, Goodwin, Sport Sheffield</div>
+<div id="location"><a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Northumberland Rd, Sheffield, S10 2TY</a></div>
 
 <p><p><h3>Add/Edit Availability:</h3>
-<div id="title">Not Yet Available</div>
 <div id="divHeader">
-<div id="nameHeader" class="gameheader"><br>Name</div>
+<div id="nameHeader" class="gameheader"><br></div>
 </div>
 <div id="editHeader" class="gameheader"><br></div>
 <div style="clear:both;"></div>
@@ -94,6 +29,7 @@ text {
 </form>
 <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
 <button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
+<p><p>Ready to generate teams for next Monday?<br><a href="/teams">Go here</a>.
 
   <script type="text/javascript">
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });
@@ -107,16 +43,21 @@ text {
 
     // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
     var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
-    console.log('Data=' + JSON.stringify(pagedata));
-
+    //console.log('Data=' + JSON.stringify(pagedata));
+ 
+    var bankHolidaysJson = pagedata.bankHolidays;
     var selectedMonthDate = new Date(pagedata.data.gameid);
     var gameMonth = monthDateNumericFormat.format(selectedMonthDate);
     var gameYear = selectedMonthDate.getFullYear();
+    var nextMonday = pagedata.data.nextMonday;
+    var nextMondayDate = new Date(nextMonday);
+ 
 
-    var pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
+    var pollDate = new Date("01 " + monthDateFormat.format(selectedMonthDate) + " " + gameYear);
     console.log(pollDate);
-    var gameMonthString = monthDateFormat.format(todayDate);
+    var gameMonthString = monthDateFormat.format(nextMondayDate);
     // update the header month input selector
+    document.getElementById("gameMonthInput").max = "2022-08"
     document.getElementById("gameMonthInput").value = gameYear + "-" + gameMonth
     document.getElementById("gameMonthInput").addEventListener('change', function() {
       var selectedDate = document.getElementById("gameMonthInput").value
@@ -156,22 +97,6 @@ text {
         }
     }
 
-
-    function createJsonDiff(obj1, obj2) {
-      var ret = {};
-      for(var i in obj2) {
-
-    console.log("i="+i)
-        if(!obj1.hasOwnProperty(i) || obj2[i] !== obj1[i]) {
-          console.log("iprop="+i)
-          ret[i] = obj2[i];
-        }
-      }
-      return ret;
-    };
-
-    document.getElementById("title").innerHTML = "<b>" + monthDateFormat.format(pollDate) + ' ' + gameYear + "</b>"
-
     // auto generate divs for headers for each game week
     for (var i = 0; i < mondaysDates.length; i ++) {
       var newWeekHeader = document.createElement("div");
@@ -180,11 +105,33 @@ text {
       // create a totals header...
       var newWeekTotal = document.createElement("i");
       newWeekTotal.setAttribute("id", "week" + i + "Total"); 
-      newWeekTotal.innerHTML = "0"; 
+      newWeekTotal.innerHTML = '0';
       newWeekHeader.appendChild(newWeekTotal);
       newWeekHeader.appendChild(document.createElement("br"));
+
+      // check whether a bank holiday
+      var isBankHoliday = false;
+      var currentDateHeaderDate = new Date(pollDate.getFullYear() + "-" + (pollDate.getMonth()+1) + "-" + mondaysDates[i] + " 09:00:00");
+      Object.keys(bankHolidaysJson).forEach(function(key) {
+        if (key == "england-and-wales") {
+          for (var i = 0; i < bankHolidaysJson[key].events.length; i++) {
+            var bankHolDate = new Date(bankHolidaysJson[key].events[i].date);
+            if (bankHolDate.toISOString().split('T')[0] == currentDateHeaderDate.toISOString().split('T')[0]) {
+              isBankHoliday = true;
+            }
+          }
+        }
+      });
+
       // create a date header
-      const weekDateHeader = document.createTextNode(mondaysDates[i] + getDayOfMonthSuffix(mondaysDates[i]));
+      currentDateHeader = mondaysDates[i] + getDayOfMonthSuffix(mondaysDates[i]);
+
+      const weekDateHeader = document.createElement("i");
+      if (isBankHoliday) {
+        currentDateHeader = "<strike>" + currentDateHeader + "</strike>";
+        newWeekHeader.setAttribute("bankHoliday", true);
+      }
+      weekDateHeader.innerHTML = currentDateHeader;
       newWeekHeader.appendChild(weekDateHeader);
       divHeader.appendChild(newWeekHeader);  
     }
@@ -209,7 +156,7 @@ text {
         weekTotalSummary.innerHTML = 0
         for (var i = 1; i <= playerCount; i++) {
           if (document.getElementById("player" + i + "Week" + j).checked) {
-            weekTotalSummary.innerHTML = parseInt(weekTotalSummary.innerHTML) + 1;
+            weekTotalSummary.innerHTML = "(" + (parseInt(weekTotalSummary.innerHTML.replace("(", "").replace(")", "")) + 1) + ")";
           }
         }
       }
@@ -237,7 +184,7 @@ text {
       newPlayerName.setAttribute("type", "text"); 
       newPlayerName.setAttribute("id", "player" + playerCount); 
       newPlayerName.setAttribute("name", "myPlayers[]"); 
-      newPlayerName.style.width = 120;
+      newPlayerName.style.width = 90;
       nameHeader.appendChild(document.createElement("br"));
       nameHeader.appendChild(newPlayerName);
       allOriginalPlayers["player" + playerCount] = playerName
@@ -269,6 +216,10 @@ text {
         } else {
           // new player so assume default checked
           newPlayerWeek.checked = true;
+        }
+        if (weekHeader.getAttribute("bankHoliday")) {
+          newPlayerWeek.setAttribute("type", "hidden"); 
+          newPlayerWeek.checked = false;
         }
         weekHeader.appendChild(document.createElement("br"));
         weekHeader.appendChild(newPlayerWeek);
