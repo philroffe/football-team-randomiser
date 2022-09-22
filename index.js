@@ -112,7 +112,7 @@ express()
       res.json({'result': 'OK'})
     } catch (err) {
       console.error(err);
-      res.send("Error " + err);
+      res.send({'result': err});
     }
   })
 .get('/dbconvert', async (req, res) => {

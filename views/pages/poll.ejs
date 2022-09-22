@@ -308,88 +308,66 @@
     }
 
     function savePlayer(playerId) {
-      var playerName = document.getElementById(playerId).value;
-      var originalPlayerName = allOriginalPlayers[playerId];
-      console.log("SAVING Player: " + playerName + " ChosenPlayer:" + playerId);
+      // Save the data (using XMLHttpRequest)
+      try {
+        var playerName = document.getElementById(playerId).value;
+        var originalPlayerName = allOriginalPlayers[playerId];
+        console.log("SAVING Player: " + playerName + " ChosenPlayer:" + playerId);
 
-      // now loop through all saved players and pre-populate their availability
-      var allPlayerDetails = {};
-      var saveType = "UNKNOWN"
-      // check if player is new, edited, or deleted
-      console.log("LOOKUP: " + playerId + " Original Name: " + originalPlayerName);
-      if (originalPlayerName) {
-        console.log("EDITED: " + playerId + " Original Name: " + originalPlayerName);
-        // if playername is empty then prefix the original name for deletion upon save
-        if (playerName == "") {
-          saveType = "DELETE"
-          playerName = originalPlayerName;
-        } else if (playerName != allOriginalPlayers) {
-          saveType = "RENAME"
+        // now loop through all saved players and pre-populate their availability
+        var allPlayerDetails = {};
+        var saveType = "UNKNOWN"
+        // check if player is new, edited, or deleted
+        console.log("LOOKUP: " + playerId + " Original Name: " + originalPlayerName);
+        if (originalPlayerName) {
+          console.log("EDITED: " + playerId + " Original Name: " + originalPlayerName);
+          // if playername is empty then prefix the original name for deletion upon save
+          if (playerName == "") {
+            saveType = "DELETE"
+            playerName = originalPlayerName;
+          } else if (playerName != allOriginalPlayers) {
+            saveType = "RENAME"
+          }
+        } else {
+          saveType = "NEW"
+          console.log("NEW: " + playerId + " Original Name: " + originalPlayerName);
         }
-      } else {
-        saveType = "NEW"
-        console.log("NEW: " + playerId + " Original Name: " + originalPlayerName);
-      }
 
-      if (playerName && playerName != "") {
-        var playerAvailability = {};
-        for (var j = 0; j < mondaysDates.length; j++) {
-          var playerAvailable = document.getElementById(playerId + "Week" + j).checked
-          playerAvailability[j] = playerAvailable;
+        if (playerName && playerName != "") {
+          var playerAvailability = {};
+          for (var j = 0; j < mondaysDates.length; j++) {
+            var playerAvailable = document.getElementById(playerId + "Week" + j).checked
+            playerAvailability[j] = playerAvailable;
+          }
+          allPlayerDetails[playerName] = playerAvailability;
         }
-        allPlayerDetails[playerName] = playerAvailability;
-      }
 
-      var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "playerName": playerName, "playerAvailability": playerAvailability, "saveType": saveType, "originalPlayerName": originalPlayerName };
+        var gamedetails = { "gameYear": gameYear, "gameMonth": gameMonth, "playerName": playerName, "playerAvailability": playerAvailability, "saveType": saveType, "originalPlayerName": originalPlayerName };
 
-      console.log("SAVING:" + JSON.stringify(gamedetails));
-      const options = {};
-      // Now POST the data to save
-      if (window.fetch) {
-        // run my fetch request here
-        fetch("/save-result", {
-          method: 'POST',
-          body: JSON.stringify(gamedetails),
-          headers: { 'Content-Type': 'application/json' }
-         })
-         .then( res => res.json() )
-         .then( data => console.log(data) )
-         .then( location.reload(true) )
-         .catch(error => {
-           console.error('There has been a problem with your fetch operation:', error);
-         });
-      } else {
-        // do something with XMLHttpRequest?
-        var xmlhttp = new XMLHttpRequest();   // new HttpRequest instance 
-        var theUrl = "/json-handler";
+        console.log("SAVING:" + JSON.stringify(gamedetails));
+
+        // now send the POST request with the data
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            console.log("Saved response", this.responseText);
+            location.reload(true);
+          }
+        };
         xmlhttp.open("POST", "/save-result");
         xmlhttp.setRequestHeader("Content-Type", "application/json");
         xmlhttp.send(JSON.stringify(gamedetails));
-        location.reload(true);
-      }
- 
-      console.log("SAVING:" + JSON.stringify(gamedetails));
+      } catch (error) {
+        console.error('There has been a problem with the save-result operation:', error);
+        // log this error back to the server to help with debugging
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.open("POST", "/logging");
+        xmlhttp.setRequestHeader("Content-Type", "application/json");
+        xmlhttp.send( JSON.stringify({ "error": error.stack }) );
 
-      //(either disable everything, or might just be easier to reload the page)
-      // disable everything
-      for (var i = 1; i <= playerCount; i++) {
-        document.getElementById("player" + i).disabled = true; 
-        for (var j = 0; j < mondaysDates.length; j++) {
-          document.getElementById("player" + i + "Week" + j).disabled = true; 
-        }
-        document.getElementById("player" + i + "Edit").disabled = false; 
-        document.getElementById("player" + i + "Edit").style.backgroundColor = "lightgreen";
+        //location.reload(true);
       }
-      // re-enable the addPlayer botton
-      document.getElementById("addPlayer").disabled = false; 
-      document.getElementById("addPlayer").style.backgroundColor = "lightgreen";
-      ///////////////
-      // saved - disable the cancel button
-      document.getElementById("cancelEdit").disabled = true; 
-      document.getElementById("cancelEdit").style.backgroundColor = "lightgrey";
-      // need to delay the reload by 500ms - with heroku it seems  to have a race condition on reload
-      //delay(500).then(() => location.reload());
-    }
+    } // end of savePlayers()
 
   </script>
 
