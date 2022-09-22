@@ -45,6 +45,8 @@ express()
       }
     })
 .get('/poll', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('Poll access from IP:' + ip);
   // Check if cache needs clearing
   var diffSeconds = (new Date().getTime() - cacheLastRefresh.getTime()) / 1000;
   if (diffSeconds > maxCacheSecs) {
@@ -80,7 +82,8 @@ express()
   }
 })
 .post('/save-result', async (req, res) => {
-    console.log('Got POST query:', req.body);
+    var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+    console.log('Got POST query (IP and body):', ip, req.body);
     var gameMonth = req.body.gameMonth;
     var gameYear = req.body.gameYear;
     var playerName = req.body.playerName;
@@ -93,7 +96,7 @@ express()
     var timestamp = new Date();
     const gamedetails_new = { "gameid": gameId, "timestamp": timestamp, 
     "playerName": playerName, "playerAvailability": playerAvailability, 
-    "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": req.ip };
+    "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": ip };
 
     console.log('Inserting DB data:', JSON.stringify(gamedetails_new));
     try {
