@@ -31,6 +31,11 @@ express()
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
+.post('/logging', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+  console.error('CLIENT_ERROR:', ip, req.body);
+  res.json({'result': 'OK'});
+  })
 .get('/teams', async (req, res) => {
       try {
         console.log('Generating TEAMS page with data');
