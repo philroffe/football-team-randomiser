@@ -46,7 +46,7 @@ express()
     })
 .get('/poll', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
-  console.log('Poll access from IP:' + ip);
+  console.log('Poll access from IP:' + ip + " with user-agent:" + req.get('User-Agent'));
   // Check if cache needs clearing
   var diffSeconds = (new Date().getTime() - cacheLastRefresh.getTime()) / 1000;
   if (diffSeconds > maxCacheSecs) {
@@ -108,7 +108,8 @@ express()
       await firestore.collection("games_" + gameId).doc("_summary").set(playerSummary);
       // if you got here without an exception then everything was successful
       //res.sendStatus(200);
-      res.json({'result': 'OK'})
+      res.redirect('/poll');
+      //res.json({'result': 'OK'})
     } catch (err) {
       console.error(err);
       res.send("Error " + err);
