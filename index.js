@@ -31,6 +31,9 @@ express()
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
+.get('/maintenance', async (req, res) => {
+  res.redirect(301, 'https://tensile-spirit-360708.nw.r.appspot.com/poll' + req.path)
+})
 .post('/logging', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
   console.error('CLIENT_ERROR:', ip, req.body);
@@ -88,7 +91,7 @@ express()
 })
 .post('/save-result', async (req, res) => {
     var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
-    console.log('Got POST query (IP and body):', ip, req.body);
+    console.log('Got /save-result POST:', ip, JSON.stringify(req.body));
     var gameMonth = req.body.gameMonth;
     var gameYear = req.body.gameYear;
     var playerName = req.body.playerName;
