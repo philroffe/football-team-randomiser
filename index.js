@@ -32,7 +32,7 @@ express()
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
 .get('/maintenance', async (req, res) => {
-  res.redirect(301, 'https://tensile-spirit-360708.nw.r.appspot.com/poll' + req.path)
+  res.redirect(301, 'https://tensile-spirit-360708.nw.r.appspot.com/poll')
 })
 .post('/logging', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
