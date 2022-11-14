@@ -32,6 +32,7 @@ express()
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
 .get('/maintenance', async (req, res) => {
+  console.log('GET MAINTENANCE PAGE:' + ip + " with user-agent:" + req.get('User-Agent'));
   res.redirect(301, 'https://tensile-spirit-360708.nw.r.appspot.com/poll')
 })
 .post('/logging', async (req, res) => {
