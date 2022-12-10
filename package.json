@@ -1,9 +1,9 @@
 {
-  "name": "node-js-getting-started",
+  "name": "football-team-randomiser",
   "version": "0.3.0",
-  "description": "A sample Node.js app using Express 4",
+  "description": "A simple app to manage 5-a-side football games.  A poll each month allows players to add their weekly availability, and the ability to randomise the teams and generate an email.",
   "engines": {
-    "node": "14.x"
+    "node": "18.x"
   },
   "main": "index.js",
   "scripts": {
@@ -25,7 +25,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/heroku/node-js-getting-started"
+    "url": "https://github.com/philroffe/football-team-randomiser"
   },
   "keywords": [
     "node",

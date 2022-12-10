@@ -23,6 +23,8 @@ var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' })
 var bankHolidaysCache = {};
 var cacheLastRefresh = new Date();
 var maxCacheSecs = 86400; // 1 day
+const PLAYER_UNIQUE_FILTER = "PLAYER_UNIQUE_FILTER_TYPE";
+const PLAYER_LOG_FILTER = "PLAYER_LOG_FILTER_TYPE";
 
 express()
 .use(express.static(path.join(__dirname, 'public')))
@@ -91,6 +93,19 @@ express()
     res.send("Error " + err);
   }
 })
+.get('/poll-log', async (req, res) => {
+      try {
+        console.log('Listing recent LOG of poll entries');
+        var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date, PLAYER_LOG_FILTER);
+        var nextMonday = getDateNextMonday();
+        // combine database data with supplimentary game data and render the page
+        var pageData = { data: rowdata, nextMonday: nextMonday.toISOString() };
+        res.render('pages/poll-log', { pageData: pageData} );
+      } catch (err) {
+        console.error(err);
+        res.send("Error " + err);
+      }
+    })
 .post('/save-result', async (req, res) => {
     var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
     console.log('Got /save-result POST:', ip, JSON.stringify(req.body));
@@ -236,7 +251,7 @@ function downloadPage(url) {
   });
 }
 
-async function queryDatabaseAndBuildPlayerList(reqDate) {
+async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQUE_FILTER) {
     // Get the date next Monday
     nextMonday = new Date();
     if ((nextMonday.getDay() == 1) && (nextMonday.getHours() >= 19)) {
@@ -270,7 +285,12 @@ async function queryDatabaseAndBuildPlayerList(reqDate) {
       rowdata = {}
       rowdata.status = "FROM_DATABASE"
       rowdata.gameid = requestedDateMonth
-      rowdata.players = buildPlayerList(dbresult);
+      if (filterType == PLAYER_LOG_FILTER) {
+        rowdata.players = buildPlayerLogList(dbresult);
+      } else {
+        // build players from the whole log list
+        rowdata.players = buildPlayerUniqueList(dbresult);
+      }
       rowdata.nextMonday = nextMonday
     } else {
       // create a blank entry to render the poll page
@@ -281,7 +301,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate) {
     return rowdata;
 }
 
-function buildPlayerList(dbresult) {
+function buildPlayerUniqueList(dbresult) {
   //loop through all rows and merge the player data into one map
   var playerdata = {};
   dbresult.forEach((doc) => {
@@ -304,10 +324,31 @@ function buildPlayerList(dbresult) {
           delete playerdata[originalPlayerName]
           playerdata[playerName] = playerAvailability
           break;
+        case "EDIT":
+          playerdata[playerName] = playerAvailability
+          break;
         default:
           console.log('WARN - Skipping player:' + playerName + ' Unknown saveType:' + saveType);
       }
   });
   console.log('AllPlayers=' + JSON.stringify(playerdata));
+  return playerdata;
+}
+
+function buildPlayerLogList(dbresult) {
+  //loop through all rows and merge the player data into one map
+  var playerdata = {};
+  dbresult.forEach((doc) => {
+    if (doc.id != "_summary") {
+    //console.log(doc.id, '=>', doc.data());
+    playerName = new Date(doc.data().timestamp.seconds*1000).toISOString().replace(/T|\..*Z/g, ' ') + " " + doc.data().playerName + "\\t" + doc.data().saveType;
+    playerData = doc.data().playerAvailability;
+    if (doc.data().originalPlayerName) {
+      // 
+      playerData["originalName"] = doc.data().originalPlayerName;
+    }
+    playerdata[playerName] = playerData;
+    }
+  });
   return playerdata;
 }

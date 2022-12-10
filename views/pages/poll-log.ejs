@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <%- include ("../partials/header.ejs") %>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+
+  <div id="year">
+    <h3>Month: 
+    <input type="month" class="gameMonthInput" id="gameMonthInput" name="start" min="2022-03" value="2022-04">
+    </h3>
+  </div>
+
+    <pre id="logarea"></pre>
+
+      <script type="text/javascript">
+        // Get the date next Monday (and check if today is a Monday too)
+        var nextMonday = new Date();
+        //nextMonday = new Date('11 Aug 2021'); // useful for testing
+        if (nextMonday.getDay() != 1) {
+          nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
+        }
+        var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });
+        var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
+        var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
+        nextMondayText = dayDateFormat.format(nextMonday) + " " + monthDateFormat.format(nextMonday);
+
+        // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
+        var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
+        //console.log('Data=' + JSON.stringify(pagedata));
+
+        var selectedMonthDate = new Date(pagedata.data.gameid);
+        var nextMondayDate = new Date(nextMonday);
+        var gameYear = selectedMonthDate.getFullYear();
+        var pollDate = new Date("01 " + monthDateFormat.format(selectedMonthDate) + " " + gameYear);
+        console.log(pollDate);
+        var gameMonthString = monthDateFormat.format(nextMondayDate);
+        var newMaxDate = new Date(nextMondayDate).setMonth(nextMondayDate.getMonth()+1)
+        var gameMonth = monthDateNumericFormat.format(selectedMonthDate);
+        var gameYear = selectedMonthDate.getFullYear();
+        var nextMonday = pagedata.data.nextMonday;
+        var nextMondayDate = new Date(nextMonday);
+         // update the header month input selector
+        document.getElementById("gameMonthInput").max = gameYear + monthDateNumericFormat.format(newMaxDate)
+        document.getElementById("gameMonthInput").value = gameYear + "-" + gameMonth
+        document.getElementById("gameMonthInput").addEventListener('change', function() {
+          var selectedDate = document.getElementById("gameMonthInput").value
+          document.location.href = '/poll-log?date=' + selectedDate + '-01'
+        });
+
+        // now loop through all the logs from the players and add them to the logarea
+        var allOriginalPlayers = {}
+        var players = pagedata.data.players;
+        if (!players) { players = {}; }
+        Object.keys(players).sort().forEach(function(key) {
+          //console.log('player=' + key + "___" + JSON.stringify(players[key]));
+          playerName = key
+          playerAvailability = players[key]
+          logarea.innerHTML = playerName + "\t" + JSON.stringify(playerAvailability) + "\n" + logarea.innerHTML;
+        });
+
+        
+
+      </script>
+  </div>
+</body>
+</html>

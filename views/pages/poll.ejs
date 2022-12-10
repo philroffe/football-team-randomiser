@@ -29,7 +29,7 @@
 </form>
 <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
 <button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
-<p><p><a href="/teams">Finished? Generate teams and email here.</a>.
+<p><p>Finished? <a href="/teams">Generate teams and email</a>, or view the <a href="/poll-log">log of poll entries.</a>.
 
   <script type="text/javascript">
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });
@@ -58,7 +58,7 @@
     var gameMonthString = monthDateFormat.format(nextMondayDate);
     var newMaxDate = new Date(nextMondayDate).setMonth(nextMondayDate.getMonth()+1)
      // update the header month input selector
-    document.getElementById("gameMonthInput").max = "2022-" + monthDateNumericFormat.format(newMaxDate)
+    document.getElementById("gameMonthInput").max = gameYear + monthDateNumericFormat.format(newMaxDate)
     document.getElementById("gameMonthInput").value = gameYear + "-" + gameMonth
     document.getElementById("gameMonthInput").addEventListener('change', function() {
       var selectedDate = document.getElementById("gameMonthInput").value
@@ -326,8 +326,10 @@
           if (playerName == "") {
             saveType = "DELETE"
             playerName = originalPlayerName;
-          } else if (playerName != allOriginalPlayers) {
+          } else if (playerName != originalPlayerName) {
             saveType = "RENAME"
+          } else {
+            saveType = "EDIT"
           }
         } else {
           saveType = "NEW"
