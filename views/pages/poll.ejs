@@ -1,6 +1,7 @@
 <html>
 <head>
   <%- include ("../partials/header.ejs") %>
+  <script src="/autocomplete.js"></script>
 </head>
 
 <body class="w3-light-grey">
@@ -19,7 +20,7 @@
 
 <p><p><h3>Add/Edit Availability:</h3>
 <div id="divHeader">
-<div id="nameHeader" class="gameheader"><br></div>
+    <div id="nameHeader" class="gameheader"><br></div>
 </div>
 <div id="editHeader" class="gameheader"><br></div>
 <div style="clear:both;"></div>
@@ -67,6 +68,9 @@
 
     var players = pagedata.data.players;
     if (!players) { players = {}; }
+
+    //var playerNameSuggestions = ["Phil R", "Tom B", "Tom S"];
+    var playerNameSuggestions = pagedata.data.suggestedPlayerList;
 
     function mondaysInMonth(m,y) {
       var days = new Date(y,m,0).getDate();
@@ -191,14 +195,23 @@
       newPlayerName.setAttribute("id", "player" + playerCount); 
       newPlayerName.setAttribute("name", "myPlayers[]"); 
       newPlayerName.style.width = 90;
+      // create an autocomplete div to add the player input to
+      newPlayerName.setAttribute("autocomplete", "off"); 
+      autocomplete(newPlayerName, playerNameSuggestions);
+      var newPlayerDiv = document.createElement("div"); 
+      newPlayerDiv.setAttribute("class", "autocomplete"); 
+      newPlayerDiv.appendChild(newPlayerName);
+      // add the div to the nameHeader element to add it to the page
       nameHeader.appendChild(document.createElement("br"));
-      nameHeader.appendChild(newPlayerName);
+      nameHeader.appendChild(newPlayerDiv);
+
+      // Determine whether input should be editable
       allOriginalPlayers["player" + playerCount] = playerName
       if (playerName) {
         newPlayerName.setAttribute("value", playerName); 
         newPlayerName.setAttribute("disabled", true); 
       } else {
-        newPlayerName.setAttribute("value", "Your Name?"); 
+        newPlayerName.setAttribute("placeholder", "Your Name?"); 
         newPlayerName.focus();
         newPlayerName.select();
       }

@@ -275,16 +275,37 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     var requestedDateMonth = requestedDate.toISOString().split('T')[0]
     //console.log("requestedDateMonth=" + requestedDateMonth)
 
+    // first generate a suggestedPlayerList containing names of players over last 6 months
+    var suggestedPlayerMap = new Map();
+    var suggestedDate = new Date(requestedDate)
+    for (var i = 0; i < 6; i++) { 
+      suggestedDate.setMonth(suggestedDate.getMonth() - 1);
+      var suggestedDateMonth = suggestedDate.toISOString().split('T')[0]
+      //console.log('suggestedDateMonth' + suggestedDateMonth);
+      const dbresult = await firestore.collection("games_" + suggestedDateMonth).get();
+      dbresult.forEach((doc) => {
+        //suggestedPlayerList.push(doc.data().playerName);        
+        if (doc.id != "_summary") {
+          suggestedPlayerMap.set(doc.data().playerName.trim(), "New Player");
+          //console.log('Added Player' + doc.data().playerName);
+        }
+      });
+    }
+    const sortedAsc = new Map([...suggestedPlayerMap].sort());
+    var suggestedPlayerList = Array.from(sortedAsc.keys());
+    //console.log('SUGGESTED LIST SIZE:' + suggestedPlayerMap.size);
+
+
     // Query database and get all players for games matching this month
     const dbresult = await firestore.collection("games_" + requestedDateMonth).get();
     //console.log('dbresult=' + JSON.stringify(dbresult));
-
     var rowdata = {};
     if (dbresult.size > 0) {
       // We have data! now build the player list and set it as the players for the front-end
       rowdata = {}
       rowdata.status = "FROM_DATABASE"
       rowdata.gameid = requestedDateMonth
+      rowdata.suggestedPlayerList = suggestedPlayerList;
       if (filterType == PLAYER_LOG_FILTER) {
         rowdata.players = buildPlayerLogList(dbresult);
       } else {
@@ -294,7 +315,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
       rowdata.nextMonday = nextMonday
     } else {
       // create a blank entry to render the poll page
-      rowdata = { "status": "NO_DATABASE_ENTRY", "gameid": requestedDateMonth, "players":{}, "nextMonday": nextMonday}
+      rowdata = { "status": "NO_DATABASE_ENTRY", "gameid": requestedDateMonth, "players":{}, "nextMonday": nextMonday, "suggestedPlayerList": [] }
   
     }
     console.log('rowdata=' + JSON.stringify(rowdata));
