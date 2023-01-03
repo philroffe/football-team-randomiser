@@ -46,6 +46,8 @@
     var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
     //console.log('Data=' + JSON.stringify(pagedata));
  
+    var isAdmin = pagedata.isAdmin;
+
     var bankHolidaysJson = pagedata.bankHolidays;
     var selectedMonthDate = new Date(pagedata.data.gameid);
     var gameMonth = monthDateNumericFormat.format(selectedMonthDate);
@@ -68,9 +70,39 @@
 
     var players = pagedata.data.players;
     if (!players) { players = {}; }
+    var attendance = pagedata.data.attendance;
+    if (!attendance) { attendance = {}; }
+
+
+    var aliases = {};
+    aliases["Phil Roffe"] = [ "Phil R" ]
+    aliases["Dan Atherton"] = [ "Dan A", "Dan" ]
+    //aliases["Jon G"] = [ "Jon" ]
+
+    if (isAdmin) {
+      // check for any aliases
+      Object.keys(attendance).sort().forEach(function(week) {
+        Object.keys(attendance[week]).sort().forEach(function(key) {
+          //console.log("week:" + week + " key:" + key);
+          var foundPlayerName = getPlayerNameFromAlias(key);
+          //console.log("FOUND ALIAS " + getPlayerNameFromAlias(key))
+          if (!foundPlayerName) {
+            console.log("PLAYER NAME NOT FOUND:" + key);
+          }
+        })
+      })
+    }
 
     //var playerNameSuggestions = ["Phil R", "Tom B", "Tom S"];
-    var playerNameSuggestions = pagedata.data.suggestedPlayerList;
+    //var suggestedPlayerAliasMap = pagedata.data.suggestedPlayerAliasMap;
+    //var playerNameSuggestions = suggestedPlayerAliasMap.keys();
+
+    var playerAliasMaps = pagedata.data.playerAliasMaps;
+    //console.log("PLAYER ALIAS MAPS:" + JSON.stringify(playerAliasMaps));
+    var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
+    //var aliasToPlayerMap = playerAliasMaps[aliasToPlayerMap];
+    var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap));
+    //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
 
     function mondaysInMonth(m,y) {
       var days = new Date(y,m,0).getDate();
@@ -144,6 +176,32 @@
       weekDateHeader.innerHTML = currentDateHeader;
       newWeekHeader.appendChild(weekDateHeader);
       divHeader.appendChild(newWeekHeader);  
+
+      if (isAdmin) {
+        // create the edit button
+        var weekEditButton = document.createElement("button");
+        weekEditButton.innerHTML = "e";
+        weekEditButton.style.backgroundColor = "lightgreen";
+        weekEditButton.setAttribute("id", "week" + i + "Edit");
+        weekEditButton.setAttribute("class", "rotated"); 
+        const chosenEditWeek = i;
+        weekEditButton.onclick = function() {editWeek(chosenEditWeek)};
+        newWeekHeader.appendChild(document.createElement("br"));
+        newWeekHeader.appendChild(weekEditButton);
+
+        if (isBankHoliday) {
+          weekEditButton.setAttribute("hidden", true); 
+        }
+      }
+    }
+    if (isAdmin) {
+      // just add a dummy button to the name header to space it out
+      var dummyAdminNameButton = document.createElement("button");
+      dummyAdminNameButton.setAttribute("class", "noborder"); 
+      dummyAdminNameButton.setAttribute("disabled", true); 
+      nameHeader = document.getElementById("nameHeader")
+      nameHeader.appendChild(document.createElement("br"));
+      nameHeader.appendChild(dummyAdminNameButton);
     }
 
     console.log(pagedata.data.players);
@@ -164,11 +222,25 @@
       for (var j = 0; j < mondaysDates.length; j++) {
         var weekTotalSummary = document.getElementById("week" + j + "Total");
         weekTotalSummary.innerHTML = 0
+
+        var playerTotal = 0;
+        var attendanceTotal = 0;
+        var attendanceTotalText = ""
         for (var i = 1; i <= playerCount; i++) {
           if (document.getElementById("player" + i + "Week" + j).checked) {
-            weekTotalSummary.innerHTML = "(" + (parseInt(weekTotalSummary.innerHTML.replace("(", "").replace(")", "")) + 1) + ")";
+            playerTotal++
+            //weekTotalSummary.innerHTML = "(" + (parseInt(weekTotalSummary.innerHTML.replace("(", "").replace(")", "")) + 1) + ")";
+          }
+          if (isAdmin) {
+            if (document.getElementById("player" + i + "WeekAdmin" + j).checked) {
+              attendanceTotal++
+              //weekTotalSummary.innerHTML = "(" + (parseInt(weekTotalSummary.innerHTML.replace("(", "").replace(")", "")) + 1) + ")";
+            }
+            attendanceTotalText = "/" + attendanceTotal;
           }
         }
+        weekTotalSummary.innerHTML = "(" + playerTotal + attendanceTotalText + ")";
+        //"(" + (parseInt(weekTotalSummary.innerHTML.replace("(", "").replace(")", "")) + 1) + ")";
       }
     }
 
@@ -177,6 +249,27 @@
         var txt = document.createElement("textarea");
         txt.innerHTML = html;
         return txt.value;
+    }
+
+    // check for unique player name
+    function getPlayerNameFromAlias(nameToCheck) {
+      //playerNameSuggestions
+      //aliases
+      var foundPlayerName = undefined;
+      Object.keys(playerNameSuggestions).sort().forEach(function(key) {
+        if (nameToCheck.trim() == key.trim()) {
+          //console.log("FOUND KEY " + key)
+          foundPlayerName = key;
+        }
+        for (var i = 0; i < playerNameSuggestions[key].length; i ++) {
+          if (nameToCheck.trim() == currentAlias) {
+            //console.log("FOUND ALIAS " + currentAlias)
+            // found matching name
+            foundPlayerName = currentAlias;
+          }
+        }
+      })
+      return foundPlayerName;
     }
 
     // add an additional text box and hook up listeners
@@ -215,6 +308,18 @@
         newPlayerName.focus();
         newPlayerName.select();
       }
+
+      if (isAdmin) {
+        // add Admin ability for the name column
+        var newAdminHeader = document.createElement("input");
+        newAdminHeader.value = "Played?";
+        newAdminHeader.style.width = 90;
+        newAdminHeader.setAttribute("class", "noborder"); 
+        newAdminHeader.setAttribute("disabled", true); 
+        nameHeader.appendChild(document.createElement("br"));
+        nameHeader.appendChild(newAdminHeader);
+        nameHeader.appendChild(document.createElement("br"));
+      }
       
       for (var i = 0; i < mondaysDates.length; i ++) {
         var weekHeader = document.getElementById("week" + i + "Header")
@@ -242,6 +347,30 @@
         }
         weekHeader.appendChild(document.createElement("br"));
         weekHeader.appendChild(newPlayerWeek);
+
+
+        if (isAdmin) {
+          // add Admin capability for the game week columns
+          var newPlayerWeekAdmin = document.createElement("input"); 
+          newPlayerWeekAdmin.setAttribute("type", "checkbox"); 
+          newPlayerWeekAdmin.setAttribute("class", "checkmark"); 
+          newPlayerWeekAdmin.setAttribute("id", "player" + playerCount + "WeekAdmin" + i); 
+          newPlayerWeekAdmin.setAttribute("name", playerCount + "myPlayerWeekAdmin[]"); 
+          newPlayerWeekAdmin.disabled = true;
+          if (attendance["week" + i]) {
+            //console.log(attendance["week" + i][playerName])
+            newPlayerWeekAdmin.checked = attendance["week" + i][playerName];
+          }
+          //newPlayerWeekAdmin.setAttribute("disabled", true); 
+          weekHeader.appendChild(document.createElement("br"));
+          weekHeader.appendChild(newPlayerWeekAdmin);
+          weekHeader.appendChild(document.createElement("br"));
+
+          if (weekHeader.getAttribute("bankHoliday")) {
+            newPlayerWeekAdmin.setAttribute("type", "hidden"); 
+            newPlayerWeekAdmin.checked = false;
+          }
+        }
       }
 
       // create the edit button
@@ -262,6 +391,20 @@
       }
       newPlayerEditButton.onclick = function() {editPlayer(playerName, newPlayerEditButton)};
 
+      if (isAdmin) {
+        // add Admin capability for the edit column
+        var newAdminEditHeader = document.createElement("input");
+        newAdminEditHeader.value = "";
+        newAdminEditHeader.style.width = 10;
+        newAdminEditHeader.setAttribute("class", "noborder"); 
+        newAdminEditHeader.setAttribute("disabled", true); 
+        editHeader.appendChild(document.createElement("br"));
+        editHeader.appendChild(newAdminEditHeader);
+        editHeader.appendChild(document.createElement("br"));
+        // now hide the edit button per player (replaced with single admin save)
+        newPlayerEditButton.setAttribute("hidden", true); 
+      }
+
       if (!playerName) {
         // new player so enable the save/cancel button, and disable
         document.getElementById("cancelEdit").disabled = false; 
@@ -275,6 +418,45 @@
       document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
       }
       //calcWeeklyTotals();
+  }
+
+  function editWeek(weekNumber) {
+    weekEditButton = document.getElementById("week" + weekNumber + "Edit"); 
+    if (weekEditButton.innerHTML == "s") {
+      // button toggled as Save, so save and put back to Edit move
+      saveAttendance(weekNumber);
+      weekEditButton.innerHTML = "e";
+      // re-enable every player's player-status button
+      for (var i = 1; i <= playerCount; i++) {
+        document.getElementById("player" + i + "WeekAdmin" + weekNumber).disabled = true; 
+      }
+      // reenable the other edit buttons
+      mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
+      // auto generate divs for headers for each game week
+      for (var i = 0; i < mondaysDates.length; i ++) {
+        document.getElementById("week" + i + "Edit").disabled = false; 
+      }
+      return;
+    }
+
+    // button toggled as Edit, re-enable buttons
+    chosenWeek = weekEditButton.id.split('Edit')[0]
+    console.log("EDITING weekNumber: " + weekNumber + " chosenWeek:" + chosenWeek);
+    // re-enable every player's player-status button
+    for (var i = 1; i <= playerCount; i++) {
+      document.getElementById("player" + i + "WeekAdmin" + weekNumber).disabled = false; 
+    }
+    
+    // disable the other edit buttons
+    mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
+    for (var i = 0; i < mondaysDates.length; i ++) {
+      if (i != weekNumber) {
+        document.getElementById("week" + i + "Edit").disabled = true; 
+      }
+    }
+
+    // button currently as Edit, so toggle to "save" mode
+    weekEditButton.innerHTML = "s";
   }
 
     function editPlayer(playerName, newPlayerEditButton) {
@@ -319,6 +501,40 @@
     }
     function delay(time) {
       return new Promise(resolve => setTimeout(resolve, time));
+    }
+
+    function saveAttendance(weekNumber) {
+      // Save the data (using XMLHttpRequest)
+      console.log("SAVING attendance for week: " + weekNumber);
+
+      var playersAttended = {};
+      var saveType = "ATTENDANCE"
+      for (var i = 1; i < 999; i++) {
+        var playerElement = document.getElementById("player" + i); 
+        if (playerElement == null) {
+          break;
+        }
+        var playerName = playerElement.value; 
+        var playerAttended = document.getElementById("player" + i + "WeekAdmin" + weekNumber).checked; 
+        playersAttended[playerName] = playerAttended;
+        //console.log(i + " " + playerName + " " + playerAttended);
+      }
+
+      var attendanceDetails = { "gameYear": gameYear, "gameMonth": gameMonth, "gameWeek": weekNumber, "playersAttended": playersAttended, "saveType": saveType, };
+
+      console.log("SAVING ATTENDANCE:" + JSON.stringify(attendanceDetails));
+
+      // now send the POST request with the data
+      var xmlhttp = new XMLHttpRequest();
+      xmlhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          console.log("Saved response", this.responseText);
+          location.reload(true);
+        }
+      };
+      xmlhttp.open("POST", "/save-week-attendance");
+      xmlhttp.setRequestHeader("Content-Type", "application/json");
+      xmlhttp.send(JSON.stringify(attendanceDetails));
     }
 
     function savePlayer(playerId) {

@@ -33,11 +33,6 @@ express()
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
-.get('/maintenance', async (req, res) => {
-  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
-  console.log('GET MAINTENANCE PAGE:' + ip + " with user-agent:" + req.get('User-Agent'));
-  res.redirect(301, 'https://tensile-spirit-360708.nw.r.appspot.com/poll')
-})
 .post('/logging', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
   console.error('CLIENT_ERROR:', ip, req.body);
@@ -65,10 +60,16 @@ express()
     bankHolidaysCache = {};
     console.log('CLEARED CACHE as diffSeconds was:' + diffSeconds);
   }
+
   try {
     console.log('Rendering POLL page with data' + req.query.date);
     var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
-    
+
+    var isAdmin = false;
+    if (req.query.admin == "admin") {
+      isAdmin = true;
+    }
+
     // get the latest bank holidays if not already cached
     if (bankHolidaysCache && Object.keys(bankHolidaysCache).length === 0) {
       var bankHolidaysFile;
@@ -85,7 +86,7 @@ express()
     }
 
     // combine database data with any additional page data
-    var pageData = { data: rowdata, bankHolidays: bankHolidaysCache };
+    var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, isAdmin: isAdmin };
 
     res.render('pages/poll', { pageData: pageData } );
   } catch (err) {
@@ -114,7 +115,7 @@ express()
     var playerName = req.body.playerName;
     var playerAvailability = req.body.playerAvailability;
     var saveType = req.body.saveType;
-    var originalPlayerName = (originalPlayerName === undefined) ? "" : req.body.originalPlayerName;
+    var originalPlayerName = (req.body.originalPlayerName === undefined) ? "" : req.body.originalPlayerName;
 
     
     gameId = gameYear + "-" + gameMonth + "-01";
@@ -125,12 +126,13 @@ express()
 
     console.log('Inserting DB data:', JSON.stringify(gamedetails_new));
     try {
-      //await datastore.save({ key: datastore.key("games_" + gameId), data: gamedetails_new})
-      const docRef = firestore.collection("games_" + gameId).doc(playerName + "_" + timestamp.toISOString());
+      var gamesCollectionId = "games_" + gameId;
+      const docRef = firestore.collection(gamesCollectionId).doc(playerName + "_" + timestamp.toISOString());
       await docRef.set(gamedetails_new);
 
       var playerSummary = await queryDatabaseAndBuildPlayerList(gameId);
-      await firestore.collection("games_" + gameId).doc("_summary").set(playerSummary);
+      var summaryCollectionId = gamesCollectionId + "_summary";
+      await firestore.collection(summaryCollectionId).doc("_summary").set(playerSummary);
       // if you got here without an exception then everything was successful
       //res.sendStatus(200);
       //res.redirect('/poll');
@@ -140,77 +142,66 @@ express()
       res.send({'result': err});
     }
   })
-.get('/dbconvert', async (req, res) => {
-  try {
-    console.log('Performing DBConvert from postgresql to firebase: ' + req.query.date);
-    //var gameId = req.query.date;
-    var saveType = "NEW"
-    var originalPlayerName = "";
+.post('/save-week-attendance', async (req, res) => {
+    var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+    console.log('Got /save-week-attendance POST:', ip, JSON.stringify(req.body));
+    var gameWeek = req.body.gameWeek;
+    var gameMonth = req.body.gameMonth;
+    var gameYear = req.body.gameYear;
+    var playersAttended = req.body.playersAttended;
+    var saveType = req.body.saveType;
 
-    // read postgresql data
-    const { Pool } = require('pg');
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    });
-    const client = await pool.connect();
-    const dbresult = await client.query('SELECT * FROM games');
-    //console.log('dbresult=' + JSON.stringify(dbresult));
-    // TODO; this is a workaround and should be replaced with "WHERE" in sql above
-    var rowdata = null;
     var timestamp = new Date();
-    var varAllPlayers = []
-    for (var i = 0; i < dbresult.rows.length; i++) { 
-      //if (dbresult.rows[i].gamedetails.pollMonth == monthDateNumericFormat.format(timestamp)) {
-        rowdata = dbresult.rows[i];
-        console.log(JSON.stringify(rowdata));
-        var gameId = rowdata.gameid;
-        var gamedetails = rowdata.gamedetails;
-        var players = gamedetails.players;
-        Object.keys(players).sort().forEach(function(key) {
-          playerName = key
-          playerAvailability = players[key]
-          //thisPlayerAvailability = { [playerName]: playerAvailability }
+    const attendanceDetails = { "month": gameYear + "-" + gameMonth, "week": gameWeek, "timestamp": timestamp, 
+    "playersAttended": playersAttended, "saveType": saveType, "source_ip": ip };
 
-          // now convert the rowdata to firebase
-          var timestamp = new Date();
-          const gamedetails_new = { "gameid": gameId, "timestamp": timestamp, "playerName": playerName, 
-          "playerAvailability": playerAvailability, 
-          "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": req.ip };
-
-          varAllPlayers.push(gamedetails_new)
-          
-          console.log("==== " + i + key + "====");
-          console.log(JSON.stringify(gamedetails_new));
-        });
-      //}
+    console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
+    try {
+      var summaryCollectionId = "games_" + gameYear + "-" + gameMonth + "-01_summary";
+      const docRef = firestore.collection(summaryCollectionId).doc("attendance_week" + gameWeek);
+      await docRef.set(attendanceDetails);
+      res.json({'result': 'OK'})
+    } catch (err) {
+      console.error(err);
+      res.send({'result': err});
+    }
+  })
+.get('/admin-get-aliases', async (req, res) => {
+  try {
+    console.log('Generating ALIASES page with data');
+    var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+    var playerAliasMap = playerAliasDoc.data();
+    if (!playerAliasMap) {
+      playerAliasMap = {};
     }
 
-    for (var i = 0; i < varAllPlayers.length; i++) {
-    //for (var i = 110; i < 111; i++) {
-      playerName = varAllPlayers[i].playerName
-      gameId = varAllPlayers[i].gameid
+    // combine database data with supplimentary game data and render the page
+    var pageData = { playerAliasMap: playerAliasMap };
 
-      const docRef = firestore.collection("games_" + gameId).doc(playerName + "_" + new Date().toISOString());
-      await docRef.set(varAllPlayers[i]);
-
-      // generate the summary pages if needed
-      //var playerSummary = await queryDatabaseAndBuildPlayerList(gameId);
-      //await firestore.collection("games_" + gameId).doc("_summary").set(playerSummary);
-
-      console.log(gameId + "******DONE**** ==== " + i + JSON.stringify(varAllPlayers[i]) + "====");
-    }
-    
-    // now render the new result
-    var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
-    var pageData = { data: rowdata };
-    res.render('pages/poll', { pageData: pageData } );
-    client.release();
+    var rowdata = await queryDatabaseAndBuildPlayerList("2022-12-01");
+    //console.log('rowdata......... Generating TEAMS page with data', rowdata);
+    res.render('pages/admin-aliases', { pageData: pageData, rowdata: rowdata} );
   } catch (err) {
     console.error(err);
     res.send("Error " + err);
   }
 })
+.post('/admin-save-aliases', async (req, res) => {
+    var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+    console.log('Got /admin-save-aliases POST:', ip, JSON.stringify(req.body));
+    var playerAliasMap = req.body.playerAliasMap;
+
+    console.log('Inserting ALIAS data:', JSON.stringify(playerAliasMap));
+    try {
+      const docRef = firestore.collection("ADMIN").doc("_aliases");
+      await docRef.set(playerAliasMap);
+
+      res.json({'result': 'OK'})
+    } catch (err) {
+      console.error(err);
+      res.send({'result': err});
+    }
+  })
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
 
 
@@ -264,8 +255,6 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
 
     var requestedDate = new Date();
     var requestedDate = nextMonday;
-
-
     if (reqDate) {
       requestedDate = new Date(reqDate);
     } else {
@@ -275,29 +264,13 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     var requestedDateMonth = requestedDate.toISOString().split('T')[0]
     //console.log("requestedDateMonth=" + requestedDateMonth)
 
-    // first generate a suggestedPlayerList containing names of players over last 6 months
-    var suggestedPlayerMap = new Map();
-    var suggestedDate = new Date(requestedDate)
-    for (var i = 0; i < 6; i++) { 
-      suggestedDate.setMonth(suggestedDate.getMonth() - 1);
-      var suggestedDateMonth = suggestedDate.toISOString().split('T')[0]
-      //console.log('suggestedDateMonth' + suggestedDateMonth);
-      const dbresult = await firestore.collection("games_" + suggestedDateMonth).get();
-      dbresult.forEach((doc) => {
-        //suggestedPlayerList.push(doc.data().playerName);        
-        if (doc.id != "_summary") {
-          suggestedPlayerMap.set(doc.data().playerName.trim(), "New Player");
-          //console.log('Added Player' + doc.data().playerName);
-        }
-      });
-    }
-    const sortedAsc = new Map([...suggestedPlayerMap].sort());
-    var suggestedPlayerList = Array.from(sortedAsc.keys());
-    //console.log('SUGGESTED LIST SIZE:' + suggestedPlayerMap.size);
-
+    // read the list of players and aliases
+    var playerAliasMaps = {};
+    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    //console.log('playerAliasMaps=' + JSON.stringify(playerAliasMaps));
 
     // Query database and get all players for games matching this month
-    const dbresult = await firestore.collection("games_" + requestedDateMonth).get();
+    const dbresult = await firestore.collection("games_" + requestedDateMonth).orderBy('timestamp', 'asc').get();
     //console.log('dbresult=' + JSON.stringify(dbresult));
     var rowdata = {};
     if (dbresult.size > 0) {
@@ -305,7 +278,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
       rowdata = {}
       rowdata.status = "FROM_DATABASE"
       rowdata.gameid = requestedDateMonth
-      rowdata.suggestedPlayerList = suggestedPlayerList;
+      rowdata.playerAliasMaps = playerAliasMaps;
       if (filterType == PLAYER_LOG_FILTER) {
         rowdata.players = buildPlayerLogList(dbresult);
       } else {
@@ -315,12 +288,48 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
       rowdata.nextMonday = nextMonday
     } else {
       // create a blank entry to render the poll page
-      rowdata = { "status": "NO_DATABASE_ENTRY", "gameid": requestedDateMonth, "players":{}, "nextMonday": nextMonday, "suggestedPlayerList": [] }
-  
+      rowdata = { "status": "NO_DATABASE_ENTRY", "gameid": requestedDateMonth, "players":{},
+        "nextMonday": nextMonday, "playerAliasMaps": playerAliasMaps, "attendance": {} }
     }
-    console.log('rowdata=' + JSON.stringify(rowdata));
+
+    // Query database and get all attendance lists for this month
+    //if (isAdmin) {
+      var summaryCollectionId = "games_" + requestedDateMonth + "_summary";
+      const summarydbresult = await firestore.collection(summaryCollectionId).get();
+      //"attendance_week" + gameWeek
+      var attendedData = {};
+      summarydbresult.forEach((doc) => {
+        if (doc.id != "_summary") {
+          //console.log('Added Attendance for week' + doc.data().week);
+          attendedData["week" + doc.data().week] = doc.data().playersAttended
+        }
+      });
+      rowdata.attendance = attendedData
+    //}
+
+    //console.log('rowdata=' + JSON.stringify(rowdata));
     return rowdata;
 }
+
+
+function buildPlayerLogList(dbresult) {
+  //loop through all rows and merge the player data into one map
+  var playerdata = {};
+  dbresult.forEach((doc) => {
+    if (doc.id != "_summary") {
+      //console.log(doc.id, '=>', doc.data());
+      playerName = new Date(doc.data().timestamp.seconds*1000).toISOString().replace(/T|\..*Z/g, ' ') + " " + doc.data().playerName + "\\t" + doc.data().saveType;
+      playerData = doc.data().playerAvailability;
+      if (doc.data().originalPlayerName) {
+        //console.log("FOUND originalPlayerName:" + originalPlayerName);
+        playerData["originalName"] = doc.data().originalPlayerName;
+      }
+      playerdata[playerName] = playerData;
+    }
+  });
+  return playerdata;
+}
+
 
 function buildPlayerUniqueList(dbresult) {
   //loop through all rows and merge the player data into one map
@@ -356,20 +365,56 @@ function buildPlayerUniqueList(dbresult) {
   return playerdata;
 }
 
-function buildPlayerLogList(dbresult) {
-  //loop through all rows and merge the player data into one map
-  var playerdata = {};
-  dbresult.forEach((doc) => {
-    if (doc.id != "_summary") {
-    //console.log(doc.id, '=>', doc.data());
-    playerName = new Date(doc.data().timestamp.seconds*1000).toISOString().replace(/T|\..*Z/g, ' ') + " " + doc.data().playerName + "\\t" + doc.data().saveType;
-    playerData = doc.data().playerAvailability;
-    if (doc.data().originalPlayerName) {
-      // 
-      playerData["originalName"] = doc.data().originalPlayerName;
+
+// check for unique player name
+function getPlayerNameFromAlias(nameToCheck, playerAliasMap) {
+  var foundPlayerName = undefined;
+  Object.keys(playerAliasMap).sort().forEach(function(key) {
+      console.log("CHECKING KEEEEEEEEY " + key)
+    if (nameToCheck.trim() == key.trim()) {
+      console.log("FOUND KEY " + key)
+      foundPlayerName = key;
     }
-    playerdata[playerName] = playerData;
+    for (var i = 0; i < playerAliasMap[key].length; i ++) {
+      var currentAlias = playerAliasMap[key][i];
+      if (nameToCheck.trim() == currentAlias) {
+        console.log("FOUND ALIAS " + currentAlias)
+        // found matching name
+        foundPlayerName = currentAlias;
+      }
+    }
+  })
+  return foundPlayerName;
+}
+
+
+// check for unique player name
+async function getDefinedPlayerAliasMaps() {
+  var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var playerAliasMap = playerAliasDoc.data();
+  if (!playerAliasMap) {
+    playerAliasMap = {};
+  }
+
+  var collapsedPlayerMap = {};
+  Object.keys(playerAliasMap).sort().forEach(function(key) {
+    //console.log("key", playerAliasMap[key]);
+    var playerName = key;
+    var playerActive = playerAliasMap[key].active;
+    var aliasesList = playerAliasMap[key].aliases;
+
+    // combine database data with supplimentary game data and render the page
+    var collapsedPlayerMap = {};
+    collapsedPlayerMap[playerName.toUpperCase()] = playerName;
+    for (var i = 0; i < aliasesList.length; i ++) {
+      collapsedPlayerMap[aliasesList[i].toUpperCase()] = playerName;
     }
   });
-  return playerdata;
+
+  ///// TODO - fix the sorting
+  //playerToAliasMap: new Map([...playerAliasMap].sort()
+  //aliasToPlayerMap: new Map([...collapsedPlayerMap].sort())
+
+  var playerAliasMaps = { playerToAliasMap: playerAliasMap, aliasToPlayerMap: collapsedPlayerMap };
+  return playerAliasMaps;
 }

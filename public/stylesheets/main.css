@@ -33,6 +33,29 @@ pre {
   height: 30px;
   margin: 0px 0px 0px 20px;
 }
+.noborder {
+  border: none;
+  text-align: right;
+}
+.rotatedA {
+  transform: rotate(90deg) translate(0%, 50%);
+  width: 55px;
+  height: 25px;
+}
+.rotated {
+  background: url(/icons8-edit-32-enabled.png) no-repeat;
+  background-size: 22px;
+  width: 24px;
+  height: 30px;
+  border: 1px solid grey;
+}
+.rotated:disabled {
+  background: url(/icons8-edit-32-disabled.png) no-repeat;
+  background-size: 22px;
+  width: 24px;
+  height: 30px;
+  border: 1px solid grey;
+}
 
 input[type=checkbox] {
    appearance: none;
@@ -49,10 +72,23 @@ input[type=checkbox]:checked:before {
    color: black;
    padding: initial;
    font-weight: bold;
-  padding: 2px 6px 2px 0px;
+   padding: 2px 6px 2px 0px;
 }
-input[type=checkbox]:checked:disabled:before {
+input[type=checkbox]:checked:disabled {
    color: grey;
+   background-color: #339933; /* darkgreen */
+}
+input[type=checkbox]:checked:enabled {
+   color: grey;
+   background-color: lightgreen; /* lightgreen */
+}
+input[type=checkbox]:disabled {
+   color: grey;
+   background-color: darkred; /* darkgreen */
+}
+input[type=checkbox]:enabled {
+   color: grey;
+   background-color: orangered; /* lightgreen */
 }
 
 .autocomplete {

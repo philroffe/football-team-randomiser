@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <%- include ("../partials/header.ejs") %>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+    
+  <H3>Aliases</h3>
+  <p>Active Players</p>
+  <div id="playersHeader"></div><br>
+  <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
+  <br>
+  <button id="save" style="background-color: #90EE90;" onclick="savePlayerAliases()">Save</button>
+  <button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
+  <p>Inactive Players</p>
+  <p><div id="inactivePlayersHeader"></div>
+  
+  <br><div id="unusedPlayers"></div><br>
+
+  <script type="text/javascript">      
+    // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
+    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
+    //console.log('Data=' + JSON.stringify(pagedata));
+
+    var playerAliasMap = pagedata.playerAliasMap;
+
+    var playersHeader = document.getElementById("playersHeader")
+    var playerCount = 0;
+    var collapsedPlayerList = {};
+    Object.keys(playerAliasMap).sort().forEach(function(key) {
+      //console.log("key", playerAliasMap[key]);
+      var playerName = key;
+      var playerActive = playerAliasMap[key].active;
+      var aliasesList = playerAliasMap[key].aliases;
+      addPlayer(playerName, playerActive, aliasesList);
+      ///////////////
+      collapsedPlayerList[playerName.toUpperCase()] = playerName;
+      for (var i = 0; i < aliasesList.length; i ++) {
+        collapsedPlayerList[aliasesList[i].toUpperCase()] = playerName;
+      }
+      ///////////////
+    });
+
+    function addPlayer(playerName, playerActive, aliasesList) {
+      if (!playerName) {
+        playerName = "";
+        playerActive = true;
+        aliasesList = [];
+      }
+      //console.log("ADDING PLAYERS:", playerName, playerActive, aliasesList);
+
+      // create Player Name field
+      var newPlayerName = document.createElement("input"); 
+      newPlayerName.setAttribute("type", "text"); 
+      newPlayerName.style.verticalAlign = "top";
+      newPlayerName.setAttribute("id", "player" + playerCount); 
+      newPlayerName.setAttribute("name", "myPlayers[]"); 
+      newPlayerName.value = playerName; 
+
+      // create active player checkbox
+      var newPlayerActive = document.createElement("input");
+      newPlayerActive.setAttribute("type", "checkbox");  
+      newPlayerActive.style.verticalAlign = "top";
+      newPlayerActive.setAttribute("id", "playerActive" + playerCount); 
+      newPlayerActive.setAttribute("name", "myActivePlayers[]"); 
+      newPlayerActive.checked = playerActive;
+      newPlayerActive.style.width = "25px";
+      newPlayerActive.style.height = "27px";
+      newPlayerActive.style.margin = "1px 5px 0px 0px";
+
+
+      // create text area for the aliases
+      var newPlayerAliases = document.createElement("textarea"); 
+      newPlayerAliases.setAttribute("type", "textarea"); 
+      newPlayerAliases.setAttribute("id", "playerAlias" + playerCount); 
+      newPlayerAliases.setAttribute("name", "myPlayerAliases[]"); 
+      var newPlayerAliasesText = "";
+      for (var i = 0; i < aliasesList.length; i ++) {
+        newPlayerAliasesText += aliasesList[i];
+        newPlayerAliasesText += "\n";
+      }
+      newPlayerAliases.value = newPlayerAliasesText; 
+
+      var header = playersHeader;
+      if (!playerActive) {
+        header = inactivePlayersHeader;
+      }
+      header.appendChild(newPlayerActive);
+      header.appendChild(newPlayerName);
+      header.appendChild(newPlayerAliases);
+      header.appendChild(document.createElement("br"));
+
+      playerCount++;
+
+      if (playerName == "") {
+        // new player so enable the save/cancel button, and disable
+        document.getElementById("cancelEdit").disabled = false; 
+        document.getElementById("cancelEdit").style.backgroundColor = "lightsalmon";
+      }
+    }
+
+
+    function savePlayerAliases(playerName, aliasesList) {
+      var playerAliasMap = {};
+      for (var i = 0; i < playerCount; i ++) {
+        var player = document.getElementById("player" + i).value;
+        var isActive = document.getElementById("playerActive" + i).checked;
+        var aliases = document.getElementById("playerAlias" + i).value;
+        var aliasesArray = aliases.trim().split('\n');
+        playerAliasMap[player] = { "active": isActive, "aliases": aliasesArray };
+      }
+      console.log("SAVING ALIASES:" + JSON.stringify(playerAliasMap));
+
+      var postData = { "playerAliasMap": playerAliasMap };
+
+      // now send the POST request with the data
+      var xmlhttp = new XMLHttpRequest();
+      xmlhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          console.log("Saved response", this.responseText);
+          location.reload(true);
+        }
+      };
+      xmlhttp.open("POST", "/admin-save-aliases");
+      xmlhttp.setRequestHeader("Content-Type", "application/json");
+      xmlhttp.send(JSON.stringify(postData));
+    }
+
+  </script>
+  </div>
+</body>
+</html>
