@@ -75,20 +75,29 @@ input[type=checkbox]:checked:before {
    padding: 2px 6px 2px 0px;
 }
 input[type=checkbox]:checked:disabled {
-   color: grey;
    background-color: #339933; /* darkgreen */
 }
 input[type=checkbox]:checked:enabled {
-   color: grey;
    background-color: lightgreen; /* lightgreen */
 }
 input[type=checkbox]:disabled {
-   color: grey;
    background-color: darkred; /* darkgreen */
 }
 input[type=checkbox]:enabled {
-   color: grey;
    background-color: orangered; /* lightgreen */
+}
+
+input[type=checkbox]:checked:disabled.checksecondary {
+   background-color: transparent; /* darkgreen */
+}
+input[type=checkbox]:checked:enabled.checksecondary {
+   background-color: transparent; /* lightgreen */
+}
+input[type=checkbox]:disabled.checksecondary {
+   background-color: transparent; /* darkgreen */
+}
+input[type=checkbox]:enabled.checksecondary {
+   background-color: transparent; /* lightgreen */
 }
 
 .autocomplete {

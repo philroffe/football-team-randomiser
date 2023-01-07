@@ -79,28 +79,10 @@
     aliases["Dan Atherton"] = [ "Dan A", "Dan" ]
     //aliases["Jon G"] = [ "Jon" ]
 
-    if (isAdmin) {
-      // check for any aliases
-      Object.keys(attendance).sort().forEach(function(week) {
-        Object.keys(attendance[week]).sort().forEach(function(key) {
-          //console.log("week:" + week + " key:" + key);
-          var foundPlayerName = getPlayerNameFromAlias(key);
-          //console.log("FOUND ALIAS " + getPlayerNameFromAlias(key))
-          if (!foundPlayerName) {
-            console.log("PLAYER NAME NOT FOUND:" + key);
-          }
-        })
-      })
-    }
-
-    //var playerNameSuggestions = ["Phil R", "Tom B", "Tom S"];
-    //var suggestedPlayerAliasMap = pagedata.data.suggestedPlayerAliasMap;
-    //var playerNameSuggestions = suggestedPlayerAliasMap.keys();
-
     var playerAliasMaps = pagedata.data.playerAliasMaps;
     //console.log("PLAYER ALIAS MAPS:" + JSON.stringify(playerAliasMaps));
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
-    //var aliasToPlayerMap = playerAliasMaps[aliasToPlayerMap];
+    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
     var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap));
     //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
 
@@ -208,12 +190,51 @@
     // now loop through all saved players and pre-populate their availability
     var allOriginalPlayers = {}
     Object.keys(players).sort().forEach(function(key) {
-      //console.log('player=' + key + "___" + players[key]);
+      console.log('player=' + key + "___" + players[key]);
       playerName = key
       playerName = decodeHtml(key)
       playerAvailability = players[key]
-      addPlayer(playerName, playerAvailability)
+      var officialPlayerName = getOfficialNameFromAlias(key, aliasToPlayerMap);
+      addPlayer(playerName, playerAvailability, officialPlayerName)
     });
+
+    // create a spacer before adding the attendees only
+    nameHeader.appendChild(document.createElement("br"));
+    for (var i = 0; i < mondaysDates.length; i ++) {
+      document.getElementById("week" + i + "Header").appendChild(document.createElement("br"));            
+    }
+    editHeader.appendChild(document.createElement("br"));
+
+    // add the attendees only - any players in attendance that didn't add themselves as players
+    for (var i = 0; i < mondaysDates.length; i ++) {
+      var attendanceMap = attendance["week" + i];
+      //attendanceMap[officialPlayerName]
+      if (attendanceMap) {
+        console.log('attendanceMap=' + i + "___" + JSON.stringify(attendanceMap));
+        Object.keys(attendanceMap).sort().forEach(function(key) {
+          var attendedOfficialPlayerName = key;
+          // check matching attendee in the player list
+          var foundMatch = false;
+          for (var i = 1; i < 999; i++) {
+            var playerElement = document.getElementById("player" + i); 
+            if (playerElement == null) { break; }
+            var officialPlayerName = playerElement.getAttribute("officialPlayerName");
+            if (attendedOfficialPlayerName == officialPlayerName) {
+              // attendee found in original player list, so skip
+              foundMatch = true;
+              break;
+            }
+          }
+          if (!foundMatch) {
+            // attendee not found in original player list, so add it to the bottom
+            console.log("NOT MATCHED: " + foundMatch + " - " + attendedOfficialPlayerName + " " + officialPlayerName);
+            addPlayer(attendedOfficialPlayerName, false, attendedOfficialPlayerName)
+          }
+        });
+      }
+    }
+
+
     // populate the weekly total counts
     calcWeeklyTotals();
 
@@ -251,29 +272,24 @@
         return txt.value;
     }
 
-    // check for unique player name
-    function getPlayerNameFromAlias(nameToCheck) {
-      //playerNameSuggestions
-      //aliases
-      var foundPlayerName = undefined;
-      Object.keys(playerNameSuggestions).sort().forEach(function(key) {
-        if (nameToCheck.trim() == key.trim()) {
-          //console.log("FOUND KEY " + key)
-          foundPlayerName = key;
+    // get the official name from a map of aliases (using case insensitive search)
+    function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {
+      nameToCheck = nameToCheck.trim();
+      var officialName = undefined;
+      var fullAliasList = Object.keys(aliasToPlayerMap);
+      for (var i = 0; i < fullAliasList.length; i++) { 
+        if (nameToCheck.toUpperCase() == fullAliasList[i].toUpperCase()) {
+          officialName = aliasToPlayerMap[nameToCheck.toUpperCase()]
         }
-        for (var i = 0; i < playerNameSuggestions[key].length; i ++) {
-          if (nameToCheck.trim() == currentAlias) {
-            //console.log("FOUND ALIAS " + currentAlias)
-            // found matching name
-            foundPlayerName = currentAlias;
-          }
-        }
-      })
-      return foundPlayerName;
+      }
+      if (!officialName) {
+        console.error("ERROR: Failed to find official name for:", nameToCheck);
+      }
+      return officialName;
     }
 
     // add an additional text box and hook up listeners
-    function addPlayer(playerName, availabilityMap) {
+    function addPlayer(playerName, availabilityMap, officialPlayerName) {
       playerCount++;
       if (playerCount > 30) {
         // set a max list of names (just to protect a little)
@@ -286,6 +302,7 @@
       var newPlayerName = document.createElement("input"); 
       newPlayerName.setAttribute("type", "text"); 
       newPlayerName.setAttribute("id", "player" + playerCount); 
+      newPlayerName.setAttribute("officialPlayerName", officialPlayerName); 
       newPlayerName.setAttribute("name", "myPlayers[]"); 
       newPlayerName.style.width = 90;
       // create an autocomplete div to add the player input to
@@ -311,13 +328,15 @@
 
       if (isAdmin) {
         // add Admin ability for the name column
-        var newAdminHeader = document.createElement("input");
-        newAdminHeader.value = "Played?";
-        newAdminHeader.style.width = 90;
-        newAdminHeader.setAttribute("class", "noborder"); 
-        newAdminHeader.setAttribute("disabled", true); 
+        var officialPlayerHeader = document.createElement("input");
+        officialPlayerHeader.value = "Played?";
+        officialPlayerHeader.style.width = 120;
+        newPlayerName.style.width = 120; // also set the newPlayerName input to match
+        officialPlayerHeader.style.fontSize = "0.9em";
+        officialPlayerHeader.setAttribute("class", "noborder"); 
+        officialPlayerHeader.setAttribute("disabled", true); 
         nameHeader.appendChild(document.createElement("br"));
-        nameHeader.appendChild(newAdminHeader);
+        nameHeader.appendChild(officialPlayerHeader);
         nameHeader.appendChild(document.createElement("br"));
       }
       
@@ -359,7 +378,7 @@
           newPlayerWeekAdmin.disabled = true;
           if (attendance["week" + i]) {
             //console.log(attendance["week" + i][playerName])
-            newPlayerWeekAdmin.checked = attendance["week" + i][playerName];
+            newPlayerWeekAdmin.checked = attendance["week" + i][officialPlayerName];
           }
           //newPlayerWeekAdmin.setAttribute("disabled", true); 
           weekHeader.appendChild(document.createElement("br"));
@@ -403,6 +422,9 @@
         editHeader.appendChild(document.createElement("br"));
         // now hide the edit button per player (replaced with single admin save)
         newPlayerEditButton.setAttribute("hidden", true); 
+        document.getElementById("addPlayer").hidden = true; 
+      } else {
+        document.getElementById("addPlayer").hidden = false; 
       }
 
       if (!playerName) {
@@ -429,12 +451,19 @@
       // re-enable every player's player-status button
       for (var i = 1; i <= playerCount; i++) {
         document.getElementById("player" + i + "WeekAdmin" + weekNumber).disabled = true; 
+        document.getElementById("player" + i + "Week" + weekNumber).setAttribute("class", "checkmark");
       }
       // reenable the other edit buttons
       mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
       // auto generate divs for headers for each game week
       for (var i = 0; i < mondaysDates.length; i ++) {
         document.getElementById("week" + i + "Edit").disabled = false; 
+
+        // re-enable all of the other elements
+        for (var j = 1; j <= playerCount; j++) {
+          document.getElementById("player" + j + "Week" + i).hidden = false;
+          document.getElementById("player" + j + "WeekAdmin" + i).hidden = false; 
+        }
       }
       return;
     }
@@ -445,6 +474,7 @@
     // re-enable every player's player-status button
     for (var i = 1; i <= playerCount; i++) {
       document.getElementById("player" + i + "WeekAdmin" + weekNumber).disabled = false; 
+      document.getElementById("player" + i + "Week" + weekNumber).setAttribute("class", "checksecondary");
     }
     
     // disable the other edit buttons
@@ -452,6 +482,12 @@
     for (var i = 0; i < mondaysDates.length; i ++) {
       if (i != weekNumber) {
         document.getElementById("week" + i + "Edit").disabled = true; 
+
+        // hide all of the other elements
+        for (var j = 1; j <= playerCount; j++) {
+          document.getElementById("player" + j + "Week" + i).hidden = true;
+          document.getElementById("player" + j + "WeekAdmin" + i).hidden = true; 
+        }
       }
     }
 
@@ -514,10 +550,10 @@
         if (playerElement == null) {
           break;
         }
-        var playerName = playerElement.value; 
+        var officialPlayerName = playerElement.getAttribute("officialPlayerName");
         var playerAttended = document.getElementById("player" + i + "WeekAdmin" + weekNumber).checked; 
-        playersAttended[playerName] = playerAttended;
-        //console.log(i + " " + playerName + " " + playerAttended);
+        playersAttended[officialPlayerName] = playerAttended;
+        //console.log(i + " " + officialPlayerName + " " + playerAttended);
       }
 
       var attendanceDetails = { "gameYear": gameYear, "gameMonth": gameMonth, "gameWeek": weekNumber, "playersAttended": playersAttended, "saveType": saveType, };

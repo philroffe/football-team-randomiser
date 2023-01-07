@@ -124,7 +124,7 @@ express()
     "playerName": playerName, "playerAvailability": playerAvailability, 
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": ip };
 
-    console.log('Inserting DB data:', JSON.stringify(gamedetails_new));
+    console.log('Inserting DB game data:', JSON.stringify(gamedetails_new));
     try {
       var gamesCollectionId = "games_" + gameId;
       const docRef = firestore.collection(gamesCollectionId).doc(playerName + "_" + timestamp.toISOString());
@@ -132,6 +132,10 @@ express()
 
       var playerSummary = await queryDatabaseAndBuildPlayerList(gameId);
       var summaryCollectionId = gamesCollectionId + "_summary";
+      // store the current alias maps separately to the rest of the summary
+      await firestore.collection(summaryCollectionId).doc("_aliases").set(playerSummary.playerAliasMaps);
+      delete playerSummary.playerAliasMaps; // exclude the transient alias maps in the summary
+      console.log('Inserting DB summary data:', JSON.stringify(playerSummary));
       await firestore.collection(summaryCollectionId).doc("_summary").set(playerSummary);
       // if you got here without an exception then everything was successful
       //res.sendStatus(200);
@@ -166,7 +170,7 @@ express()
       res.send({'result': err});
     }
   })
-.get('/admin-get-aliases', async (req, res) => {
+.get('/admin-aliases', async (req, res) => {
   try {
     console.log('Generating ALIASES page with data');
     var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
@@ -203,17 +207,6 @@ express()
     }
   })
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
-
-
-function createJsonDiff(obj1, obj2) {
-  var ret = {};
-  for(var i in obj2) {
-    if(!obj1.hasOwnProperty(i) || obj2[i] !== obj1[i]) {
-      ret[i] = obj2[i];
-    }
-  }
-  return ret;
-};
 
 function getDateNextMonday() {
   // Get the date next Monday
@@ -366,27 +359,18 @@ function buildPlayerUniqueList(dbresult) {
 }
 
 
-// check for unique player name
-function getPlayerNameFromAlias(nameToCheck, playerAliasMap) {
-  var foundPlayerName = undefined;
-  Object.keys(playerAliasMap).sort().forEach(function(key) {
-      console.log("CHECKING KEEEEEEEEY " + key)
-    if (nameToCheck.trim() == key.trim()) {
-      console.log("FOUND KEY " + key)
-      foundPlayerName = key;
+// get the official name from a map of aliases (using case insensitive search)
+function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {
+  nameToCheck = nameToCheck.trim();
+  var officialName = undefined;
+  var fullAliasList = Object.keys(aliasToPlayerMap);
+  for (var i = 0; i < fullAliasList.length; i++) { 
+    if (nameToCheck.toUpperCase() == fullAliasList[i].toUpperCase()) {
+      officialName = aliasToPlayerMap[nameToCheck.toUpperCase()]
     }
-    for (var i = 0; i < playerAliasMap[key].length; i ++) {
-      var currentAlias = playerAliasMap[key][i];
-      if (nameToCheck.trim() == currentAlias) {
-        console.log("FOUND ALIAS " + currentAlias)
-        // found matching name
-        foundPlayerName = currentAlias;
-      }
-    }
-  })
-  return foundPlayerName;
+  }
+  return officialName;
 }
-
 
 // check for unique player name
 async function getDefinedPlayerAliasMaps() {
@@ -399,15 +383,18 @@ async function getDefinedPlayerAliasMaps() {
   var collapsedPlayerMap = {};
   Object.keys(playerAliasMap).sort().forEach(function(key) {
     //console.log("key", playerAliasMap[key]);
-    var playerName = key;
+    var officialName = key.trim();
     var playerActive = playerAliasMap[key].active;
     var aliasesList = playerAliasMap[key].aliases;
 
-    // combine database data with supplimentary game data and render the page
-    var collapsedPlayerMap = {};
-    collapsedPlayerMap[playerName.toUpperCase()] = playerName;
+    //collapsedPlayerMap[playerName.toUpperCase()] = playerName;
+    collapsedPlayerMap[officialName.toUpperCase()] = officialName;
     for (var i = 0; i < aliasesList.length; i ++) {
-      collapsedPlayerMap[aliasesList[i].toUpperCase()] = playerName;
+      var aliasName = aliasesList[i].trim();
+      if (aliasName != "") {
+        //collapsedPlayerMap[aliasesList[i].toUpperCase()] = playerName;
+        collapsedPlayerMap[aliasName.toUpperCase()] = officialName;
+      }
     }
   });
 
