@@ -4,10 +4,10 @@
   <script src="/autocomplete.js"></script>
 </head>
 
-<body class="w3-light-grey">
+<body>
   <%- include ("../partials/nav.ejs") %>
 <!-- Page content -->
-<div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+<div class="fball-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
 
 <div id="year">
   <h3>Month: 
@@ -18,30 +18,60 @@
 <div id="description">Footie, 6pm Mondays, Goodwin, Sport Sheffield</div>
 <div id="location"><a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Northumberland Rd, Sheffield, S10 2TY</a></div>
 
-<p><p><h3>Add/Edit Availability:</h3>
-<div id="divHeader">
-    <div id="nameHeader" class="gameheader"><br></div>
-</div>
-<div id="editHeader" class="gameheader"><br></div>
-<div style="clear:both;"></div>
 
-<form id="playerForm">
- <div id="dynamicInput"></div>
-</form>
-<button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
-<button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
-<p><p>Finished? <a href="/teams">Generate teams and email</a>, or view the <a href="/poll-log">log of poll entries.</a>.
+<div class="tabs" id="tabs">
+  <div class="tab">
+    <input type="radio" id="tab-1" name="tab-group-1" checked>
+    <label for="tab-1">Availability</label>
+    <div class="content">
+      <div id="availabilityHeader" class="gameheader"></div>
+      <div id="editHeader" class="gameheader"><br></div>
+
+      <div style="clear:both;"></div>
+      <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
+      <button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
+      <p><p>Finished? <a href="/teams">Generate teams and email</a>, or view the <a href="/poll-log">log of poll entries.</a>.
+    </div>
+  </div>
+  <div class="tab">
+    <input type="radio" id="tab-2" name="tab-group-1">
+    <label for="tab-2">Attendance</label>
+    <div class="content">
+      <div id="attendanceHeader" class="gameheader"></div>
+
+      <div style="clear:both;"></div>
+      <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled=true>Save Attendance</button>
+      <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled=true>Cancel</button>
+    </div>
+  </div>
+  <div class="tab">
+    <input type="radio" id="tab-3" name="tab-group-1">
+    <label for="tab-3">Payment</label>
+    <div class="content">
+      <p>Payment summary coming at the end of the month...</p>
+    </div>
+  </div>
+</div>
+
+
 
   <script type="text/javascript">
+    const AVAILABILITY = "availability";
+    const ATTENDANCE = "attendance";
+    const PAYMENT = "payment";
+
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });
     var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
     var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
 
-    var playerCount = 0;
+    var playerCount = {};
+    playerCount[AVAILABILITY] = 0;
+    playerCount[ATTENDANCE] = 0;
+    playerCount[PAYMENT] = 0;
+
     var todayDate = new Date();
     var playerElements = {};
     var saving = true;
-
     // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
     var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
     //console.log('Data=' + JSON.stringify(pagedata));
@@ -70,21 +100,33 @@
 
     var players = pagedata.data.players;
     if (!players) { players = {}; }
-    var attendance = pagedata.data.attendance;
-    if (!attendance) { attendance = {}; }
-
-
-    var aliases = {};
-    aliases["Phil Roffe"] = [ "Phil R" ]
-    aliases["Dan Atherton"] = [ "Dan A", "Dan" ]
-    //aliases["Jon G"] = [ "Jon" ]
+    var attendanceMap = pagedata.data.attendance;
+    if (!attendanceMap) { attendanceMap = {}; }
+    var allOriginalPlayers = {}
+    // now quickly add any players not yet attended to the attendanceMap
+    Object.keys(players).sort().forEach(function(player) {
+      if (!attendanceMap[player]) {
+        attendanceMap[player] = {};
+      }
+    });
 
     var playerAliasMaps = pagedata.data.playerAliasMaps;
-    //console.log("PLAYER ALIAS MAPS:" + JSON.stringify(playerAliasMaps));
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
     var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap));
     //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
+
+    mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
+
+    //populate the tabs
+    addPlayerListToTab(AVAILABILITY);
+    addPlayerListToTab(ATTENDANCE);
+    //addPlayerListToTab(PAYMENT);
+
+    // populate the weekly total counts
+    calcWeeklyTotals(AVAILABILITY);
+    calcWeeklyTotals(ATTENDANCE);
+    //calcWeeklyTotals("PAYMENT");
 
     function mondaysInMonth(m,y) {
       var days = new Date(y,m,0).getDate();
@@ -100,9 +142,6 @@
       return mondays;
     }
 
-    mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
-
-
     function getDayOfMonthSuffix(n) {
         //checkArgument(n >= 1 && n <= 31, "illegal day of month: " + n);
         if (n >= 11 && n <= 13) {
@@ -116,14 +155,22 @@
         }
     }
 
+function addPlayerListToTab(tabName) {
+    var divElementToAppendTo = document.getElementById(tabName + "Header")
+    var nameHeader = document.createElement("div");
+    nameHeader.setAttribute("id", "nameHeader" + tabName); 
+    nameHeader.setAttribute("class", "gameheader"); 
+    nameHeader.appendChild(document.createElement("br"));
+    divElementToAppendTo.appendChild(nameHeader);
+
     // auto generate divs for headers for each game week
     for (var i = 0; i < mondaysDates.length; i ++) {
       var newWeekHeader = document.createElement("div");
-      newWeekHeader.setAttribute("id", "week" + i + "Header"); 
+      newWeekHeader.setAttribute("id", "week" + i + "Header" + tabName); 
       newWeekHeader.setAttribute("class", "gameheader"); 
       // create a totals header...
       var newWeekTotal = document.createElement("i");
-      newWeekTotal.setAttribute("id", "week" + i + "Total"); 
+      newWeekTotal.setAttribute("id", "week" + i + "Total" + tabName); 
       newWeekTotal.innerHTML = '0';
       newWeekHeader.appendChild(newWeekTotal);
       newWeekHeader.appendChild(document.createElement("br"));
@@ -157,14 +204,15 @@
       }
       weekDateHeader.innerHTML = currentDateHeader;
       newWeekHeader.appendChild(weekDateHeader);
-      divHeader.appendChild(newWeekHeader);  
+      divElementToAppendTo.appendChild(newWeekHeader);  
 
-      if (isAdmin) {
+      //if (isAdmin) {
+      if (tabName == ATTENDANCE) {
         // create the edit button
         var weekEditButton = document.createElement("button");
         weekEditButton.innerHTML = "e";
         weekEditButton.style.backgroundColor = "lightgreen";
-        weekEditButton.setAttribute("id", "week" + i + "Edit");
+        weekEditButton.setAttribute("id", "week" + i + "Edit" + tabName);
         weekEditButton.setAttribute("class", "rotated"); 
         const chosenEditWeek = i;
         weekEditButton.onclick = function() {editWeek(chosenEditWeek)};
@@ -176,35 +224,60 @@
         }
       }
     }
-    if (isAdmin) {
+    //if (isAdmin) {
+    if (tabName == ATTENDANCE) {
       // just add a dummy button to the name header to space it out
       var dummyAdminNameButton = document.createElement("button");
       dummyAdminNameButton.setAttribute("class", "noborder"); 
       dummyAdminNameButton.setAttribute("disabled", true); 
-      nameHeader = document.getElementById("nameHeader")
+      //nameHeader = document.getElementById("nameHeader")
       nameHeader.appendChild(document.createElement("br"));
       nameHeader.appendChild(dummyAdminNameButton);
     }
 
-    console.log(pagedata.data.players);
-    // now loop through all saved players and pre-populate their availability
-    var allOriginalPlayers = {}
-    Object.keys(players).sort().forEach(function(key) {
-      console.log('player=' + key + "___" + players[key]);
-      playerName = key
-      playerName = decodeHtml(key)
-      playerAvailability = players[key]
-      var officialPlayerName = getOfficialNameFromAlias(key, aliasToPlayerMap);
-      addPlayer(playerName, playerAvailability, officialPlayerName)
-    });
+    var playersMapForTab = {};
 
-    // create a spacer before adding the attendees only
+    switch(tabName) {
+      case AVAILABILITY:
+        playersMapForTab = players;
+        break;
+      case ATTENDANCE:
+        playersMapForTab = attendanceMap;
+        break;
+      case PAYMENT:
+        // code block
+        break;
+      default:
+        // code block
+    }
+
+    //console.log("tabName: " + tabName);
+    //console.log(pagedata.data.players);
+    //console.log("playersMapForTab: " + JSON.stringify(playersMapForTab));
+    //console.log("playersMapForTab Adam B week1: " + JSON.stringify(playersMapForTab["Adam B"]["week1"]));
+
+    // now loop through all saved players and pre-populate their availability
+    var weekNumber = 1;
+    Object.keys(playersMapForTab).sort().forEach(function(player) {
+      //console.log('player=' + player + "___" + JSON.stringify(playersMapForTab[player]) + "__tab__" + tabName);
+      playerName = player
+      playerName = decodeHtml(player)
+      var playerSelection = playersMapForTab[player];
+      //console.log("_____ " + playerName + " " + JSON.stringify(playerSelection));
+      var officialPlayerName = getOfficialNameFromAlias(player, aliasToPlayerMap);
+      addPlayer(playerName, playerSelection, officialPlayerName, tabName)
+    });
+  //});
+
+console.log('-----------------------')
+    /*// create a spacer before adding the attendees only
     nameHeader.appendChild(document.createElement("br"));
     for (var i = 0; i < mondaysDates.length; i ++) {
-      document.getElementById("week" + i + "Header").appendChild(document.createElement("br"));            
+      document.getElementById("week" + i + "Header" + tabName).appendChild(document.createElement("br"));            
     }
-    editHeader.appendChild(document.createElement("br"));
+    editHeader.appendChild(document.createElement("br"));*/
 
+    /*if (tabName == "attendance") {
     // add the attendees only - any players in attendance that didn't add themselves as players
     for (var i = 0; i < mondaysDates.length; i ++) {
       var attendanceMap = attendance["week" + i];
@@ -216,9 +289,9 @@
           // check matching attendee in the player list
           var foundMatch = false;
           for (var i = 1; i < 999; i++) {
-            var playerElement = document.getElementById("player" + i); 
+            var playerElement = document.getElementById("player" + i + tabName); 
             if (playerElement == null) { break; }
-            var officialPlayerName = playerElement.getAttribute("officialPlayerName");
+            var officialPlayerName = playerElement.getAttribute("title");
             if (attendedOfficialPlayerName == officialPlayerName) {
               // attendee found in original player list, so skip
               foundMatch = true;
@@ -228,40 +301,29 @@
           if (!foundMatch) {
             // attendee not found in original player list, so add it to the bottom
             console.log("NOT MATCHED: " + foundMatch + " - " + attendedOfficialPlayerName + " " + officialPlayerName);
-            addPlayer(attendedOfficialPlayerName, false, attendedOfficialPlayerName)
+            addPlayer(attendedOfficialPlayerName, false, attendedOfficialPlayerName, tabName)
           }
         });
       }
     }
-
-
-    // populate the weekly total counts
-    calcWeeklyTotals();
+    }*/
+}
 
     // populate the weekly total counts
-    function calcWeeklyTotals() {
+    function calcWeeklyTotals(tabName) {
       for (var j = 0; j < mondaysDates.length; j++) {
-        var weekTotalSummary = document.getElementById("week" + j + "Total");
+        var weekTotalSummary = document.getElementById("week" + j + "Total" + tabName);
         weekTotalSummary.innerHTML = 0
 
-        var playerTotal = 0;
-        var attendanceTotal = 0;
-        var attendanceTotalText = ""
-        for (var i = 1; i <= playerCount; i++) {
-          if (document.getElementById("player" + i + "Week" + j).checked) {
-            playerTotal++
-            //weekTotalSummary.innerHTML = "(" + (parseInt(weekTotalSummary.innerHTML.replace("(", "").replace(")", "")) + 1) + ")";
-          }
-          if (isAdmin) {
-            if (document.getElementById("player" + i + "WeekAdmin" + j).checked) {
-              attendanceTotal++
-              //weekTotalSummary.innerHTML = "(" + (parseInt(weekTotalSummary.innerHTML.replace("(", "").replace(")", "")) + 1) + ")";
-            }
-            attendanceTotalText = "/" + attendanceTotal;
+        var currentTotal = 0;
+        var tabPlayerCount = playerCount[tabName];
+        //console.log("tabName " + tabName + " tabPlayerCount " + tabPlayerCount);
+        for (var i = 1; i <= tabPlayerCount; i++) {
+          if (document.getElementById("player" + i + "Week" + j + tabName).checked) {
+            currentTotal++;
           }
         }
-        weekTotalSummary.innerHTML = "(" + playerTotal + attendanceTotalText + ")";
-        //"(" + (parseInt(weekTotalSummary.innerHTML.replace("(", "").replace(")", "")) + 1) + ")";
+        weekTotalSummary.innerHTML = "(" + currentTotal + ")";
       }
     }
 
@@ -283,27 +345,38 @@
         }
       }
       if (!officialName) {
-        console.error("ERROR: Failed to find official name for:", nameToCheck);
+        console.log("WARNING: Failed to find official name for:", nameToCheck);
       }
       return officialName;
     }
 
     // add an additional text box and hook up listeners
-    function addPlayer(playerName, availabilityMap, officialPlayerName) {
-      playerCount++;
-      if (playerCount > 30) {
+    function addPlayer(playerName, availabilityMap, officialPlayerName, tabName = "availability") {
+      //update the player count for this tab
+      var tabPlayerCount = playerCount[tabName];
+      tabPlayerCount++;
+      playerCount[tabName] = tabPlayerCount;
+      if (tabPlayerCount > 100) {
         // set a max list of names (just to protect a little)
         return;
       }
-      var form = document.getElementById("dynamicInput")
-      var nameHeader = document.getElementById("nameHeader")
+      var nameHeader = document.getElementById("nameHeader" + tabName);
       
       // create a player text box
       var newPlayerName = document.createElement("input"); 
       newPlayerName.setAttribute("type", "text"); 
-      newPlayerName.setAttribute("id", "player" + playerCount); 
-      newPlayerName.setAttribute("officialPlayerName", officialPlayerName); 
+      newPlayerName.setAttribute("id", "player" + tabPlayerCount + tabName); 
       newPlayerName.setAttribute("name", "myPlayers[]"); 
+      if (officialPlayerName) {
+        newPlayerName.setAttribute("title", officialPlayerName);
+        newPlayerName.style.background = "url(/regular.png)";
+      } else {
+        //newPlayerName.style.backgroundColor = "transparent";
+        newPlayerName.style.background = "url(/new-icon.png)";
+      }
+      newPlayerName.style.backgroundPosition = "right";
+      newPlayerName.style.backgroundRepeat = "no-repeat";
+      newPlayerName.style.backgroundSize = "20px 20px";
       newPlayerName.style.width = 90;
       // create an autocomplete div to add the player input to
       newPlayerName.setAttribute("autocomplete", "off"); 
@@ -316,7 +389,7 @@
       nameHeader.appendChild(newPlayerDiv);
 
       // Determine whether input should be editable
-      allOriginalPlayers["player" + playerCount] = playerName
+      allOriginalPlayers["player" + tabPlayerCount] = playerName
       if (playerName) {
         newPlayerName.setAttribute("value", playerName); 
         newPlayerName.setAttribute("disabled", true); 
@@ -326,7 +399,8 @@
         newPlayerName.select();
       }
 
-      if (isAdmin) {
+/*      //if (isAdmin) {
+      if (tabName == "attendance") {
         // add Admin ability for the name column
         var officialPlayerHeader = document.createElement("input");
         officialPlayerHeader.value = "Played?";
@@ -338,15 +412,16 @@
         nameHeader.appendChild(document.createElement("br"));
         nameHeader.appendChild(officialPlayerHeader);
         nameHeader.appendChild(document.createElement("br"));
-      }
+      }*/
       
       for (var i = 0; i < mondaysDates.length; i ++) {
-        var weekHeader = document.getElementById("week" + i + "Header")
+        //console.log("=============" + i + );
+        var weekHeader = document.getElementById("week" + i + "Header" + tabName)
         var newPlayerWeek = document.createElement("input"); 
         newPlayerWeek.setAttribute("type", "checkbox"); 
         newPlayerWeek.setAttribute("class", "checkmark"); 
-        newPlayerWeek.setAttribute("id", "player" + playerCount + "Week" + i); 
-        newPlayerWeek.setAttribute("name", playerCount + "myPlayerWeek[]"); 
+        newPlayerWeek.setAttribute("id", "player" + tabPlayerCount + "Week" + i + tabName); 
+        newPlayerWeek.setAttribute("name", tabPlayerCount + "myPlayerWeek[]"); 
         if (playerName) {
           // existing player so check as needed
           newPlayerWeek.disabled = true;
@@ -366,51 +441,33 @@
         }
         weekHeader.appendChild(document.createElement("br"));
         weekHeader.appendChild(newPlayerWeek);
+      }
 
 
-        if (isAdmin) {
-          // add Admin capability for the game week columns
-          var newPlayerWeekAdmin = document.createElement("input"); 
-          newPlayerWeekAdmin.setAttribute("type", "checkbox"); 
-          newPlayerWeekAdmin.setAttribute("class", "checkmark"); 
-          newPlayerWeekAdmin.setAttribute("id", "player" + playerCount + "WeekAdmin" + i); 
-          newPlayerWeekAdmin.setAttribute("name", playerCount + "myPlayerWeekAdmin[]"); 
-          newPlayerWeekAdmin.disabled = true;
-          if (attendance["week" + i]) {
-            //console.log(attendance["week" + i][playerName])
-            newPlayerWeekAdmin.checked = attendance["week" + i][officialPlayerName];
-          }
-          //newPlayerWeekAdmin.setAttribute("disabled", true); 
-          weekHeader.appendChild(document.createElement("br"));
-          weekHeader.appendChild(newPlayerWeekAdmin);
-          weekHeader.appendChild(document.createElement("br"));
+      if (tabName == "availability") {
+        // create the edit button
+        var newPlayerEditButton = document.createElement("button");
+        newPlayerEditButton.type = "button";
+        newPlayerEditButton.innerHTML = "Edit...";
+        newPlayerEditButton.style.backgroundColor = "lightgreen";
+        newPlayerEditButton.setAttribute("id", "player" + tabPlayerCount + "Edit" + tabName);
+        //console.log("CREATED " + "player" + tabPlayerCount + "Edit" + tabName);
 
-          if (weekHeader.getAttribute("bankHoliday")) {
-            newPlayerWeekAdmin.setAttribute("type", "hidden"); 
-            newPlayerWeekAdmin.checked = false;
-          }
+        var editHeader = document.getElementById("editHeader")
+        editHeader.appendChild(document.createElement("br"));
+        editHeader.appendChild(newPlayerEditButton);
+        if (!playerName) {
+          // new player so toggle Edit button to Save
+          newPlayerEditButton.innerHTML = "Save";
+        } else {
+          //newPlayerEditButton.innerHTML = "<span>&#10003;</span>"; //Tick
         }
+        newPlayerEditButton.onclick = function() {editPlayer(playerName, newPlayerEditButton)};
       }
-
-      // create the edit button
-      var newPlayerEditButton = document.createElement("button");
-      newPlayerEditButton.type = "button";
-      newPlayerEditButton.innerHTML = "Edit...";
-      newPlayerEditButton.style.backgroundColor = "lightgreen";
-      newPlayerEditButton.setAttribute("id", "player" + playerCount + "Edit");
-
-      var editHeader = document.getElementById("editHeader")
-      editHeader.appendChild(document.createElement("br"));
-      editHeader.appendChild(newPlayerEditButton);
-      if (!playerName) {
-        // new player so toggle Edit button to Save
-        newPlayerEditButton.innerHTML = "Save";
-      } else {
-        //newPlayerEditButton.innerHTML = "<span>&#10003;</span>"; //Tick
-      }
-      newPlayerEditButton.onclick = function() {editPlayer(playerName, newPlayerEditButton)};
 
       if (isAdmin) {
+      //if (tabName == "attendance") {
+        // TODO... NEEDS IMPROVING - this tabName check doesn't work!
         // add Admin capability for the edit column
         var newAdminEditHeader = document.createElement("input");
         newAdminEditHeader.value = "";
@@ -431,40 +488,63 @@
         // new player so enable the save/cancel button, and disable
         document.getElementById("cancelEdit").disabled = false; 
         document.getElementById("cancelEdit").style.backgroundColor = "lightsalmon";
-        for (var i = 1; i <= playerCount-1; i++) {
-          document.getElementById("player" + i + "Edit").disabled = true; 
-          document.getElementById("player" + i + "Edit").style.backgroundColor = "lightgrey";
+        for (var i = 1; i <= tabPlayerCount-1; i++) {
+          console.log("element=" + document.getElementById("player" + i + "Edit" + tabName))
+          console.log("pppp=" + "player" + i + "Edit" + tabName)
+          console.log("expecting=player1Editavailability")
+
+          ////// TODO - it's creating "attendance", but for some reason not "availability".  Need availability.
+
+          document.getElementById("player" + i + "Edit" + tabName).disabled = true; 
+          document.getElementById("player" + i + "Edit" + tabName).style.backgroundColor = "lightgrey";
         }
       // disable the addPlayer botton
       document.getElementById("addPlayer").disabled = true; 
       document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
       }
-      //calcWeeklyTotals();
+      //calcWeeklyTotals(tabName);
+      var minHeight = 250 + (tabPlayerCount * 35);
+      document.getElementById("tabs").style.minHeight = minHeight + "px";
+  }
+
+  function saveCurrentEdittingWeek() {
+    // check which weekEdit button is active
+    for (var i = 0; i < mondaysDates.length; i ++) {
+      var weekEditButton = document.getElementById("week" + i + "Edit" + ATTENDANCE); 
+      if (weekEditButton.innerHTML == "s") {
+        // button toggled as Save, so call editWeek(weekNumber) to save and toggle it back
+        editWeek(i);
+        return;
+      }
+    }
   }
 
   function editWeek(weekNumber) {
-    weekEditButton = document.getElementById("week" + weekNumber + "Edit"); 
+    var tabName = ATTENDANCE;
+    var tabPlayerCount = playerCount[tabName];
+    weekEditButton = document.getElementById("week" + weekNumber + "Edit" + tabName); 
     if (weekEditButton.innerHTML == "s") {
       // button toggled as Save, so save and put back to Edit move
       saveAttendance(weekNumber);
       weekEditButton.innerHTML = "e";
       // re-enable every player's player-status button
-      for (var i = 1; i <= playerCount; i++) {
-        document.getElementById("player" + i + "WeekAdmin" + weekNumber).disabled = true; 
-        document.getElementById("player" + i + "Week" + weekNumber).setAttribute("class", "checkmark");
+      for (var i = 1; i <= tabPlayerCount; i++) {
+        document.getElementById("player" + i + "Week" + weekNumber + tabName).setAttribute("class", "checkmark");
       }
       // reenable the other edit buttons
       mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
       // auto generate divs for headers for each game week
       for (var i = 0; i < mondaysDates.length; i ++) {
-        document.getElementById("week" + i + "Edit").disabled = false; 
+        document.getElementById("week" + i + "Edit" + tabName).disabled = false; 
 
         // re-enable all of the other elements
-        for (var j = 1; j <= playerCount; j++) {
-          document.getElementById("player" + j + "Week" + i).hidden = false;
-          document.getElementById("player" + j + "WeekAdmin" + i).hidden = false; 
+        for (var j = 1; j <= tabPlayerCount; j++) {
+          document.getElementById("player" + j + "Week" + i + tabName).hidden = false;
         }
       }
+      document.getElementById("copyAvailabilityButton").disabled = true; 
+      document.getElementById("saveAttendanceButton").disabled = true;
+      document.getElementById("cancelAttendanceEditButton").disabled = true;
       return;
     }
 
@@ -472,58 +552,62 @@
     chosenWeek = weekEditButton.id.split('Edit')[0]
     console.log("EDITING weekNumber: " + weekNumber + " chosenWeek:" + chosenWeek);
     // re-enable every player's player-status button
-    for (var i = 1; i <= playerCount; i++) {
-      document.getElementById("player" + i + "WeekAdmin" + weekNumber).disabled = false; 
-      document.getElementById("player" + i + "Week" + weekNumber).setAttribute("class", "checksecondary");
+    for (var i = 1; i <= tabPlayerCount; i++) {
+      //document.getElementById("player" + i + "Week" + weekNumber + tabName).setAttribute("class", "checksecondary");
+      document.getElementById("player" + i + "Week" + weekNumber + tabName).disabled = false;
     }
     
     // disable the other edit buttons
     mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
     for (var i = 0; i < mondaysDates.length; i ++) {
       if (i != weekNumber) {
-        document.getElementById("week" + i + "Edit").disabled = true; 
+        document.getElementById("week" + i + "Edit" + tabName).disabled = true; 
 
         // hide all of the other elements
-        for (var j = 1; j <= playerCount; j++) {
-          document.getElementById("player" + j + "Week" + i).hidden = true;
-          document.getElementById("player" + j + "WeekAdmin" + i).hidden = true; 
+        for (var j = 1; j <= tabPlayerCount; j++) {
+          document.getElementById("player" + j + "Week" + i + tabName).hidden = true;
         }
       }
     }
 
     // button currently as Edit, so toggle to "save" mode
     weekEditButton.innerHTML = "s";
+    document.getElementById("copyAvailabilityButton").disabled = false; 
+    document.getElementById("saveAttendanceButton").disabled = false; 
+    document.getElementById("cancelAttendanceEditButton").disabled = false;
   }
 
     function editPlayer(playerName, newPlayerEditButton) {
+      var tabName = "availability";
       if (newPlayerEditButton.innerHTML == "Save") {
         // button toggled as Save, so save and put back to Edit move
         chosenPlayer = newPlayerEditButton.id.split('Edit')[0]
         savePlayer(chosenPlayer);
         newPlayerEditButton.innerHTML = "Edit...";
         newPlayerEditButton.disabled = false; 
-        calcWeeklyTotals();
+        calcWeeklyTotals(tabName);
         return;
       }
       chosenPlayer = newPlayerEditButton.id.split('Edit')[0]
       console.log("EDITING Player: " + playerName + " ChosenPlayer:" + chosenPlayer);
       // disable everything
-      for (var i = 1; i <= playerCount; i++) {
-        document.getElementById("player" + i).disabled = true; 
+      var tabPlayerCount = playerCount[tabName];
+      for (var i = 1; i <= tabPlayerCount; i++) {
+        document.getElementById("player" + i + tabName).disabled = true; 
         for (var j = 0; j < mondaysDates.length; j++) {
-          document.getElementById("player" + i + "Week" + j).disabled = true; 
+          document.getElementById("player" + i + "Week" + j + tabName).disabled = true; 
         }
-        document.getElementById("player" + i + "Edit").disabled = true; 
-        document.getElementById("player" + i + "Edit").style.backgroundColor = "lightgrey";
+        document.getElementById("player" + i + "Edit" + tabName).disabled = true; 
+        document.getElementById("player" + i + "Edit" + tabName).style.backgroundColor = "lightgrey";
       }
 
       // renable only the chosen Player
-      document.getElementById(chosenPlayer).disabled = false; 
+      document.getElementById(chosenPlayer + tabName).disabled = false; 
       for (var j = 0; j < mondaysDates.length; j++) {
-        document.getElementById(chosenPlayer + "Week" + j).disabled = false; 
+        document.getElementById(chosenPlayer + "Week" + j + tabName).disabled = false; 
       }
-      document.getElementById(chosenPlayer + "Edit").disabled = false; 
-      document.getElementById(chosenPlayer + "Edit").style.backgroundColor = "lightgreen";
+      document.getElementById(chosenPlayer + "Edit" + tabName).disabled = false; 
+      document.getElementById(chosenPlayer + "Edit" + tabName).style.backgroundColor = "lightgreen";
       // enable the cancel button
       document.getElementById("cancelEdit").disabled = false; 
       document.getElementById("cancelEdit").style.backgroundColor = "lightsalmon";
@@ -533,7 +617,7 @@
 
       // button currently as Edit, so toggle to "save" mode
       newPlayerEditButton.innerHTML = "Save";
-      calcWeeklyTotals();
+      calcWeeklyTotals(tabName);
     }
     function delay(time) {
       return new Promise(resolve => setTimeout(resolve, time));
@@ -542,18 +626,26 @@
     function saveAttendance(weekNumber) {
       // Save the data (using XMLHttpRequest)
       console.log("SAVING attendance for week: " + weekNumber);
+      var tabName = "attendance";
 
       var playersAttended = {};
+      playersAttended[weekNumber] = {};
       var saveType = "ATTENDANCE"
       for (var i = 1; i < 999; i++) {
-        var playerElement = document.getElementById("player" + i); 
-        if (playerElement == null) {
+        var playerElement = document.getElementById("player" + i + tabName); 
+        if (!playerElement) {
+          console.log("GOT NULL!");
           break;
         }
-        var officialPlayerName = playerElement.getAttribute("officialPlayerName");
-        var playerAttended = document.getElementById("player" + i + "WeekAdmin" + weekNumber).checked; 
-        playersAttended[officialPlayerName] = playerAttended;
-        //console.log(i + " " + officialPlayerName + " " + playerAttended);
+        var officialPlayerName = playerElement.getAttribute("title");
+        var playerName = officialPlayerName;
+        if (!officialPlayerName) {
+          // new player - no official name yet so use the current value
+          playerName = playerElement.value;
+        }
+        var playerAttended = document.getElementById("player" + i + "Week" + weekNumber + tabName).checked; 
+        playersAttended[weekNumber][playerName] = playerAttended;
+        console.log("PLAYER DETAILS: " + i + " " + officialPlayerName + " " + playerAttended);
       }
 
       var attendanceDetails = { "gameYear": gameYear, "gameMonth": gameMonth, "gameWeek": weekNumber, "playersAttended": playersAttended, "saveType": saveType, };
@@ -574,9 +666,10 @@
     }
 
     function savePlayer(playerId) {
+      var tabName = "availability";
       // Save the data (using XMLHttpRequest)
       try {
-        var playerName = document.getElementById(playerId).value;
+        var playerName = document.getElementById(playerId + tabName).value;
         var originalPlayerName = allOriginalPlayers[playerId];
         console.log("SAVING Player: " + playerName + " ChosenPlayer:" + playerId);
 
@@ -604,7 +697,7 @@
         if (playerName && playerName != "") {
           var playerAvailability = {};
           for (var j = 0; j < mondaysDates.length; j++) {
-            var playerAvailable = document.getElementById(playerId + "Week" + j).checked
+            var playerAvailable = document.getElementById(playerId + "Week" + j + tabName).checked
             playerAvailability[j] = playerAvailable;
           }
           allPlayerDetails[playerName] = playerAvailability;

@@ -289,15 +289,30 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     //if (isAdmin) {
       var summaryCollectionId = "games_" + requestedDateMonth + "_summary";
       const summarydbresult = await firestore.collection(summaryCollectionId).get();
-      //"attendance_week" + gameWeek
       var attendedData = {};
       summarydbresult.forEach((doc) => {
-        if (doc.id != "_summary") {
-          //console.log('Added Attendance for week' + doc.data().week);
-          attendedData["week" + doc.data().week] = doc.data().playersAttended
+        if (doc.data().week >=0) {
+          var weekNumber = doc.data().week;
+          attendedData[weekNumber] = doc.data().playersAttended[weekNumber]
+          //console.log('Added Attendance for week: ' + weekNumber + " " + JSON.stringify(attendedData));
         }
       });
-      rowdata.attendance = attendedData
+      //console.log('LOADED from DB attendedData by week: ' + JSON.stringify(attendedData));
+
+      // transform from {weekNumber: {player1, player2}} to {player: {weekNumber, weekNumber}}
+      var attendedDataByPlayer = {};
+      Object.keys(attendedData).sort().forEach(function(weekNumber) {
+        Object.keys(attendedData[weekNumber]).sort().forEach(function(player) {
+          if (!attendedDataByPlayer[player]) {
+            attendedDataByPlayer[player] = {};
+          }
+          var playerSelection = attendedData[weekNumber][player];
+          attendedDataByPlayer[player][weekNumber] = playerSelection;
+        });
+      });
+      //console.log('TRANSFORMED attendedData by player: ' + JSON.stringify(attendedDataByPlayer));
+
+      rowdata.attendance = attendedDataByPlayer;
     //}
 
     //console.log('rowdata=' + JSON.stringify(rowdata));
@@ -358,19 +373,6 @@ function buildPlayerUniqueList(dbresult) {
   return playerdata;
 }
 
-
-// get the official name from a map of aliases (using case insensitive search)
-function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {
-  nameToCheck = nameToCheck.trim();
-  var officialName = undefined;
-  var fullAliasList = Object.keys(aliasToPlayerMap);
-  for (var i = 0; i < fullAliasList.length; i++) { 
-    if (nameToCheck.toUpperCase() == fullAliasList[i].toUpperCase()) {
-      officialName = aliasToPlayerMap[nameToCheck.toUpperCase()]
-    }
-  }
-  return officialName;
-}
 
 // check for unique player name
 async function getDefinedPlayerAliasMaps() {
