@@ -18,41 +18,45 @@
 <div id="description">Footie, 6pm Mondays, Goodwin, Sport Sheffield</div>
 <div id="location"><a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Northumberland Rd, Sheffield, S10 2TY</a></div>
 
-
-<div class="tabs" id="tabs">
-  <div class="tab">
-    <input type="radio" id="tab-1" name="tab-group-1" checked>
-    <label for="tab-1">Availability</label>
+<p>
+<div class="warpper">
+  <input class="radio" id="one" name="group" type="radio" checked>
+  <input class="radio" id="two" name="group" type="radio">
+  <input class="radio" id="three" name="group" type="radio">
+  <div class="tabs">
+  <label class="tab" id="one-tab" for="one">Availability</label>
+  <label class="tab" id="two-tab" for="two">Attendance</label>
+  <label class="tab" id="three-tab" for="three">Payments</label>
+    </div>
+  <div id="panels" class="panels">
+  <div class="panel" id="one-panel">
     <div class="content">
+      <div class="panel-title">Availability</div>
       <div id="availabilityHeader" class="gameheader"></div>
       <div id="editHeader" class="gameheader"><br></div>
-
       <div style="clear:both;"></div>
       <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
       <button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
       <p><p>Finished? <a href="/teams">Generate teams and email</a>, or view the <a href="/poll-log">log of poll entries.</a>.
     </div>
   </div>
-  <div class="tab">
-    <input type="radio" id="tab-2" name="tab-group-1">
-    <label for="tab-2">Attendance</label>
+  <div class="panel" id="two-panel">
     <div class="content">
+      <div class="panel-title">Attendance</div>
       <div id="attendanceHeader" class="gameheader"></div>
-
       <div style="clear:both;"></div>
       <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled=true>Save Attendance</button>
       <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled=true>Cancel</button>
     </div>
   </div>
-  <div class="tab">
-    <input type="radio" id="tab-3" name="tab-group-1">
-    <label for="tab-3">Payment</label>
+  <div class="panel" id="three-panel">
+    <div class="panel-title">Payments</div>
     <div class="content">
       <p>Payment summary coming at the end of the month...</p>
     </div>
   </div>
+  </div>
 </div>
-
 
 
   <script type="text/javascript">
@@ -450,6 +454,7 @@ console.log('-----------------------')
         newPlayerEditButton.type = "button";
         newPlayerEditButton.innerHTML = "Edit...";
         newPlayerEditButton.style.backgroundColor = "lightgreen";
+        newPlayerEditButton.setAttribute("class", "editButton"); 
         newPlayerEditButton.setAttribute("id", "player" + tabPlayerCount + "Edit" + tabName);
         //console.log("CREATED " + "player" + tabPlayerCount + "Edit" + tabName);
 
@@ -503,8 +508,8 @@ console.log('-----------------------')
       document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
       }
       //calcWeeklyTotals(tabName);
-      var minHeight = 250 + (tabPlayerCount * 35);
-      document.getElementById("tabs").style.minHeight = minHeight + "px";
+      var minHeight = Math.max(600, 350 + (tabPlayerCount * 35));
+      document.getElementById("panels").style.minHeight = minHeight + "px";
   }
 
   function saveCurrentEdittingWeek() {
