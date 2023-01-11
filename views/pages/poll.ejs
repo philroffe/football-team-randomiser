@@ -753,7 +753,7 @@ console.log('-----------------------')
       // Save the data (using XMLHttpRequest)
       try {
         var playerName = document.getElementById(playerId + tabName).value;
-        var originalPlayerName = allOriginalPlayers[playerId];
+        var originalPlayerName = allOriginalPlayers[playerName];
         console.log("SAVING Player: " + playerName + " ChosenPlayer:" + playerId);
 
         // now loop through all saved players and pre-populate their availability
