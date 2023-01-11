@@ -42,11 +42,23 @@
   </div>
   <div class="panel" id="two-panel">
     <div class="content">
-      <div class="panel-title">Attendance</div>
-      <div id="attendanceHeader" class="gameheader"></div>
-      <div style="clear:both;"></div>
-      <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled=true>Save Attendance</button>
-      <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled=true>Cancel</button>
+      <div class="panel-title">Attendance</div>For admin access only.
+
+      <div id="tempPasswordEntryDiv">
+        <form>
+        <input type="password" id="passwordInput" placeholder="Enter Password" minlength="8" required></input>
+        <button type="submit" id="checkPasswordButton" onclick="checkPassword();">Submit</button>
+        </form>
+      </div>
+
+      <div id="tempPasswordOKDiv" hidden=true>
+        <!-- Simple (insecure) way to hide a feature - a form of feature flag rather than password -->
+        <div id="attendanceHeader" class="gameheader"></div>
+        <div style="clear:both;"></div>
+        <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled=true><-- Copy from Availability</button><br><br>
+        <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled=true>Save Attendance</button>
+        <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled=true>Cancel</button>
+      </div>
     </div>
   </div>
   <div class="panel" id="three-panel">
@@ -131,6 +143,46 @@
     calcWeeklyTotals(AVAILABILITY);
     calcWeeklyTotals(ATTENDANCE);
     //calcWeeklyTotals("PAYMENT");
+
+    var adminPasswordHash = "YmlnY2hhbmNl";
+
+    // if admin cookie (feature toggle) already set then check it and auto show
+    var accessLevelCookie = getCookie("accessLevel");
+    if (accessLevelCookie == adminPasswordHash) {
+      document.getElementById("tempPasswordOKDiv").hidden = false;
+      document.getElementById("tempPasswordEntryDiv").hidden = true;
+    }
+
+    function checkPassword() {
+      var password = document.getElementById("passwordInput").value;
+      console.log("PPP=" + password + " " + btoa(password));
+      if (btoa(password) == adminPasswordHash) {
+        document.getElementById("tempPasswordOKDiv").hidden = false;
+        document.getElementById("tempPasswordEntryDiv").hidden = true;
+        setCookie("accessLevel", adminPasswordHash, 8);
+      }
+    }
+    function getCookie(cname) {
+      let name = cname + "=";
+      let decodedCookie = decodeURIComponent(document.cookie);
+      let ca = decodedCookie.split(';');
+      for(let i = 0; i <ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) == ' ') {
+          c = c.substring(1);
+        }
+        if (c.indexOf(name) == 0) {
+          return c.substring(name.length, c.length);
+        }
+      }
+      return "";
+    }
+    function setCookie(cname, cvalue, exhours) {
+      const d = new Date();
+      d.setTime(d.getTime() + (exhours*60*60*1000));
+      let expires = "expires="+ d.toUTCString();
+      document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+    }
 
     function mondaysInMonth(m,y) {
       var days = new Date(y,m,0).getDate();
@@ -510,6 +562,32 @@ console.log('-----------------------')
       //calcWeeklyTotals(tabName);
       var minHeight = Math.max(600, 350 + (tabPlayerCount * 35));
       document.getElementById("panels").style.minHeight = minHeight + "px";
+  }
+
+  function copyAttendanceFromAvailability() {
+    var tabName = ATTENDANCE;
+    var tabPlayerCount = playerCount[tabName];
+    // check which weekEdit button is active
+    var weekNumberActive;
+    for (var i = 0; i < mondaysDates.length; i ++) {
+      var weekEditButton = document.getElementById("week" + i + "Edit" + ATTENDANCE); 
+      if (weekEditButton.innerHTML == "s") {
+        weekNumberActive = i;
+      }
+    }
+    //console.log("WeekActive:" + weekNumberActive);
+    // look through attendance players and lookup the players
+    for (var i = 1; i <= tabPlayerCount; i ++) {
+      var currentPlayerCheckbox = document.getElementById("player" + i + ATTENDANCE);
+      var currentPlayerName = currentPlayerCheckbox.value
+      // loopup if available from the availability (players) map
+      var playerAvailability = players[currentPlayerName];
+      //console.log("Player:=" + currentPlayerName + " week:" + weekNumberActive + " isAvailable:" + JSON.stringify(playerAvailability) + " AvailabileWeek:" + playerAvailability[weekNumberActive]);
+      if (playerAvailability) {
+        document.getElementById("player" + i + "Week" + weekNumberActive + ATTENDANCE).checked = playerAvailability[weekNumberActive];
+      }
+    }
+    calcWeeklyTotals(ATTENDANCE);
   }
 
   function saveCurrentEdittingWeek() {

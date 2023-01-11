@@ -171,7 +171,6 @@ input[type=checkbox]:enabled.checksecondary {
 }
 .panels{
   background:#fffffff6;
-  box-shadow: 0 2rem 2rem #00000080;
   min-height:500px;
   width:100%;
   max-width:500px;
