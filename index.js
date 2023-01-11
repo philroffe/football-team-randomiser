@@ -302,13 +302,15 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
       // transform from {weekNumber: {player1, player2}} to {player: {weekNumber, weekNumber}}
       var attendedDataByPlayer = {};
       Object.keys(attendedData).sort().forEach(function(weekNumber) {
-        Object.keys(attendedData[weekNumber]).sort().forEach(function(player) {
-          if (!attendedDataByPlayer[player]) {
-            attendedDataByPlayer[player] = {};
-          }
-          var playerSelection = attendedData[weekNumber][player];
-          attendedDataByPlayer[player][weekNumber] = playerSelection;
-        });
+        if (attendedData[weekNumber]) {
+          Object.keys(attendedData[weekNumber]).sort().forEach(function(player) {
+            if (!attendedDataByPlayer[player]) {
+              attendedDataByPlayer[player] = {};
+            }
+            var playerSelection = attendedData[weekNumber][player];
+            attendedDataByPlayer[player][weekNumber] = playerSelection;
+          });
+        }
       });
       //console.log('TRANSFORMED attendedData by player: ' + JSON.stringify(attendedDataByPlayer));
 
