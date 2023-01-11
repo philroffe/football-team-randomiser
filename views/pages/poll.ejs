@@ -119,18 +119,25 @@
     var attendanceMap = pagedata.data.attendance;
     if (!attendanceMap) { attendanceMap = {}; }
     var allOriginalPlayers = {}
-    // now quickly add any players not yet attended to the attendanceMap
-    Object.keys(players).sort().forEach(function(player) {
-      if (!attendanceMap[player]) {
-        attendanceMap[player] = {};
-      }
-    });
 
     var playerAliasMaps = pagedata.data.playerAliasMaps;
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
     var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap));
     //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
+
+    // now quickly add any players not yet attended to the attendanceMap
+    Object.keys(players).sort().forEach(function(player) {
+      if (!attendanceMap[player]) {
+        // player name not find, so lookup the official name
+        var officialPlayerName = getOfficialNameFromAlias(player, aliasToPlayerMap);
+        //console.log("player:" + player + " _officialPlayerName:" + officialPlayerName);
+        if (officialPlayerName && !attendanceMap[officialPlayerName]) {
+          // player name and official name not found, so treat as a new player and add blank entry
+          attendanceMap[player] = {};
+        }
+      }
+    });
 
     mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
 
