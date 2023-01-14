@@ -156,14 +156,32 @@ express()
     var saveType = req.body.saveType;
 
     var timestamp = new Date();
-    const attendanceDetails = { "month": gameYear + "-" + gameMonth, "week": gameWeek, "timestamp": timestamp, 
-    "playersAttended": playersAttended, "saveType": saveType, "source_ip": ip };
+    var attendanceDetails = { "month": gameYear + "-" + gameMonth, "timestamp": timestamp, 
+     "saveType": saveType, "source_ip": ip };
+    Object.keys(playersAttended).forEach(function(weekNumber) {
+      attendanceDetails[weekNumber] = playersAttended[weekNumber];
+    });
 
     console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
     try {
-      var summaryCollectionId = "games_" + gameYear + "-" + gameMonth + "-01_summary";
-      const docRef = firestore.collection(summaryCollectionId).doc("attendance_week" + gameWeek);
-      await docRef.set(attendanceDetails);
+      
+      var summaryCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
+      const docRef = firestore.collection(summaryCollectionId).doc("_attendance");
+     if (docRef.empty) {
+        console.log('CREATING:', JSON.stringify(attendanceDetails));
+        await docRef.set(attendanceDetails);
+      } else {
+        console.log('UPDATING:', JSON.stringify(attendanceDetails));
+        // copy the existing doc to preserve a history
+        var existingDoc = await docRef.get();
+        var existingDocData = existingDoc.data();
+        existingDocData.saveType = "ATTENDANCE_BACKUP"
+        const backupDocRef = firestore.collection(summaryCollectionId).doc("_attendance_" + existingDocData.timestamp);
+        backupDocRef.set(existingDocData)
+        // now update with the new data
+        await docRef.update(attendanceDetails);
+      }
+      
       res.json({'result': 'OK'})
     } catch (err) {
       console.error(err);
@@ -286,36 +304,34 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     }
 
     // Query database and get all attendance lists for this month
-    //if (isAdmin) {
-      var summaryCollectionId = "games_" + requestedDateMonth + "_summary";
-      const summarydbresult = await firestore.collection(summaryCollectionId).get();
-      var attendedData = {};
-      summarydbresult.forEach((doc) => {
-        if (doc.data().week >=0) {
-          var weekNumber = doc.data().week;
-          attendedData[weekNumber] = doc.data().playersAttended[weekNumber]
-          //console.log('Added Attendance for week: ' + weekNumber + " " + JSON.stringify(attendedData));
+    var attendedData = {};
+    dbresult.forEach((doc) => {
+      if (doc.data().saveType == "ATTENDANCE") {
+        // assume no more than 4 weeks in a month
+        for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
+          attendedData[weekNumber] = doc.data()[weekNumber];
+          //console.log('Added Attendance for week: ' + weekNumber + " " + JSON.stringify(attendedData[weekNumber]));
         }
-      });
-      //console.log('LOADED from DB attendedData by week: ' + JSON.stringify(attendedData));
+      }
+    });
+    //console.log('LOADED from DB attendedData by week: ' + JSON.stringify(attendedData));
 
-      // transform from {weekNumber: {player1, player2}} to {player: {weekNumber, weekNumber}}
-      var attendedDataByPlayer = {};
-      Object.keys(attendedData).sort().forEach(function(weekNumber) {
-        if (attendedData[weekNumber]) {
-          Object.keys(attendedData[weekNumber]).sort().forEach(function(player) {
-            if (!attendedDataByPlayer[player]) {
-              attendedDataByPlayer[player] = {};
-            }
-            var playerSelection = attendedData[weekNumber][player];
-            attendedDataByPlayer[player][weekNumber] = playerSelection;
-          });
-        }
-      });
-      //console.log('TRANSFORMED attendedData by player: ' + JSON.stringify(attendedDataByPlayer));
+    // transform from {weekNumber: {player1, player2}} to {player: {weekNumber, weekNumber}}
+    var attendedDataByPlayer = {};
+    Object.keys(attendedData).sort().forEach(function(weekNumber) {
+      if (attendedData[weekNumber]) {
+        Object.keys(attendedData[weekNumber]).sort().forEach(function(player) {
+          if (!attendedDataByPlayer[player]) {
+            attendedDataByPlayer[player] = {};
+          }
+          var playerSelection = attendedData[weekNumber][player];
+          attendedDataByPlayer[player][weekNumber] = playerSelection;
+        });
+      }
+    });
+    //console.log('TRANSFORMED attendedData by player: ' + JSON.stringify(attendedDataByPlayer));
 
-      rowdata.attendance = attendedDataByPlayer;
-    //}
+    rowdata.attendance = attendedDataByPlayer;
 
     //console.log('rowdata=' + JSON.stringify(rowdata));
     return rowdata;
