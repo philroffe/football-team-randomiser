@@ -65,9 +65,9 @@ express()
     console.log('Rendering POLL page with data' + req.query.date);
     var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
 
-    var isAdmin = false;
-    if (req.query.admin == "admin") {
-      isAdmin = true;
+    var tabName = "";
+    if (req.query.tab) {
+      tabName = req.query.tab;
     }
 
     // get the latest bank holidays if not already cached
@@ -86,7 +86,7 @@ express()
     }
 
     // combine database data with any additional page data
-    var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, isAdmin: isAdmin };
+    var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, selectTab: tabName };
 
     res.render('pages/poll', { pageData: pageData } );
   } catch (err) {

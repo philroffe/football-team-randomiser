@@ -23,7 +23,7 @@
 
   <script type="text/javascript">      
     // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
-    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
+    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&#39;/g, "'"));
     //console.log('Data=' + JSON.stringify(pagedata));
 
     var playerAliasMap = pagedata.playerAliasMap;

@@ -20,9 +20,9 @@
 
 <p>
 <div class="warpper">
-  <input class="radio" id="one" name="group" type="radio" checked>
-  <input class="radio" id="two" name="group" type="radio">
-  <input class="radio" id="three" name="group" type="radio">
+  <input class="radio" id="one" name="group" type="radio" onclick="changeTab('one');" checked>
+  <input class="radio" id="two" name="group" type="radio" onclick="changeTab('two');">
+  <input class="radio" id="three" name="group" type="radio" onclick="changeTab('three');">
   <div class="tabs">
   <label class="tab" id="one-tab" for="one">Availability</label>
   <label class="tab" id="two-tab" for="two">Attendance</label>
@@ -55,9 +55,11 @@
         <!-- Simple (insecure) way to hide a feature - a form of feature flag rather than password -->
         <div id="attendanceHeader" class="gameheader"></div>
         <div style="clear:both;"></div>
-        <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled=true><-- Copy from Availability</button><br><br>
-        <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled=true>Save Attendance</button>
+        <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled=true><-- Copy from Availability</button>
+        <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled=true>Save</button>
         <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled=true>Cancel</button>
+
+        <p>Problem with the list? <a href="/admin-aliases">Check the aliases...</a>
       </div>
     </div>
   </div>
@@ -89,10 +91,15 @@
     var playerElements = {};
     var saving = true;
     // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
-    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
+    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&#39;/g, "'"));
     //console.log('Data=' + JSON.stringify(pagedata));
  
-    var isAdmin = pagedata.isAdmin;
+    //var isAdmin = pagedata.isAdmin;
+
+    var tabName = pagedata.selectTab;
+    if (document.getElementById(tabName)) {
+      document.getElementById(tabName).checked = true;
+    }
 
     var bankHolidaysJson = pagedata.bankHolidays;
     var selectedMonthDate = new Date(pagedata.data.gameid);
@@ -118,7 +125,6 @@
     if (!players) { players = {}; }
     var attendanceMap = pagedata.data.attendance;
     if (!attendanceMap) { attendanceMap = {}; }
-    var allOriginalPlayers = {}
 
     var playerAliasMaps = pagedata.data.playerAliasMaps;
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
@@ -132,7 +138,7 @@
         // player name not find, so lookup the official name
         var officialPlayerName = getOfficialNameFromAlias(player, aliasToPlayerMap);
         //console.log("player:" + player + " _officialPlayerName:" + officialPlayerName);
-        if (officialPlayerName && !attendanceMap[officialPlayerName]) {
+        if (!attendanceMap[officialPlayerName]) {
           // player name and official name not found, so treat as a new player and add blank entry
           attendanceMap[player] = {};
         }
@@ -189,6 +195,19 @@
       d.setTime(d.getTime() + (exhours*60*60*1000));
       let expires = "expires="+ d.toUTCString();
       document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+    }
+
+    function changeTab(tabName) {
+      // calculate updated URL
+      var newURL = window.location.href;
+      if (window.location.href.includes("tab=")) {
+        newURL = window.location.href.replace(/(tab=)\w+/g, 'tab=' + tabName)
+      } else {
+        (window.location.href.includes("?")) ? newURL += "&" : newURL += "?";
+        newURL += "tab=" + tabName;
+      }
+      // update the URL (without refreshing) to reflect tab change
+      window.history.pushState({}, 'unused', newURL);
     }
 
     function mondaysInMonth(m,y) {
@@ -320,7 +339,6 @@ function addPlayerListToTab(tabName) {
     //console.log("playersMapForTab Adam B week1: " + JSON.stringify(playersMapForTab["Adam B"]["week1"]));
 
     // now loop through all saved players and pre-populate their availability
-    var weekNumber = 1;
     Object.keys(playersMapForTab).sort().forEach(function(player) {
       //console.log('player=' + player + "___" + JSON.stringify(playersMapForTab[player]) + "__tab__" + tabName);
       playerName = player
@@ -332,7 +350,6 @@ function addPlayerListToTab(tabName) {
     });
   //});
 
-console.log('-----------------------')
     /*// create a spacer before adding the attendees only
     nameHeader.appendChild(document.createElement("br"));
     for (var i = 0; i < mondaysDates.length; i ++) {
@@ -351,7 +368,7 @@ console.log('-----------------------')
           var attendedOfficialPlayerName = key;
           // check matching attendee in the player list
           var foundMatch = false;
-          for (var i = 1; i < 999; i++) {
+          for (var i = 0; i < 999; i++) {
             var playerElement = document.getElementById("player" + i + tabName); 
             if (playerElement == null) { break; }
             var officialPlayerName = playerElement.getAttribute("title");
@@ -381,7 +398,7 @@ console.log('-----------------------')
         var currentTotal = 0;
         var tabPlayerCount = playerCount[tabName];
         //console.log("tabName " + tabName + " tabPlayerCount " + tabPlayerCount);
-        for (var i = 1; i <= tabPlayerCount; i++) {
+        for (var i = 0; i < tabPlayerCount; i++) {
           if (document.getElementById("player" + i + "Week" + j + tabName).checked) {
             currentTotal++;
           }
@@ -417,18 +434,19 @@ console.log('-----------------------')
     function addPlayer(playerName, availabilityMap, officialPlayerName, tabName = "availability") {
       //update the player count for this tab
       var tabPlayerCount = playerCount[tabName];
+      currentPlayerNumber = tabPlayerCount;
       tabPlayerCount++;
-      playerCount[tabName] = tabPlayerCount;
       if (tabPlayerCount > 100) {
         // set a max list of names (just to protect a little)
         return;
       }
+      playerCount[tabName] = tabPlayerCount;
       var nameHeader = document.getElementById("nameHeader" + tabName);
       
       // create a player text box
       var newPlayerName = document.createElement("input"); 
       newPlayerName.setAttribute("type", "text"); 
-      newPlayerName.setAttribute("id", "player" + tabPlayerCount + tabName); 
+      newPlayerName.setAttribute("id", "player" + currentPlayerNumber + tabName); 
       newPlayerName.setAttribute("name", "myPlayers[]"); 
       if (officialPlayerName) {
         newPlayerName.setAttribute("title", officialPlayerName);
@@ -452,7 +470,6 @@ console.log('-----------------------')
       nameHeader.appendChild(newPlayerDiv);
 
       // Determine whether input should be editable
-      allOriginalPlayers["player" + tabPlayerCount] = playerName
       if (playerName) {
         newPlayerName.setAttribute("value", playerName); 
         newPlayerName.setAttribute("disabled", true); 
@@ -483,8 +500,8 @@ console.log('-----------------------')
         var newPlayerWeek = document.createElement("input"); 
         newPlayerWeek.setAttribute("type", "checkbox"); 
         newPlayerWeek.setAttribute("class", "checkmark"); 
-        newPlayerWeek.setAttribute("id", "player" + tabPlayerCount + "Week" + i + tabName); 
-        newPlayerWeek.setAttribute("name", tabPlayerCount + "myPlayerWeek[]"); 
+        newPlayerWeek.setAttribute("id", "player" + currentPlayerNumber + "Week" + i + tabName); 
+        newPlayerWeek.setAttribute("name", currentPlayerNumber + "myPlayerWeek[]"); 
         if (playerName) {
           // existing player so check as needed
           newPlayerWeek.disabled = true;
@@ -514,8 +531,8 @@ console.log('-----------------------')
         newPlayerEditButton.innerHTML = "Edit...";
         newPlayerEditButton.style.backgroundColor = "lightgreen";
         newPlayerEditButton.setAttribute("class", "editButton"); 
-        newPlayerEditButton.setAttribute("id", "player" + tabPlayerCount + "Edit" + tabName);
-        //console.log("CREATED " + "player" + tabPlayerCount + "Edit" + tabName);
+        newPlayerEditButton.setAttribute("id", "player" + currentPlayerNumber + "Edit" + tabName);
+        //console.log("CREATED " + "player" + currentPlayerNumber + "Edit" + tabName);
 
         var editHeader = document.getElementById("editHeader")
         editHeader.appendChild(document.createElement("br"));
@@ -528,7 +545,7 @@ console.log('-----------------------')
         }
         newPlayerEditButton.onclick = function() {editPlayer(playerName, newPlayerEditButton)};
       }
-
+/*
       if (isAdmin) {
       //if (tabName == "attendance") {
         // TODO... NEEDS IMPROVING - this tabName check doesn't work!
@@ -546,13 +563,13 @@ console.log('-----------------------')
         document.getElementById("addPlayer").hidden = true; 
       } else {
         document.getElementById("addPlayer").hidden = false; 
-      }
+      }*/
 
       if (!playerName) {
         // new player so enable the save/cancel button, and disable
         document.getElementById("cancelEdit").disabled = false; 
         document.getElementById("cancelEdit").style.backgroundColor = "lightsalmon";
-        for (var i = 1; i <= tabPlayerCount-1; i++) {
+        for (var i = 0; i < currentPlayerNumber-1; i++) {
           console.log("element=" + document.getElementById("player" + i + "Edit" + tabName))
           console.log("pppp=" + "player" + i + "Edit" + tabName)
           console.log("expecting=player1Editavailability")
@@ -567,7 +584,7 @@ console.log('-----------------------')
       document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
       }
       //calcWeeklyTotals(tabName);
-      var minHeight = Math.max(600, 350 + (tabPlayerCount * 35));
+      var minHeight = Math.max(600, 350 + (currentPlayerNumber * 35));
       document.getElementById("panels").style.minHeight = minHeight + "px";
   }
 
@@ -584,7 +601,7 @@ console.log('-----------------------')
     }
     //console.log("WeekActive:" + weekNumberActive);
     // look through attendance players and lookup the players
-    for (var i = 1; i <= tabPlayerCount; i ++) {
+    for (var i = 0; i < tabPlayerCount; i ++) {
       var currentPlayerCheckbox = document.getElementById("player" + i + ATTENDANCE);
       var currentPlayerName = currentPlayerCheckbox.value
       // loopup if available from the availability (players) map
@@ -618,7 +635,7 @@ console.log('-----------------------')
       saveAttendance(weekNumber);
       weekEditButton.innerHTML = "e";
       // re-enable every player's player-status button
-      for (var i = 1; i <= tabPlayerCount; i++) {
+      for (var i = 0; i < tabPlayerCount; i++) {
         document.getElementById("player" + i + "Week" + weekNumber + tabName).setAttribute("class", "checkmark");
       }
       // reenable the other edit buttons
@@ -628,7 +645,7 @@ console.log('-----------------------')
         document.getElementById("week" + i + "Edit" + tabName).disabled = false; 
 
         // re-enable all of the other elements
-        for (var j = 1; j <= tabPlayerCount; j++) {
+        for (var j = 0; j < tabPlayerCount; j++) {
           document.getElementById("player" + j + "Week" + i + tabName).hidden = false;
         }
       }
@@ -642,7 +659,7 @@ console.log('-----------------------')
     chosenWeek = weekEditButton.id.split('Edit')[0]
     console.log("EDITING weekNumber: " + weekNumber + " chosenWeek:" + chosenWeek);
     // re-enable every player's player-status button
-    for (var i = 1; i <= tabPlayerCount; i++) {
+    for (var i = 0; i < tabPlayerCount; i++) {
       //document.getElementById("player" + i + "Week" + weekNumber + tabName).setAttribute("class", "checksecondary");
       document.getElementById("player" + i + "Week" + weekNumber + tabName).disabled = false;
     }
@@ -654,7 +671,7 @@ console.log('-----------------------')
         document.getElementById("week" + i + "Edit" + tabName).disabled = true; 
 
         // hide all of the other elements
-        for (var j = 1; j <= tabPlayerCount; j++) {
+        for (var j = 0; j < tabPlayerCount; j++) {
           document.getElementById("player" + j + "Week" + i + tabName).hidden = true;
         }
       }
@@ -682,7 +699,7 @@ console.log('-----------------------')
       console.log("EDITING Player: " + playerName + " ChosenPlayer:" + chosenPlayer);
       // disable everything
       var tabPlayerCount = playerCount[tabName];
-      for (var i = 1; i <= tabPlayerCount; i++) {
+      for (var i = 0; i < tabPlayerCount; i++) {
         document.getElementById("player" + i + tabName).disabled = true; 
         for (var j = 0; j < mondaysDates.length; j++) {
           document.getElementById("player" + i + "Week" + j + tabName).disabled = true; 
@@ -690,6 +707,10 @@ console.log('-----------------------')
         document.getElementById("player" + i + "Edit" + tabName).disabled = true; 
         document.getElementById("player" + i + "Edit" + tabName).style.backgroundColor = "lightgrey";
       }
+
+      // store the current name before the editting (used if you blank the name to delete the player)
+      var nameBeforeEdit = document.getElementById(chosenPlayer + tabName).value
+      document.getElementById(chosenPlayer + tabName).setAttribute("nameBeforeEdit", nameBeforeEdit);
 
       // renable only the chosen Player
       document.getElementById(chosenPlayer + tabName).disabled = false; 
@@ -721,7 +742,7 @@ console.log('-----------------------')
       var playersAttended = {};
       playersAttended[weekNumber] = {};
       var saveType = "ATTENDANCE"
-      for (var i = 1; i < 999; i++) {
+      for (var i = 0; i < 999; i++) {
         var playerElement = document.getElementById("player" + i + tabName); 
         if (!playerElement) {
           console.log("GOT NULL!");
@@ -760,7 +781,7 @@ console.log('-----------------------')
       // Save the data (using XMLHttpRequest)
       try {
         var playerName = document.getElementById(playerId + tabName).value;
-        var originalPlayerName = allOriginalPlayers[playerName];
+        var originalPlayerName = document.getElementById(playerId + tabName).getAttribute("nameBeforeEdit");
         console.log("SAVING Player: " + playerName + " ChosenPlayer:" + playerId);
 
         // now loop through all saved players and pre-populate their availability
@@ -780,12 +801,20 @@ console.log('-----------------------')
             saveType = "EDIT"
           }
         } else {
-          saveType = "NEW"
-          console.log("NEW: " + playerId + " Original Name: " + originalPlayerName);
+          // if playername is empty then prefix the original name for deletion upon save
+          if (playerName == "") {
+            saveType = "DELETE"
+            playerName = originalPlayerName;
+          } else if (playerName != originalPlayerName) {
+            saveType = "RENAME"
+          } else {
+            saveType = "NEW"
+            console.log("NEW: " + playerId + " Original Name: " + originalPlayerName);
+          }
         }
 
+        var playerAvailability = {};
         if (playerName && playerName != "") {
-          var playerAvailability = {};
           for (var j = 0; j < mondaysDates.length; j++) {
             var playerAvailable = document.getElementById(playerId + "Week" + j + tabName).checked
             playerAvailability[j] = playerAvailable;
