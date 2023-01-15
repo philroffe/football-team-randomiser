@@ -185,6 +185,25 @@ express()
       res.send({'result': err});
     }
   })
+.post('/save-payment', async function (req, res) {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+  console.log('Got /save-payment POST:', ip, JSON.stringify(req.body));
+  var gameMonth = req.body.gameMonth;
+  var gameYear = req.body.gameYear;
+  var paydetails = req.body.paydetails;
+
+  console.log('Inserting DB data:', JSON.stringify(paydetails));
+  try {
+    var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
+    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+    var savedata = { "paydetails": paydetails };
+    await docRef.set(savedata, { merge: true });
+    res.json({'result': 'OK'})
+  } catch (err) {
+    console.error(err);
+    res.send({'result': err});
+  }
+ })
 .get('/admin-aliases', async (req, res) => {
   try {
     console.log('Generating ALIASES page with data');
@@ -297,11 +316,12 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     } else {
       // create a blank entry to render the poll page
       rowdata = { "status": "NO_DATABASE_ENTRY", "gameid": requestedDateMonth, "players":{},
-        "nextMonday": nextMonday, "playerAliasMaps": playerAliasMaps, "attendance": {} }
+        "nextMonday": nextMonday, "playerAliasMaps": playerAliasMaps, "attendance": {}, "paydetails": {}}
     }
 
     // Query database and get all attendance lists for this month
     var attendedData = {};
+    var paymentData = {};
     dbresult.forEach((doc) => {
       if (doc.data().saveType == "ATTENDANCE") {
         // assume no more than 4 weeks in a month
@@ -309,6 +329,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
           attendedData[weekNumber] = doc.data()[weekNumber];
           //console.log('Added Attendance for week: ' + weekNumber + " " + JSON.stringify(attendedData[weekNumber]));
         }
+        paymentData = doc.data().paydetails;
       }
     });
     //console.log('LOADED from DB attendedData by week: ' + JSON.stringify(attendedData));
@@ -329,6 +350,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     //console.log('TRANSFORMED attendedData by player: ' + JSON.stringify(attendedDataByPlayer));
 
     rowdata.attendance = attendedDataByPlayer;
+    rowdata.paydetails = paymentData;
 
     //console.log('rowdata=' + JSON.stringify(rowdata));
     return rowdata;

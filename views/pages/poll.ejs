@@ -11,7 +11,7 @@
 
 <div id="year">
   <h3>Month: 
-  <input type="month" class="gameMonthInput" id="gameMonthInput" name="start" min="2022-03" value="2022-04">
+  <input type="month" class="gameMonthInput" id="gameMonthInput" name="start" min="2020-08" value="2022-04">
   </h3>
 </div>
 
@@ -65,8 +65,15 @@
   </div>
   <div class="panel" id="three-panel">
     <div class="panel-title">Payments</div>
-    <div class="content">
-      <p>Payment summary coming at the end of the month...</p>
+    <p>Payment summary coming at the end of the month...</p>
+    <div class="content" id="tempPaymentsEntryDiv" hidden=true>
+      <div id="paymentsNameHeader" class="gameheader">Name<br></div>
+      <div id="paymentsGamesHeader" class="gameheader" style="text-align: center;">Games<br></div>
+      <div id="paymentsOwesHeader" class="gameheader" style="text-align: center;">Owes<br></div>
+      <div id="paidHeader" class="gameheader">Paid<br></div>
+      <div style="clear:both;"></div>
+      <button id="editPaymentsButton" style="background-color: #90EE90;" type="button" onclick="editPayments();">Edit</button>
+      <button id="cancelPaymentsButton" onclick="location.reload()" disabled=true>Cancel</button>
     </div>
   </div>
   </div>
@@ -125,6 +132,8 @@
     if (!players) { players = {}; }
     var attendanceMap = pagedata.data.attendance;
     if (!attendanceMap) { attendanceMap = {}; }
+    var paydetailsMap = pagedata.data.paydetails;
+    if (!paydetailsMap) { paydetailsMap = {}; }
 
     var playerAliasMaps = pagedata.data.playerAliasMaps;
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
@@ -150,6 +159,7 @@
     //populate the tabs
     addPlayerListToTab(AVAILABILITY);
     addPlayerListToTab(ATTENDANCE);
+    addPaymentsToTab();
     //addPlayerListToTab(PAYMENT);
 
     // populate the weekly total counts
@@ -164,6 +174,7 @@
     if (accessLevelCookie == adminPasswordHash) {
       document.getElementById("tempPasswordOKDiv").hidden = false;
       document.getElementById("tempPasswordEntryDiv").hidden = true;
+      document.getElementById("tempPaymentsEntryDiv").hidden = false;
     }
 
     function checkPassword() {
@@ -172,6 +183,7 @@
       if (btoa(password) == adminPasswordHash) {
         document.getElementById("tempPasswordOKDiv").hidden = false;
         document.getElementById("tempPasswordEntryDiv").hidden = true;
+        document.getElementById("tempPaymentsEntryDiv").hidden = false;
         setCookie("accessLevel", adminPasswordHash, 8);
       }
     }
@@ -571,8 +583,8 @@ function addPlayerListToTab(tabName) {
         document.getElementById("cancelEdit").style.backgroundColor = "lightsalmon";
         for (var i = 0; i < currentPlayerNumber-1; i++) {
           console.log("element=" + document.getElementById("player" + i + "Edit" + tabName))
-          console.log("pppp=" + "player" + i + "Edit" + tabName)
-          console.log("expecting=player1Editavailability")
+          //console.log("pppp=" + "player" + i + "Edit" + tabName)
+          //console.log("expecting=player1Editavailability")
 
           ////// TODO - it's creating "attendance", but for some reason not "availability".  Need availability.
 
@@ -848,6 +860,132 @@ function addPlayerListToTab(tabName) {
         //location.reload(true);
       }
     } // end of savePlayers()
+
+    function editPayments() {
+      // toggle the button
+      var isEditing = false;
+      var editPaymentsButton = document.getElementById("editPaymentsButton"); 
+      var cancelPaymentsButton = document.getElementById("cancelPaymentsButton"); 
+      if (editPaymentsButton.innerHTML == "Edit") {
+        editPaymentsButton.innerHTML = "Save"
+        cancelPaymentsButton.disabled = false;
+        isEditing = false;
+      } else {
+        editPaymentsButton.innerHTML = "Edit"
+        cancelPaymentsButton.disabled = true;
+        isEditing = true;
+      }
+
+      // show/hide the checkboxes
+      var currentPlayerNumber = 0;
+      var paydetails = {};
+      Object.keys(attendanceMap).sort().forEach(function(playerName) {
+        var playerNameElement = document.getElementById("player" + currentPlayerNumber + "NamePayment"); 
+        var playerPaymentStatusElement = document.getElementById("player" + currentPlayerNumber + "Payment"); 
+        var paymentLinkElement = document.getElementById("paid" + currentPlayerNumber + "Payment"); 
+        playerPaymentStatusElement.hidden = isEditing;
+        paymentLinkElement.hidden = !isEditing;
+        paydetails[playerNameElement.innerHTML] = playerPaymentStatusElement.checked;
+        currentPlayerNumber++;
+      })
+
+
+      if (editPaymentsButton.innerHTML == "Edit") {
+        // now send the POST request with the data
+        var savedata = { "gameYear": gameYear, "gameMonth": gameMonth, "paydetails": paydetails };
+        console.log("SAVING PAYMENTS:" + JSON.stringify(savedata));
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            console.log("Saved response", this.responseText);
+            location.reload(true);
+          }
+        };
+        xmlhttp.open("POST", "/save-payment");
+        xmlhttp.setRequestHeader("Content-Type", "application/json");
+        xmlhttp.send(JSON.stringify(savedata));
+      }
+    }
+
+    function addPaymentsToTab() {
+      var currentPlayerNumber = 0;
+      var paymentsNameHeader = document.getElementById("paymentsNameHeader");
+      var paymentsGamesHeader = document.getElementById("paymentsGamesHeader");
+      var paymentsOwesHeader = document.getElementById("paymentsOwesHeader");
+      var paidHeader = document.getElementById("paidHeader");
+
+      // sort by paid status, split names into separate arrays and then concat together
+      var playersPaid = [];
+      var playersUnPaid = [];
+      Object.keys(attendanceMap).sort().forEach(function(playerName) {
+        var hasPaid = false;
+        if (paydetailsMap[playerName]) { 
+          playersPaid.push(playerName);
+        } else {
+          playersUnPaid.push(playerName);
+        }
+      })
+      var playersOrdered = playersUnPaid.concat(playersPaid);
+
+      for (var i = 0; i < playersOrdered.length; i ++) {
+        var playerName = playersOrdered[i];
+        var numberOfGames = 0;
+        // count the number of games that they actively played
+        Object.keys(attendanceMap[playerName]).sort().forEach(function(games) {
+          if (attendanceMap[playerName][games]) { numberOfGames++; }
+        })
+        if (numberOfGames > 0) {
+          var hasPaid = false;
+          if (paydetailsMap[playerName]) { hasPaid = true; }
+
+          var playerNameElement = document.createElement("b");
+          playerNameElement.setAttribute("id", "player" + currentPlayerNumber + "NamePayment"); 
+          playerNameElement.innerHTML = playerName;
+          paymentsNameHeader.appendChild(playerNameElement);
+          paymentsNameHeader.appendChild(document.createElement("br"));
+
+          var totalGamesElement = document.createElement("text");
+          totalGamesElement.innerHTML = numberOfGames;
+          totalGamesElement.style.textAlign = "center";
+          paymentsGamesHeader.appendChild(totalGamesElement);
+          paymentsGamesHeader.appendChild(document.createElement("br"));
+
+          var paymentLinkElement = document.createElement("a");
+          paymentLinkElement.setAttribute("id", "link" + currentPlayerNumber + "Payment"); 
+          if (!hasPaid) {
+            var paymentLink = "https://www.paypal.me/philroffe/" + (numberOfGames*4);
+            var linkText = document.createTextNode("£" + (numberOfGames * 4) + " (Paypal)");
+            paymentLinkElement.appendChild(linkText);
+            paymentLinkElement.href = paymentLink;
+          }
+          paymentsOwesHeader.appendChild(paymentLinkElement);
+          paymentsOwesHeader.appendChild(document.createElement("br"));
+
+          // add checkbox
+          var playerPaymentStatusElement = document.createElement("input"); 
+          playerPaymentStatusElement.setAttribute("type", "checkbox"); 
+          playerPaymentStatusElement.setAttribute("class", "checkmark"); 
+          playerPaymentStatusElement.setAttribute("id", "player" + currentPlayerNumber + "Payment"); 
+          playerPaymentStatusElement.setAttribute("name", currentPlayerNumber + "myPayments[]"); 
+          playerPaymentStatusElement.checked = hasPaid;
+          playerPaymentStatusElement.hidden = true;
+          playerPaymentStatusElement.style.maxHeight = "22px";
+          playerPaymentStatusElement.style.padding = "0px 0px 0px 5px";
+          paidHeader.appendChild(playerPaymentStatusElement);
+
+          // add text for amount paid
+          var paidElement = document.createElement("text");
+          paidElement.setAttribute("id", "paid" + currentPlayerNumber + "Payment"); 
+          if (hasPaid) {
+            paidElement.innerHTML = "£" + (numberOfGames * 4) + " &#10003;";
+          }
+          paidHeader.appendChild(paidElement);
+          paidHeader.appendChild(document.createElement("br"));
+          currentPlayerNumber++;
+        }
+      }
+
+    }
 
   </script>
 
