@@ -131,12 +131,11 @@ express()
       await docRef.set(gamedetails_new);
 
       var playerSummary = await queryDatabaseAndBuildPlayerList(gameId);
-      var summaryCollectionId = gamesCollectionId + "_summary";
       // store the current alias maps separately to the rest of the summary
-      await firestore.collection(summaryCollectionId).doc("_aliases").set(playerSummary.playerAliasMaps);
+      await firestore.collection(gamesCollectionId).doc("_aliases").set(playerSummary.playerAliasMaps);
       delete playerSummary.playerAliasMaps; // exclude the transient alias maps in the summary
       console.log('Inserting DB summary data:', JSON.stringify(playerSummary));
-      await firestore.collection(summaryCollectionId).doc("_summary").set(playerSummary);
+      await firestore.collection(gamesCollectionId).doc("_summary").set(playerSummary);
       // if you got here without an exception then everything was successful
       //res.sendStatus(200);
       //res.redirect('/poll');
@@ -164,24 +163,22 @@ express()
 
     console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
     try {
-      
-      var summaryCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
-      const docRef = firestore.collection(summaryCollectionId).doc("_attendance");
-     if (docRef.empty) {
+      var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
+      const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+      var existingDoc = await docRef.get();
+      if (!existingDoc.data()) {
         console.log('CREATING:', JSON.stringify(attendanceDetails));
         await docRef.set(attendanceDetails);
       } else {
         console.log('UPDATING:', JSON.stringify(attendanceDetails));
         // copy the existing doc to preserve a history
-        var existingDoc = await docRef.get();
         var existingDocData = existingDoc.data();
         existingDocData.saveType = "ATTENDANCE_BACKUP"
-        const backupDocRef = firestore.collection(summaryCollectionId).doc("_attendance_" + existingDocData.timestamp);
+        const backupDocRef = firestore.collection(gamesCollectionId).doc("_attendance_" + existingDocData.timestamp);
         backupDocRef.set(existingDocData)
         // now update with the new data
         await docRef.update(attendanceDetails);
       }
-      
       res.json({'result': 'OK'})
     } catch (err) {
       console.error(err);
@@ -342,7 +339,7 @@ function buildPlayerLogList(dbresult) {
   //loop through all rows and merge the player data into one map
   var playerdata = {};
   dbresult.forEach((doc) => {
-    if (doc.id != "_summary") {
+    if (!doc.id.startsWith("_")) {
       //console.log(doc.id, '=>', doc.data());
       playerName = new Date(doc.data().timestamp.seconds*1000).toISOString().replace(/T|\..*Z/g, ' ') + " " + doc.data().playerName + "\\t" + doc.data().saveType;
       playerData = doc.data().playerAvailability;
@@ -362,10 +359,11 @@ function buildPlayerUniqueList(dbresult) {
   var playerdata = {};
   dbresult.forEach((doc) => {
     //console.log(doc.id, '=>', doc.data());
-    playerName = doc.data().playerName;
-    playerAvailability = doc.data().playerAvailability;
-    saveType = doc.data().saveType;
-    originalPlayerName = doc.data().originalPlayerName;
+    if (!doc.id.startsWith("_")) {
+      playerName = doc.data().playerName;
+      playerAvailability = doc.data().playerAvailability;
+      saveType = doc.data().saveType;
+      originalPlayerName = doc.data().originalPlayerName;
       switch (saveType) {
         case "NEW":
           // console.log('Adding Player=' + playerName);
@@ -386,11 +384,11 @@ function buildPlayerUniqueList(dbresult) {
         default:
           console.log('WARN - Skipping player:' + playerName + ' Unknown saveType:' + saveType);
       }
+    }
   });
   console.log('AllPlayers=' + JSON.stringify(playerdata));
   return playerdata;
 }
-
 
 // check for unique player name
 async function getDefinedPlayerAliasMaps() {
