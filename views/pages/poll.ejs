@@ -880,12 +880,12 @@ function addPlayerListToTab(tabName) {
       // show/hide the checkboxes
       var currentPlayerNumber = 0;
       var paydetails = {};
+
       Object.keys(attendanceMap).sort().forEach(function(playerName) {
         var playerNameElement = document.getElementById("player" + currentPlayerNumber + "NamePayment"); 
-        var playerPaymentAmountElement = document.getElementById("amount" + currentPlayerNumber + "Payment"); 
-        var paymentLinkElement = document.getElementById("paid" + currentPlayerNumber + "Payment"); 
+        var playerPaymentAmountElement = document.getElementById("player" + currentPlayerNumber + "AmountPayment"); 
+        var paymentLinkElement = document.getElementById("player" + currentPlayerNumber + "LinkPayment"); 
         playerPaymentAmountElement.hidden = isEditing;
-        paymentLinkElement.hidden = !isEditing;
         paydetails[playerNameElement.innerHTML] = playerPaymentAmountElement.value;
         currentPlayerNumber++;
       })
@@ -920,13 +920,18 @@ function addPlayerListToTab(tabName) {
       var playersPaid = {};
       var playersUnPaid = {};
       Object.keys(attendanceMap).sort().forEach(function(playerName) {
-
         // count the amount owed for each game that they actively played
         var amountOwed = 0;
         Object.keys(attendanceMap[playerName]).sort().forEach(function(games) {
           if (attendanceMap[playerName][games]) { amountOwed += 4; }
         })
-        if (amountOwed - paydetailsMap[playerName] <= 0) { 
+
+        var outstandingBalance = amountOwed;
+        if (paydetailsMap[playerName]) {
+          outstandingBalance = amountOwed - paydetailsMap[playerName];
+        }
+        //console.log(playerName, amountOwed, paydetailsMap[playerName], outstandingBalance)
+        if (outstandingBalance <= 0) { 
           playersPaid[playerName] = amountOwed;
         } else {
           playersUnPaid[playerName] = amountOwed;
@@ -939,7 +944,6 @@ function addPlayerListToTab(tabName) {
           ...playersPaid
       };
 
-      //for (var i = 0; i < playersOrdered.length; i ++) {
       Object.keys(playersOrdered).forEach(function(playerName) {
         //var playerName = playersOrdered[i];
         var numberOfGames = 0;
@@ -947,72 +951,72 @@ function addPlayerListToTab(tabName) {
         Object.keys(attendanceMap[playerName]).sort().forEach(function(games) {
           if (attendanceMap[playerName][games]) { numberOfGames++; }
         })
-        if (numberOfGames > 0) {
-          var amountPaid = 0;
-          if (paydetailsMap[playerName]) { amountPaid = paydetailsMap[playerName]; }
-          var amountOwed = playersOrdered[playerName];
-          var outstandingBalance = (numberOfGames*4) - amountPaid;
-          console.log(playerName, (numberOfGames), amountOwed, amountPaid, outstandingBalance)
+        var amountPaid = 0;
+        if (paydetailsMap[playerName]) { amountPaid = paydetailsMap[playerName]; }
+        var amountOwed = playersOrdered[playerName];
+        var outstandingBalance = (numberOfGames*4) - amountPaid;
+        //console.log(playerName, (numberOfGames), amountOwed, amountPaid, outstandingBalance)
 
-          var playerNameElement = document.createElement("b");
-          playerNameElement.setAttribute("id", "player" + currentPlayerNumber + "NamePayment"); 
-          playerNameElement.innerHTML = playerName;
-          paymentsNameHeader.appendChild(playerNameElement);
-          paymentsNameHeader.appendChild(document.createElement("br"));
+        var playerNameElement = document.createElement("b");
+        playerNameElement.setAttribute("id", "player" + currentPlayerNumber + "NamePayment"); 
+        playerNameElement.innerHTML = playerName;
+        paymentsNameHeader.appendChild(playerNameElement);
+        paymentsNameHeader.appendChild(document.createElement("br"));
 
-          var totalGamesElement = document.createElement("text");
-          totalGamesElement.innerHTML = numberOfGames;
-          totalGamesElement.style.textAlign = "center";
-          paymentsGamesHeader.appendChild(totalGamesElement);
-          paymentsGamesHeader.appendChild(document.createElement("br"));
+        var totalGamesElement = document.createElement("text");
+        totalGamesElement.setAttribute("id", "player" + currentPlayerNumber + "GamesPayment"); 
+        totalGamesElement.innerHTML = numberOfGames;
+        totalGamesElement.style.textAlign = "center";
+        paymentsGamesHeader.appendChild(totalGamesElement);
+        paymentsGamesHeader.appendChild(document.createElement("br"));
 
-          var totalOwesElement = document.createElement("text");
-          totalOwesElement.innerHTML = "£" + amountOwed;
-          totalOwesElement.style.textAlign = "center";
-          paymentsOwesHeader.appendChild(totalOwesElement);
-          paymentsOwesHeader.appendChild(document.createElement("br"));
+        var totalOwesElement = document.createElement("text");
+        totalOwesElement.setAttribute("id", "player" + currentPlayerNumber + "OwesPayment"); 
+        totalOwesElement.innerHTML = "£" + amountOwed;
+        totalOwesElement.style.textAlign = "center";
+        paymentsOwesHeader.appendChild(totalOwesElement);
+        paymentsOwesHeader.appendChild(document.createElement("br"));
 
-          var paymentLinkElement = document.createElement("a");
-          paymentLinkElement.setAttribute("id", "link" + currentPlayerNumber + "Payment"); 
-          if (outstandingBalance > 0) {
-            var paymentLink = "https://www.paypal.me/philroffe/" + outstandingBalance;
-            var linkText = document.createTextNode("(PayPal £" + outstandingBalance + ")");
-            paymentLinkElement.appendChild(linkText);
-            paymentLinkElement.href = paymentLink;
-          }
-          paymentsPaypalHeader.appendChild(paymentLinkElement);
-          paymentsPaypalHeader.appendChild(document.createElement("br"));
-
-          // add input field for amount paid
-          var playerPaymentAmountElement = document.createElement("input"); 
-          playerPaymentAmountElement.setAttribute("type", "text"); 
-          playerPaymentAmountElement.setAttribute("id", "amount" + currentPlayerNumber + "Payment"); 
-          playerPaymentAmountElement.setAttribute("name", currentPlayerNumber + "myPayments[]"); 
-          playerPaymentAmountElement.value = amountPaid;
-          playerPaymentAmountElement.hidden = true;
-          playerPaymentAmountElement.style.maxHeight = "22px";
-          playerPaymentAmountElement.style.maxWidth = "40px";
-          playerPaymentAmountElement.style.padding = "0px 0px 0px 5px";
-          paidHeader.appendChild(playerPaymentAmountElement);
-
-          // add text for amount paid
-          var paidElement = document.createElement("text");
-          paidElement.setAttribute("id", "paid" + currentPlayerNumber + "Payment"); 
-          if (amountPaid > 0) {
-            var text = "£" + amountPaid;
-            if (outstandingBalance == 0) {
-              text += " &#10003;";
-            } else if (outstandingBalance < 0) {
-              text += " &#10003; £" + outstandingBalance;
-            } else {
-              text += " (?) £" + outstandingBalance;
-            }
-            paidElement.innerHTML = text;
-          }
-          paidHeader.appendChild(paidElement);
-          paidHeader.appendChild(document.createElement("br"));
-          currentPlayerNumber++;
+        var paymentLinkElement = document.createElement("a");
+        paymentLinkElement.setAttribute("id", "player" + currentPlayerNumber + "LinkPayment"); 
+        if (outstandingBalance > 0) {
+          var paymentLink = "https://www.paypal.me/philroffe/" + outstandingBalance;
+          var linkText = document.createTextNode("(PayPal £" + outstandingBalance + ")");
+          paymentLinkElement.appendChild(linkText);
+          paymentLinkElement.href = paymentLink;
         }
+        paymentsPaypalHeader.appendChild(paymentLinkElement);
+        paymentsPaypalHeader.appendChild(document.createElement("br"));
+
+        // add input field for amount paid
+        var playerPaymentAmountElement = document.createElement("input"); 
+        playerPaymentAmountElement.setAttribute("type", "text"); 
+        playerPaymentAmountElement.setAttribute("id", "player" + currentPlayerNumber + "AmountPayment"); 
+        playerPaymentAmountElement.setAttribute("name", currentPlayerNumber + "myPayments[]"); 
+        playerPaymentAmountElement.value = amountPaid;
+        playerPaymentAmountElement.hidden = true;
+        playerPaymentAmountElement.style.maxHeight = "22px";
+        playerPaymentAmountElement.style.maxWidth = "40px";
+        playerPaymentAmountElement.style.padding = "0px 0px 0px 5px";
+        paidHeader.appendChild(playerPaymentAmountElement);
+
+        // add text for amount paid
+        var paidElement = document.createElement("text");
+        paidElement.setAttribute("id", "player" + currentPlayerNumber + "PaidPayment"); 
+        if (amountPaid > 0) {
+          var text = "£" + amountPaid;
+          if (outstandingBalance == 0) {
+            text += " &#10003;";
+          } else if (outstandingBalance < 0) {
+            text += " &#10003; £" + outstandingBalance;
+          } else {
+            text += " (?) £" + outstandingBalance;
+          }
+          paidElement.innerHTML = text;
+        }
+        paidHeader.appendChild(paidElement);
+        paidHeader.appendChild(document.createElement("br"));
+        currentPlayerNumber++;
       })
 
     }
