@@ -1,4 +1,5 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <%- include ("../partials/header.ejs") %>
   <script src="/autocomplete.js"></script>
@@ -36,7 +37,7 @@
       <div id="editHeader" class="gameheader"><br></div>
       <div style="clear:both;"></div>
       <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
-      <button id="cancelEdit" onclick="location.reload()" disabled=true>Cancel</button>
+      <button id="cancelEdit" onclick="location.reload()" disabled>Cancel</button>
       <p><p>Finished? <a href="/teams">Generate teams and email</a>, or view the <a href="/poll-log">log of poll entries.</a>.
     </div>
   </div>
@@ -46,18 +47,18 @@
 
       <div id="tempPasswordEntryDiv">
         <form>
-        <input type="password" id="passwordInput" placeholder="Enter Password" minlength="8" required></input>
+        <input type="password" id="passwordInput" placeholder="Enter Password" minlength="8" required>
         <button type="submit" id="checkPasswordButton" onclick="checkPassword();">Submit</button>
         </form>
       </div>
 
-      <div id="tempPasswordOKDiv" hidden=true>
+      <div id="tempPasswordOKDiv" hidden>
         <!-- Simple (insecure) way to hide a feature - a form of feature flag rather than password -->
         <div id="attendanceHeader" class="gameheader"></div>
         <div style="clear:both;"></div>
-        <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled=true><-- Copy from Availability</button>
-        <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled=true>Save</button>
-        <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled=true>Cancel</button>
+        <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled>&larr; Copy from Availability</button>
+        <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled>Save</button>
+        <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled>Cancel</button>
 
         <p>Problem with the list? <a href="/admin-aliases">Check the aliases...</a>
       </div>
@@ -66,7 +67,7 @@
   <div class="panel" id="three-panel">
     <div class="panel-title">Payments</div>
     <p>Payment summary coming at the end of the month...</p>
-    <div class="content" id="tempPaymentsEntryDiv" hidden=true>
+    <div class="content" id="tempPaymentsEntryDiv" hidden>
       <div id="paymentsNameHeader" class="gameheader">Name<br></div>
       <div id="paymentsGamesHeader" class="gameheader" style="text-align: center;">Games<br></div>
       <div id="paymentsOwesHeader" class="gameheader" style="text-align: center;">Owes<br></div>
@@ -74,14 +75,14 @@
       <div id="paidHeader" class="gameheader" style="text-align: right;">Paid (£)<br></div>
       <div style="clear:both;"></div>
       <button id="editPaymentsButton" style="background-color: #90EE90;" type="button" onclick="editPayments();">Edit</button>
-      <button id="cancelPaymentsButton" onclick="location.reload()" disabled=true>Cancel</button>
+      <button id="cancelPaymentsButton" onclick="location.reload()" disabled>Cancel</button>
     </div>
   </div>
   </div>
 </div>
 
 
-  <script type="text/javascript">
+  <script>
     const AVAILABILITY = "availability";
     const ATTENDANCE = "attendance";
     const PAYMENT = "payment";
@@ -301,7 +302,6 @@ function addPlayerListToTab(tabName) {
       newWeekHeader.appendChild(weekDateHeader);
       divElementToAppendTo.appendChild(newWeekHeader);  
 
-      //if (isAdmin) {
       if (tabName == ATTENDANCE) {
         // create the edit button
         var weekEditButton = document.createElement("button");
@@ -319,7 +319,7 @@ function addPlayerListToTab(tabName) {
         }
       }
     }
-    //if (isAdmin) {
+    
     if (tabName == ATTENDANCE) {
       // just add a dummy button to the name header to space it out
       var dummyAdminNameButton = document.createElement("button");
@@ -346,11 +346,6 @@ function addPlayerListToTab(tabName) {
         // code block
     }
 
-    //console.log("tabName: " + tabName);
-    //console.log(pagedata.data.players);
-    //console.log("playersMapForTab: " + JSON.stringify(playersMapForTab));
-    //console.log("playersMapForTab Adam B week1: " + JSON.stringify(playersMapForTab["Adam B"]["week1"]));
-
     // now loop through all saved players and pre-populate their availability
     Object.keys(playersMapForTab).sort().forEach(function(player) {
       //console.log('player=' + player + "___" + JSON.stringify(playersMapForTab[player]) + "__tab__" + tabName);
@@ -361,45 +356,6 @@ function addPlayerListToTab(tabName) {
       var officialPlayerName = getOfficialNameFromAlias(player, aliasToPlayerMap);
       addPlayer(playerName, playerSelection, officialPlayerName, tabName)
     });
-  //});
-
-    /*// create a spacer before adding the attendees only
-    nameHeader.appendChild(document.createElement("br"));
-    for (var i = 0; i < mondaysDates.length; i ++) {
-      document.getElementById("week" + i + "Header" + tabName).appendChild(document.createElement("br"));            
-    }
-    editHeader.appendChild(document.createElement("br"));*/
-
-    /*if (tabName == "attendance") {
-    // add the attendees only - any players in attendance that didn't add themselves as players
-    for (var i = 0; i < mondaysDates.length; i ++) {
-      var attendanceMap = attendance["week" + i];
-      //attendanceMap[officialPlayerName]
-      if (attendanceMap) {
-        console.log('attendanceMap=' + i + "___" + JSON.stringify(attendanceMap));
-        Object.keys(attendanceMap).sort().forEach(function(key) {
-          var attendedOfficialPlayerName = key;
-          // check matching attendee in the player list
-          var foundMatch = false;
-          for (var i = 0; i < 999; i++) {
-            var playerElement = document.getElementById("player" + i + tabName); 
-            if (playerElement == null) { break; }
-            var officialPlayerName = playerElement.getAttribute("title");
-            if (attendedOfficialPlayerName == officialPlayerName) {
-              // attendee found in original player list, so skip
-              foundMatch = true;
-              break;
-            }
-          }
-          if (!foundMatch) {
-            // attendee not found in original player list, so add it to the bottom
-            console.log("NOT MATCHED: " + foundMatch + " - " + attendedOfficialPlayerName + " " + officialPlayerName);
-            addPlayer(attendedOfficialPlayerName, false, attendedOfficialPlayerName, tabName)
-          }
-        });
-      }
-    }
-    }*/
 }
 
     // populate the weekly total counts
@@ -491,21 +447,6 @@ function addPlayerListToTab(tabName) {
         newPlayerName.focus();
         newPlayerName.select();
       }
-
-/*      //if (isAdmin) {
-      if (tabName == "attendance") {
-        // add Admin ability for the name column
-        var officialPlayerHeader = document.createElement("input");
-        officialPlayerHeader.value = "Played?";
-        officialPlayerHeader.style.width = 120;
-        newPlayerName.style.width = 120; // also set the newPlayerName input to match
-        officialPlayerHeader.style.fontSize = "0.9em";
-        officialPlayerHeader.setAttribute("class", "noborder"); 
-        officialPlayerHeader.setAttribute("disabled", true); 
-        nameHeader.appendChild(document.createElement("br"));
-        nameHeader.appendChild(officialPlayerHeader);
-        nameHeader.appendChild(document.createElement("br"));
-      }*/
       
       for (var i = 0; i < mondaysDates.length; i ++) {
         //console.log("=============" + i + );
@@ -558,25 +499,6 @@ function addPlayerListToTab(tabName) {
         }
         newPlayerEditButton.onclick = function() {editPlayer(playerName, newPlayerEditButton)};
       }
-/*
-      if (isAdmin) {
-      //if (tabName == "attendance") {
-        // TODO... NEEDS IMPROVING - this tabName check doesn't work!
-        // add Admin capability for the edit column
-        var newAdminEditHeader = document.createElement("input");
-        newAdminEditHeader.value = "";
-        newAdminEditHeader.style.width = 10;
-        newAdminEditHeader.setAttribute("class", "noborder"); 
-        newAdminEditHeader.setAttribute("disabled", true); 
-        editHeader.appendChild(document.createElement("br"));
-        editHeader.appendChild(newAdminEditHeader);
-        editHeader.appendChild(document.createElement("br"));
-        // now hide the edit button per player (replaced with single admin save)
-        newPlayerEditButton.setAttribute("hidden", true); 
-        document.getElementById("addPlayer").hidden = true; 
-      } else {
-        document.getElementById("addPlayer").hidden = false; 
-      }*/
 
       if (!playerName) {
         // new player so enable the save/cancel button, and disable
@@ -1022,6 +944,6 @@ function addPlayerListToTab(tabName) {
     }
 
   </script>
-
+</div>
 </body>
 </html>

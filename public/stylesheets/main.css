@@ -70,7 +70,7 @@ pre {
   border: 1px solid grey;
 }
 .saveIcon {
-  color: #000; /* Fallback for older browsers */*/
+  color: #000; /* Fallback for older browsers */
   color: rgba(0, 0, 0, 0);
   background: url(/save-64.png) no-repeat;
   background-size: 22px 26px;
@@ -87,6 +87,13 @@ input[type=checkbox] {
 }
 input[type=checkbox]:checked {
    background-color: #7DCEA0; /* green */
+}
+input[type=checkbox]:before {
+   content:"\2717";
+   color: darkred;
+   padding: initial;
+   font-weight: bold;
+   padding: 2px 6px 2px 0px;
 }
 input[type=checkbox]:checked:before {
    content:"\2713";
@@ -157,7 +164,7 @@ input[type=checkbox]:enabled.checksecondary {
 .warpper{
   display:flex;
   flex-direction: column;
-  align-items: left;
+  align-items: normal;
 }
 .tab{
   cursor: pointer;

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <%- include ("../partials/header.ejs") %>
 
@@ -33,7 +33,7 @@
     <div id="pollLink">Not Yet Available</div>
     <div id="optionDates">Not Yet Available</div><br>
     <div id="emailTitle">Not Yet Available</div> 
-    <pre class="emailHeader"><div id="emailBody">Not Yet Available</div></pre>
+    <pre class="emailHeader" id="emailBody">Not Yet Available</pre>
     <div class="linkborder" onclick=";updateDivText()"><a href="">Randomise Players Again!</a></div>
     <hr><p>
     <div style="float:left;">Send Email:</div> 
@@ -41,7 +41,7 @@
     <div class="linkborder" style="float:left;" id="emailLinkDesktop">Not Yet Available</div>
   </div>
 
-  <script type="text/javascript">
+  <script>
   var nextMondayText = "<%= pageData.nextMonday %>";
   var nextMondayDate = new Date(nextMondayText);
   //var todayDate = new Date();
