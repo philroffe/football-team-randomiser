@@ -21,6 +21,7 @@ const firestore = new Firestore({
 var nextMonday = new Date();
 var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
 var bankHolidaysCache = {};
+var attendanceMapByYearCache = {};
 var cacheLastRefresh = new Date();
 var maxCacheSecs = 86400; // 1 day
 const PLAYER_UNIQUE_FILTER = "PLAYER_UNIQUE_FILTER_TYPE";
@@ -51,6 +52,58 @@ express()
         res.send("Error " + err);
       }
     })
+.get('/stats', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('Stats access from IP:' + ip + " with user-agent:" + req.get('User-Agent'));
+  // Check if cache needs clearing
+  /*var diffSeconds = (new Date().getTime() - cacheLastRefresh.getTime()) / 1000;
+  if (diffSeconds > maxCacheSecs) {
+    attendanceMapByYearCache = {};
+    console.log('CLEARED Attendance CACHE as diffSeconds was:' + diffSeconds);
+  }*/
+
+  try {
+    var attendanceMapByYear = {};
+    if (Object.keys(attendanceMapByYearCache).length > 0) {
+      console.log('Retrieved STATS from cache:' + req.query.date);
+      attendanceMapByYear = attendanceMapByYearCache;
+    } else {
+      for (var year = 2019; year < 2024; year ++) {
+        attendanceMapByYear[year] = {};
+        for (var month = 1; month < 13; month ++) {
+          var monthString = "" + month;
+          if (monthString.length == 1) {
+            monthString = "0" + month;
+          }
+          var currentDate = year + "-" + monthString + "-01";
+          console.log('Building STATS page for date:' + currentDate);
+          var rowdata = await queryDatabaseAndBuildPlayerList(currentDate);
+          if (rowdata.attendance && Object.keys(rowdata.attendance).length > 0) {
+            attendanceMapByYear[year][monthString] = rowdata.attendance;
+          }
+        }
+      }
+    }
+    attendanceMapByYearCache = attendanceMapByYear;
+
+    // read the list of players and aliases
+    var playerAliasMaps = {};
+    playerAliasMaps = await getDefinedPlayerAliasMaps();
+
+    var rowdata = {};
+    rowdata.attendanceByYear = attendanceMapByYear;
+    rowdata.playerAliasMaps = playerAliasMaps;
+    console.log('rowdata', JSON.stringify(rowdata));
+
+    // combine database data with any additional page data
+    var pageData = { data: rowdata, };
+
+    res.render('pages/stats', { pageData: pageData } );
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
 .get('/poll', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('Poll access from IP:' + ip + " with user-agent:" + req.get('User-Agent'));
@@ -254,7 +307,6 @@ function getDateNextMonday() {
   console.log('Next Monday:' + nextMonday.toISOString());
   return nextMonday;
 }
-
 
 // wrap a request in an promise
 function downloadPage(url) {
