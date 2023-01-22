@@ -10,6 +10,16 @@ pre {
   border-bottom: 1px solid #333333;
   border-left: 1px solid #D5EDF6;
 }
+.weeksnowrap  {
+    white-space: nowrap; /*Prevents Wrapping*/
+    display: inline-block;
+    width: 400px;
+}
+.gameheader  {
+  float: left;
+  padding: 2px 6px 2px 0px;
+  margin: 0px;
+}
 .gameheader  {
   float: left;
   padding: 2px 6px 2px 0px;
@@ -184,7 +194,9 @@ input[type=checkbox]:enabled.checksecondary {
   min-width:350px;
   border-radius:3px;
   overflow:hidden;
-  padding:5px;  
+  padding:5px;
+  overflow-x: scroll;
+  overflow-y: hidden;
 }
 .panel{
   display:none;
@@ -217,3 +229,23 @@ input[type=checkbox]:enabled.checksecondary {
   color:#000;
   border-top: 3px solid #000;
 }
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    /* display: none; <- Crashes Chrome on hover */
+    -webkit-appearance: none;
+    margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
+}
+input[type=number] {
+    -moz-appearance:textfield; /* Firefox */
+}
+input[type=number]:disabled {
+   border: 0;
+   margin: 0;
+   padding: 0;
+   /*width: 15px;*/
+   font-size: 90%;
+   font-weight: bold;
+   color: black;
+}
+

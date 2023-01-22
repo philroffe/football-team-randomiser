@@ -117,6 +117,7 @@ express()
   try {
     console.log('Rendering POLL page with data' + req.query.date);
     var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
+    console.log('SCORES POLL page with data' + JSON.stringify(rowdata.scores));
 
     var tabName = "";
     if (req.query.tab) {
@@ -205,6 +206,7 @@ express()
     var gameMonth = req.body.gameMonth;
     var gameYear = req.body.gameYear;
     var playersAttended = req.body.playersAttended;
+    var scores = req.body.scores;
     var saveType = req.body.saveType;
 
     var timestamp = new Date();
@@ -212,6 +214,9 @@ express()
      "saveType": saveType, "source_ip": ip };
     Object.keys(playersAttended).forEach(function(weekNumber) {
       attendanceDetails[weekNumber] = playersAttended[weekNumber];
+    });
+    Object.keys(scores).forEach(function(weekNumber) {
+      attendanceDetails[weekNumber].scores = scores[weekNumber];
     });
 
     console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
@@ -374,14 +379,22 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     // Query database and get all attendance lists for this month
     var attendedData = {};
     var paymentData = {};
+    var scoresData = {};
     dbresult.forEach((doc) => {
       if (doc.data().saveType == "ATTENDANCE") {
         // assume no more than 4 weeks in a month
         for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
           attendedData[weekNumber] = doc.data()[weekNumber];
           //console.log('Added Attendance for week: ' + weekNumber + " " + JSON.stringify(attendedData[weekNumber]));
+
+          //extract the scores data out of the attended list
+          if (attendedData[weekNumber]) {
+            scoresData[weekNumber] = attendedData[weekNumber].scores;
+            delete attendedData[weekNumber].scores;
+          }
         }
         paymentData = doc.data().paydetails;
+        //
       }
     });
     //console.log('LOADED from DB attendedData by week: ' + JSON.stringify(attendedData));
@@ -402,6 +415,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     //console.log('TRANSFORMED attendedData by player: ' + JSON.stringify(attendedDataByPlayer));
 
     rowdata.attendance = attendedDataByPlayer;
+    rowdata.scores = scoresData;
     rowdata.paydetails = paymentData;
 
     //console.log('rowdata=' + JSON.stringify(rowdata));

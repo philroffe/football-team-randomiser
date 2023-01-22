@@ -12,7 +12,7 @@
 
 <div id="year">
   <h3>Month: 
-  <input type="month" class="gameMonthInput" id="gameMonthInput" name="start" min="2020-08" value="2022-04">
+  <input type="month" class="gameMonthInput" id="gameMonthInput" name="start" min="2019-08" value="2022-04">
   </h3>
 </div>
 
@@ -33,8 +33,10 @@
   <div class="panel" id="one-panel">
     <div class="content">
       <div class="panel-title">Availability</div>
-      <div id="availabilityHeader" class="gameheader"></div>
-      <div id="editHeader" class="gameheader"><br></div>
+      <div class="weeksnowrap">
+        <div id="availabilityHeader"></div>
+        <div id="editHeader" class="gameheader"><br></div>
+      </div>
       <div style="clear:both;"></div>
       <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
       <button id="cancelEdit" onclick="location.reload()" disabled>Cancel</button>
@@ -54,8 +56,9 @@
 
       <div id="tempPasswordOKDiv" hidden>
         <!-- Simple (insecure) way to hide a feature - a form of feature flag rather than password -->
-        <div id="attendanceHeader" class="gameheader"></div>
+        <div id="attendanceHeader" class="weeksnowrap"></div>
         <div style="clear:both;"></div>
+        <div id="scoreHeader" class="gameheader"></div>
         <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled>&larr; Copy from Availability</button>
         <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled>Save</button>
         <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled>Cancel</button>
@@ -133,6 +136,7 @@
     var players = pagedata.data.players;
     if (!players) { players = {}; }
     var attendanceMap = pagedata.data.attendance;
+    var scoresMap = pagedata.data.scores;
     if (!attendanceMap) { attendanceMap = {}; }
     var paydetailsMap = pagedata.data.paydetails;
     if (!paydetailsMap) { paydetailsMap = {}; }
@@ -252,12 +256,18 @@
     }
 
 function addPlayerListToTab(tabName) {
-    var divElementToAppendTo = document.getElementById(tabName + "Header")
+    var divElementToAppendTo = document.getElementById(tabName + "Header");
+    //divElementToAppendTo.setAttribute("class", "weeksnowrap"); 
     var nameHeader = document.createElement("div");
     nameHeader.setAttribute("id", "nameHeader" + tabName); 
     nameHeader.setAttribute("class", "gameheader"); 
     nameHeader.appendChild(document.createElement("br"));
     divElementToAppendTo.appendChild(nameHeader);
+    if (tabName == ATTENDANCE) {
+      // spacer for the score items
+      nameHeader.appendChild(document.createElement("br"));
+      //nameHeader.appendChild(document.createElement("br"));
+    }
 
     // auto generate divs for headers for each game week
     for (var i = 0; i < mondaysDates.length; i ++) {
@@ -317,6 +327,53 @@ function addPlayerListToTab(tabName) {
         if (isBankHoliday) {
           weekEditButton.setAttribute("hidden", true); 
         }
+
+        if (tabName == ATTENDANCE) {
+          // create the score items
+          var team1Spinner = document.createElement("input");
+          team1Spinner.setAttribute("type", "number"); 
+          team1Spinner.setAttribute("id", "week" + i + "Score1" + tabName); 
+          (scoresMap[i]) ? team1Spinner.value = scoresMap[i].team1goals : team1Spinner.value = "";
+          team1Spinner.style.width = (team1Spinner.value.length*10) + "px";
+          team1Spinner.style.maxWidth = "26px";
+          team1Spinner.style.maxHeight = "24px";
+          team1Spinner.style.textAlign = "right";
+          team1Spinner.disabled = true;
+          team1Spinner.onclick = function() {this.select()};
+          newWeekHeader.appendChild(document.createElement("br"));
+          newWeekHeader.appendChild(team1Spinner);
+          // create the score items
+          var team2Spinner = document.createElement("input");
+          team2Spinner.setAttribute("type", "number"); 
+          team2Spinner.setAttribute("id", "week" + i + "Score2" + tabName); 
+          (scoresMap[i]) ? team2Spinner.value = scoresMap[i].team2goals : team2Spinner.value = "";
+          team2Spinner.style.width = (team2Spinner.value.length*9) + "px";
+          team2Spinner.style.maxWidth = "26px";
+          team2Spinner.style.maxHeight = "24px";
+          team2Spinner.disabled = true;
+          team2Spinner.onclick = function() {this.select()};
+          var teamSeparator = document.createElement("text");
+          teamSeparator.setAttribute("id", "week" + i + "ScoreSeparator" + tabName); 
+          teamSeparator.innerHTML = "-";
+          teamSeparator.style.padding = "2px 0px 4px 0px";
+          newWeekHeader.appendChild(teamSeparator);
+          //newWeekHeader.appendChild(document.createElement("br"));
+          newWeekHeader.appendChild(team2Spinner);
+
+          var winTeamColour = "white";
+          if (scoresMap[i]) {
+            if (scoresMap[i].winner == 0) {
+              winTeamColour = "grey";
+            } else if (scoresMap[i].winner == 1) {
+              winTeamColour = "coral";
+            } else if (scoresMap[i].winner == 2) {
+              winTeamColour = "skyblue";
+            }
+            team1Spinner.style.backgroundColor = winTeamColour;
+            teamSeparator.style.backgroundColor = winTeamColour;
+            team2Spinner.style.backgroundColor = winTeamColour;
+          }
+        }
       }
     }
     
@@ -325,6 +382,11 @@ function addPlayerListToTab(tabName) {
       var dummyAdminNameButton = document.createElement("button");
       dummyAdminNameButton.setAttribute("class", "noborder"); 
       dummyAdminNameButton.setAttribute("disabled", true); 
+      dummyAdminNameButton.innerHTML = "Score:";
+      dummyAdminNameButton.style.textAlign = "right";
+      dummyAdminNameButton.style.width = "100%";
+      dummyAdminNameButton.style.color = "black";
+      dummyAdminNameButton.style.padding = "10px 0px";
       //nameHeader = document.getElementById("nameHeader")
       nameHeader.appendChild(document.createElement("br"));
       nameHeader.appendChild(dummyAdminNameButton);
@@ -356,6 +418,25 @@ function addPlayerListToTab(tabName) {
       var officialPlayerName = getOfficialNameFromAlias(player, aliasToPlayerMap);
       addPlayer(playerName, playerSelection, officialPlayerName, tabName)
     });
+
+    /*// auto generate divs for headers for each game week
+    var optionText = ["Red", "Blue", "Draw"];
+    for (var i = 0; i < mondaysDates.length; i ++) {
+      var newWeekScoreHeader = document.createElement("select");
+      // create options
+      for (var j = 0; j < optionText.length; j ++) {
+        var option = document.createElement("option");
+        option.text = optionText[j];
+        newWeekScoreHeader.add(option);
+      }
+      //newWeekScoreHeader.setAttribute("name", ""); 
+      //newWeekScoreHeader.setAttribute("value", "red"); 
+
+      currentWeekHeader = document.getElementById("week" + i + "Header" + tabName);
+      newWeekScoreHeader.setAttribute("id", "week" + i + "ScoreHeader" + tabName); 
+      currentWeekHeader.appendChild(document.createElement("br"));
+      currentWeekHeader.appendChild(newWeekScoreHeader);
+    }*/
 }
 
     // populate the weekly total counts
@@ -427,7 +508,7 @@ function addPlayerListToTab(tabName) {
       newPlayerName.style.backgroundPosition = "right";
       newPlayerName.style.backgroundRepeat = "no-repeat";
       newPlayerName.style.backgroundSize = "20px 20px";
-      newPlayerName.style.width = 90;
+      newPlayerName.style.width = "100px";
       // create an autocomplete div to add the player input to
       newPlayerName.setAttribute("autocomplete", "off"); 
       autocomplete(newPlayerName, playerNameSuggestions);
@@ -572,6 +653,8 @@ function addPlayerListToTab(tabName) {
       // re-enable every player's player-status button
       for (var i = 0; i < tabPlayerCount; i++) {
         document.getElementById("player" + i + "Week" + weekNumber + tabName).setAttribute("class", "checkmark");
+        document.getElementById("week" + weekNumber + "Score1" + tabName).disabled = true;
+        document.getElementById("week" + weekNumber + "Score2" + tabName).disabled = true;
       }
       // reenable the other edit buttons
       mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
@@ -582,6 +665,10 @@ function addPlayerListToTab(tabName) {
         // re-enable all of the other elements
         for (var j = 0; j < tabPlayerCount; j++) {
           document.getElementById("player" + j + "Week" + i + tabName).hidden = false;
+
+          document.getElementById("week" + i + "Score1" + tabName).hidden = false;
+          document.getElementById("week" + i + "ScoreSeparator" + tabName).hidden = false;
+          document.getElementById("week" + i + "Score2" + tabName).hidden = false;
         }
       }
       document.getElementById("copyAvailabilityButton").disabled = true; 
@@ -597,6 +684,15 @@ function addPlayerListToTab(tabName) {
     for (var i = 0; i < tabPlayerCount; i++) {
       //document.getElementById("player" + i + "Week" + weekNumber + tabName).setAttribute("class", "checksecondary");
       document.getElementById("player" + i + "Week" + weekNumber + tabName).disabled = false;
+
+        var team1Spinner = document.getElementById("week" + weekNumber + "Score1" + tabName);
+        var team2Spinner = document.getElementById("week" + weekNumber + "Score2" + tabName);
+        team1Spinner.disabled = false;
+        team2Spinner.disabled = false;
+        team1Spinner.style.width = "40px";
+        team2Spinner.style.width = "40px";
+        team1Spinner.style.backgroundColor = "coral";
+        team2Spinner.style.backgroundColor = "skyblue";
     }
     
     // disable the other edit buttons
@@ -608,6 +704,9 @@ function addPlayerListToTab(tabName) {
         // hide all of the other elements
         for (var j = 0; j < tabPlayerCount; j++) {
           document.getElementById("player" + j + "Week" + i + tabName).hidden = true;
+          document.getElementById("week" + i + "Score1" + tabName).hidden = true;
+          document.getElementById("week" + i + "ScoreSeparator" + tabName).hidden = true;
+          document.getElementById("week" + i + "Score2" + tabName).hidden = true;
         }
       }
     }
@@ -694,7 +793,21 @@ function addPlayerListToTab(tabName) {
         console.log("PLAYER DETAILS: " + i + " " + officialPlayerName + " " + playerAttended);
       }
 
-      var attendanceDetails = { "gameYear": gameYear, "gameMonth": gameMonth, "gameWeek": weekNumber, "playersAttended": playersAttended, "saveType": saveType, };
+      // get the score for the game week
+      var goals1 = Number(document.getElementById("week" + weekNumber + "Score1" + tabName).value); 
+      var goals2 = Number(document.getElementById("week" + weekNumber + "Score2" + tabName).value); 
+      var calcWinner = -1;
+      if (goals1 == goals2) {
+        calcWinner = 0; // draw
+      } else if (goals1 > goals2) {
+        calcWinner = 1; // team1 won
+      } else if (goals1 < goals2) {
+        calcWinner = 2; // team2 won
+      }
+      var scores = {};
+      scores[weekNumber] = {"winner": calcWinner, "team1goals": goals1, "team2goals": goals2}
+
+      var attendanceDetails = { "gameYear": gameYear, "gameMonth": gameMonth, "gameWeek": weekNumber, "playersAttended": playersAttended, "scores": scores, "saveType": saveType, };
 
       console.log("SAVING ATTENDANCE:" + JSON.stringify(attendanceDetails));
 
