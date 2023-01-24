@@ -8,7 +8,7 @@
 <body>
   <%- include ("../partials/nav.ejs") %>
 <!-- Page content -->
-<div class="fball-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+<div class="fball-content" style="max-width:100%;margin-top:46px;margin-left: 2px;">
 
 <div id="year">
   <h3>Month: 
@@ -20,6 +20,8 @@
 <div id="location"><a href="https://goo.gl/maps/6CcWirgU6bVMEqbt8">Northumberland Rd, Sheffield, S10 2TY</a></div>
 
 <p>
+
+
 <div class="warpper">
   <input class="radio" id="one" name="group" type="radio" onclick="changeTab('one');" checked>
   <input class="radio" id="two" name="group" type="radio" onclick="changeTab('two');">
@@ -33,9 +35,15 @@
   <div class="panel" id="one-panel">
     <div class="content">
       <div class="panel-title">Availability</div>
-      <div class="weeksnowrap">
-        <div id="availabilityHeader"></div>
-        <div id="editHeader" class="gameheader"><br></div>
+      <div class="panelcontentouter">
+        <!-- do not put anything directly in here, use innerleft and innerright -->
+        <div class="panelcontentinnerleft">
+          <div id="nameHeaderavailability" class="gameheader"></div>
+        </div>
+        <div class="panelcontentinnerright">
+          <div id="weekHeaderavailability" class="gameheader"></div>
+          <div id="editHeaderavailability" class="gameheader"><br></div>
+        </div>
       </div>
       <div style="clear:both;"></div>
       <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
@@ -43,6 +51,8 @@
       <p><p>Finished? <a href="/teams">Generate teams and email</a>, or view the <a href="/poll-log">log of poll entries.</a>.
     </div>
   </div>
+
+
   <div class="panel" id="two-panel">
     <div class="content">
       <div class="panel-title">Attendance</div>For admin access only.
@@ -56,7 +66,17 @@
 
       <div id="tempPasswordOKDiv" hidden>
         <!-- Simple (insecure) way to hide a feature - a form of feature flag rather than password -->
-        <div id="attendanceHeader" class="weeksnowrap"></div>
+        <div class="panelcontentouter">
+          <!-- do not put anything directly in here, use innerleft and innerright -->
+          <div class="panelcontentinnerleft">
+            <div id="nameHeaderattendance" class="gameheader"></div>
+          </div>
+          <div class="panelcontentinnerright">
+            <div id="weekHeaderattendance" class="gameheader"></div>
+            <div id="editHeaderattendance" class="gameheader"><br></div>
+          </div>
+        </div>
+
         <div style="clear:both;"></div>
         <div id="scoreHeader" class="gameheader"></div>
         <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled>&larr; Copy from Availability</button>
@@ -71,11 +91,18 @@
     <div class="panel-title">Payments</div>
     <p>Payment summary coming at the end of the month...</p>
     <div class="content" id="tempPaymentsEntryDiv" hidden>
-      <div id="paymentsNameHeader" class="gameheader">Name<br></div>
-      <div id="paymentsGamesHeader" class="gameheader" style="text-align: center;">Games<br></div>
-      <div id="paymentsOwesHeader" class="gameheader" style="text-align: center;">Owes<br></div>
-      <div id="paymentsPaypalHeader" class="gameheader" style="text-align: center;">PayPal<br></div>
-      <div id="paidHeader" class="gameheader" style="text-align: right;">Paid (£)<br></div>
+      <div class="panelcontentouter">
+        <div class="panelcontentinnerleft">
+          <div id="paymentsNameHeader" class="gameheader1">Name<br></div>
+        </div>
+        <div class="panelcontentinnerright">
+          <div id="paymentsGamesHeader" class="gameheader" style="text-align: center;">Games<br></div>
+          <div id="paymentsOwesHeader" class="gameheader" style="text-align: center;">Owes<br></div>
+          <div id="paymentsPaypalHeader" class="gameheader" style="text-align: center;">PayPal<br></div>
+          <div id="paidHeader" class="gameheader" style="text-align: right;">Paid (£)<br></div>
+        </div>
+      </div>
+      
       <div style="clear:both;"></div>
       <button id="editPaymentsButton" style="background-color: #90EE90;" type="button" onclick="editPayments();">Edit</button>
       <button id="cancelPaymentsButton" onclick="location.reload()" disabled>Cancel</button>
@@ -256,18 +283,16 @@
     }
 
 function addPlayerListToTab(tabName) {
-    var divElementToAppendTo = document.getElementById(tabName + "Header");
-    //divElementToAppendTo.setAttribute("class", "weeksnowrap"); 
-    var nameHeader = document.createElement("div");
-    nameHeader.setAttribute("id", "nameHeader" + tabName); 
-    nameHeader.setAttribute("class", "gameheader"); 
+    var nameHeader = document.getElementById("nameHeader" + tabName);
     nameHeader.appendChild(document.createElement("br"));
-    divElementToAppendTo.appendChild(nameHeader);
     if (tabName == ATTENDANCE) {
       // spacer for the score items
       nameHeader.appendChild(document.createElement("br"));
       //nameHeader.appendChild(document.createElement("br"));
     }
+    var weekHeader = document.getElementById("weekHeader" + tabName);
+    var divElementToAppendTo = weekHeader;
+    console.log(tabName, nameHeader, weekHeader)
 
     // auto generate divs for headers for each game week
     for (var i = 0; i < mondaysDates.length; i ++) {
@@ -386,6 +411,7 @@ function addPlayerListToTab(tabName) {
       dummyAdminNameButton.style.textAlign = "right";
       dummyAdminNameButton.style.width = "100%";
       dummyAdminNameButton.style.color = "black";
+      dummyAdminNameButton.style.backgroundColor = "white";
       dummyAdminNameButton.style.padding = "10px 0px";
       //nameHeader = document.getElementById("nameHeader")
       nameHeader.appendChild(document.createElement("br"));
@@ -418,25 +444,6 @@ function addPlayerListToTab(tabName) {
       var officialPlayerName = getOfficialNameFromAlias(player, aliasToPlayerMap);
       addPlayer(playerName, playerSelection, officialPlayerName, tabName)
     });
-
-    /*// auto generate divs for headers for each game week
-    var optionText = ["Red", "Blue", "Draw"];
-    for (var i = 0; i < mondaysDates.length; i ++) {
-      var newWeekScoreHeader = document.createElement("select");
-      // create options
-      for (var j = 0; j < optionText.length; j ++) {
-        var option = document.createElement("option");
-        option.text = optionText[j];
-        newWeekScoreHeader.add(option);
-      }
-      //newWeekScoreHeader.setAttribute("name", ""); 
-      //newWeekScoreHeader.setAttribute("value", "red"); 
-
-      currentWeekHeader = document.getElementById("week" + i + "Header" + tabName);
-      newWeekScoreHeader.setAttribute("id", "week" + i + "ScoreHeader" + tabName); 
-      currentWeekHeader.appendChild(document.createElement("br"));
-      currentWeekHeader.appendChild(newWeekScoreHeader);
-    }*/
 }
 
     // populate the weekly total counts
@@ -508,7 +515,7 @@ function addPlayerListToTab(tabName) {
       newPlayerName.style.backgroundPosition = "right";
       newPlayerName.style.backgroundRepeat = "no-repeat";
       newPlayerName.style.backgroundSize = "20px 20px";
-      newPlayerName.style.width = "100px";
+      newPlayerName.style.width = "100%";
       // create an autocomplete div to add the player input to
       newPlayerName.setAttribute("autocomplete", "off"); 
       autocomplete(newPlayerName, playerNameSuggestions);
@@ -569,7 +576,7 @@ function addPlayerListToTab(tabName) {
         newPlayerEditButton.setAttribute("id", "player" + currentPlayerNumber + "Edit" + tabName);
         //console.log("CREATED " + "player" + currentPlayerNumber + "Edit" + tabName);
 
-        var editHeader = document.getElementById("editHeader")
+        var editHeader = document.getElementById("editHeader" + tabName)
         editHeader.appendChild(document.createElement("br"));
         editHeader.appendChild(newPlayerEditButton);
         if (!playerName) {

@@ -20,11 +20,6 @@ pre {
   padding: 2px 6px 2px 0px;
   margin: 0px;
 }
-.gameheader  {
-  float: left;
-  padding: 2px 6px 2px 0px;
-  margin: 0px;
-}
 .gameheader input,button {
   height: 30px;
   margin: 0px;
@@ -92,6 +87,8 @@ input[type=checkbox] {
    appearance: none;
    -webkit-appearance: none;
    -moz-appearance: none;
+   width: 26px;
+   margin: 0px 2px 0px 2px;
    padding: 5px;
    background-color: #DC7633; /* red */
 }
@@ -176,6 +173,9 @@ input[type=checkbox]:enabled.checksecondary {
   flex-direction: column;
   align-items: normal;
 }
+.tabs{
+  margin:0px 4px;
+}
 .tab{
   cursor: pointer;
   padding:10px 5px;
@@ -190,11 +190,13 @@ input[type=checkbox]:enabled.checksecondary {
   background:#fffffff6;
   min-height:500px;
   width:100%;
+  /*
   max-width:500px;
   min-width:350px;
+  */
   border-radius:3px;
   overflow:hidden;
-  padding:5px;
+  /*padding:5px;*/
   overflow-x: scroll;
   overflow-y: hidden;
 }
@@ -212,7 +214,8 @@ input[type=checkbox]:enabled.checksecondary {
 }
 .panel-title{
   font-size:1.5em;
-  font-weight:bold
+  font-weight:bold;
+  padding:5px;
 }
 .radio{
   display:none;
@@ -247,5 +250,21 @@ input[type=number]:disabled {
    font-size: 90%;
    font-weight: bold;
    color: black;
+}
+
+
+.panelcontentouter {
+  float: none;
+  min-width:350px;
+  max-width:350px;
+  /*border: 1px solid black;*/
+}
+.panelcontentinnerleft {
+  float: left;
+  width: 30%;
+}
+.panelcontentinnerright {
+  float: left;
+  width: 70%;
 }
 
