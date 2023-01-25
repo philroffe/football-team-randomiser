@@ -34,6 +34,11 @@ express()
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
+.post('/services/teams', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT TEAMS POST FROM EMAIL:', ip, req.body);
+  res.json({'result': 'OK'});
+  })
 .post('/logging', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
   console.error('CLIENT_ERROR:', ip, req.body);
