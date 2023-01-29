@@ -661,13 +661,14 @@ function addPlayerListToTab(tabName) {
 
   function updateTeamShirt(checkboxElement, newValue) {
     if (newValue == 0) {
-      checkboxElement.style.background = "none";
+      checkboxElement.style.background = "url(/black-cross.png)";
     } else if (newValue == 1) {
       checkboxElement.style.background = "url(/red-football-shirt.png)";
     } else if (newValue == 2) {
       checkboxElement.style.background = "url(/blue-football-shirt.png)";
     }
     checkboxElement.setAttribute("teamValue", newValue);
+    checkboxElement.setAttribute("class", "checkmark_blank");
     checkboxElement.style.backgroundRepeat = "no-repeat";
     checkboxElement.style.backgroundSize = "26px 28px";
     checkboxElement.style.margin = "0px";

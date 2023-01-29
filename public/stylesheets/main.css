@@ -134,6 +134,13 @@ input[type=checkbox]:disabled.checksecondary {
 input[type=checkbox]:enabled.checksecondary {
    background-color: transparent; /* lightgreen */
 }
+/*Disable the tick and cross mark for .checkmark_blank */
+input[type=checkbox].checkmark_blank:before {
+  content:"";
+}
+input[type=checkbox].checkmark_blank:checked:before {
+  content:"";
+}
 
 .autocomplete {
   /*the container must be positioned relative:*/
