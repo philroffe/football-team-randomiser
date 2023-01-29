@@ -37,8 +37,75 @@ express()
 .post('/services/teams', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT TEAMS POST FROM EMAIL:', ip, req.body);
-  res.json({'result': 'OK'});
-  })
+  var emailDate = new Date(req.body.Email_Sent_Date.split(' at')[0]);
+  var emailSubjectGameDate = new Date(req.body.Subject_Game_Date + " 2023");
+  var redTeam = req.body.Red_Team;
+  var blueTeam = req.body.Blue_Team;
+
+  try {
+    //calc date - use the next Monday after the email date
+    var nextMonday = getDateNextMonday(emailDate);
+    var nextMondayString = nextMonday.toISOString().split('T')[0]; //2023-11-27
+    var gameMonth = nextMondayString.slice(0, -3); //2023-11
+    var gamesCollectionId = "games_" + gameMonth + "-01";
+
+    // find the index for the week
+    var mondaysDates = mondaysInMonth(nextMonday.getMonth()+1, nextMonday.getFullYear());  //=> [ 7,14,21,28 ]
+    var weekNumber = -1;
+    for (var i = 0; i < mondaysDates.length; i ++) {
+      if (mondaysDates[i] == nextMonday.getDate()) {
+        weekNumber = i;
+        console.log("Found date:" + nextMonday + " with index:" + weekNumber);
+        break;
+      }
+    }
+
+    var timestamp = new Date();
+    var saveType = "ATTENDANCE"
+    var attendanceDetails = { "month": gameMonth, "timestamp": timestamp, "saveType": saveType, "source_ip": "mailparser.io " + ip };
+
+    var allPlayers = {};
+    var redTeamPlayers = redTeam.split('\n')
+    for(var i = 0; i < redTeamPlayers.length; i++) {
+      var playerName = redTeamPlayers[i].replace(/\d+/g, '');
+      allPlayers[playerName] = "1";
+    }
+    var blueTeamPlayers = blueTeam.split('\n')
+    for(var i = 0; i < blueTeamPlayers.length; i++) {
+      var playerName = blueTeamPlayers[i].replace(/\d+/g, '');
+      allPlayers[playerName] = "2";
+    }
+    attendanceDetails[weekNumber] = allPlayers;
+
+    console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
+    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+    var existingDoc = await docRef.get();
+    if (!existingDoc.data()) {
+      console.log('CREATING:', JSON.stringify(attendanceDetails));
+      await docRef.set(attendanceDetails);
+    } else {
+      console.log('UPDATING:', JSON.stringify(attendanceDetails));
+      // copy the existing doc to preserve a history
+      var existingDocData = existingDoc.data();
+      existingDocData.saveType = "ATTENDANCE_BACKUP"
+      if (!existingDocData[weekNumber].scores) {
+        const backupDocRef = firestore.collection(gamesCollectionId).doc("_attendance_" + existingDocData.timestamp);
+        backupDocRef.set(existingDocData)
+        // now update with the new data
+        await docRef.update(attendanceDetails);
+      } else {
+        // scores already in so manually create - be careful
+        // store in dead letter queue
+        const docRef = firestore.collection("INBOUND_EMAILS").doc(emailGameDate + "_" + emailDate);
+        await docRef.set(req.body);
+      }
+    }
+    res.json({'result': 'OK'})
+  } catch (err) {
+    console.error(err);
+    res.send({'result': err});
+  }
+})
 .post('/logging', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
   console.error('CLIENT_ERROR:', ip, req.body);
@@ -305,9 +372,9 @@ express()
   })
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
 
-function getDateNextMonday() {
+function getDateNextMonday(fromDate = new Date()) {
   // Get the date next Monday
-  nextMonday = new Date();
+  nextMonday = fromDate;
   if ((nextMonday.getDay() == 1) && (nextMonday.getHours() >= 19)) {
     // date is a Monday after kick-off time (6-7pm), so jump forward a day to force the next week
     nextMonday.setDate(nextMonday.getDate() + 1);
@@ -515,4 +582,18 @@ async function getDefinedPlayerAliasMaps() {
 
   var playerAliasMaps = { playerToAliasMap: playerAliasMap, aliasToPlayerMap: collapsedPlayerMap };
   return playerAliasMaps;
+}
+
+function mondaysInMonth(m,y) {
+  var days = new Date(y,m,0).getDate();
+  var mondays =  new Date(m +'/01/'+ y).getDay();
+  if (mondays != 1){
+    mondays = 9 - mondays;
+  }
+  mondays = [mondays];
+  //console.log(mondays);
+  for (var i = mondays[0] + 7; i <= days; i += 7) {
+    mondays.push(i);
+  }
+  return mondays;
 }
