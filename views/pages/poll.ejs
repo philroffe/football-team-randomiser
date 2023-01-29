@@ -557,7 +557,11 @@ function addPlayerListToTab(tabName) {
                 break;
               default:
                 // do nothing
-                updateTeamShirt(newPlayerWeek, 0);
+                if (availabilityMap[i]) {
+                  updateTeamShirt(newPlayerWeek, 99);
+                } else {
+                  updateTeamShirt(newPlayerWeek, 0);
+                }
             }
             newPlayerWeek.onclick = function() {
               var nextValue = Number(this.getAttribute("teamValue")) + 1;
@@ -666,6 +670,9 @@ function addPlayerListToTab(tabName) {
       checkboxElement.style.background = "url(/red-football-shirt.png)";
     } else if (newValue == 2) {
       checkboxElement.style.background = "url(/blue-football-shirt.png)";
+    } else if (newValue == 99) {
+      // temp option to cater for true (when played but unknown team)
+      checkboxElement.style.background = "url(/tick.png)";
     }
     checkboxElement.setAttribute("teamValue", newValue);
     checkboxElement.setAttribute("class", "checkmark_blank");
