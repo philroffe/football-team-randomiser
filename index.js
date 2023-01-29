@@ -60,6 +60,11 @@ express()
       }
     }
 
+    // read the list of players and aliases
+    var playerAliasMaps = {};
+    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+
     var timestamp = new Date();
     var saveType = "ATTENDANCE"
     var attendanceDetails = { "month": gameMonth, "timestamp": timestamp, "saveType": saveType, "source_ip": "mailparser.io " + ip };
@@ -67,36 +72,43 @@ express()
     var allPlayers = {};
     var redTeamPlayers = redTeam.split('\n')
     for(var i = 0; i < redTeamPlayers.length; i++) {
-      var playerName = redTeamPlayers[i].replace(/\d+/g, '');
-      allPlayers[playerName] = "1";
+      var playerName = redTeamPlayers[i].replace(/\d+/g, '').replace(/\*/g, '').trim();
+      // check if there is an official name
+      var officialPlayerName = getOfficialNameFromAlias(playerName, aliasToPlayerMap);
+      playerName = (officialPlayerName) ? officialPlayerName : playerName;
+      allPlayers[playerName] = 1;
     }
     var blueTeamPlayers = blueTeam.split('\n')
     for(var i = 0; i < blueTeamPlayers.length; i++) {
-      var playerName = blueTeamPlayers[i].replace(/\d+/g, '');
-      allPlayers[playerName] = "2";
+      var playerName = blueTeamPlayers[i].replace(/\d+/g, '').replace(/\*/g, '').trim();
+      // check if there is an official name
+      var officialPlayerName = getOfficialNameFromAlias(playerName, aliasToPlayerMap);
+      playerName = (officialPlayerName) ? officialPlayerName : playerName;
+      allPlayers[playerName] = 2;
     }
     attendanceDetails[weekNumber] = allPlayers;
 
-    console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
+    console.log('Inserting DB data:', gamesCollectionId, JSON.stringify(attendanceDetails));
     const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
     var existingDoc = await docRef.get();
     if (!existingDoc.data()) {
       console.log('CREATING:', JSON.stringify(attendanceDetails));
       await docRef.set(attendanceDetails);
     } else {
-      console.log('UPDATING:', JSON.stringify(attendanceDetails));
       // copy the existing doc to preserve a history
       var existingDocData = existingDoc.data();
       existingDocData.saveType = "ATTENDANCE_BACKUP"
-      if (!existingDocData[weekNumber].scores) {
+      if (!existingDocData[weekNumber] || !existingDocData[weekNumber].scores) {
+        console.log('UPDATING:', JSON.stringify(attendanceDetails));
         const backupDocRef = firestore.collection(gamesCollectionId).doc("_attendance_" + existingDocData.timestamp);
         backupDocRef.set(existingDocData)
         // now update with the new data
         await docRef.update(attendanceDetails);
       } else {
+        console.log('STORING IN DEAD LETTER:', JSON.stringify(attendanceDetails));
         // scores already in so manually create - be careful
         // store in dead letter queue
-        const docRef = firestore.collection("INBOUND_EMAILS").doc(emailGameDate + "_" + emailDate);
+        const docRef = firestore.collection("INBOUND_EMAILS").doc(emailSubjectGameDate + "_" + emailDate);
         await docRef.set(req.body);
       }
     }
@@ -596,4 +608,21 @@ function mondaysInMonth(m,y) {
     mondays.push(i);
   }
   return mondays;
+}
+
+
+// get the official name from a map of aliases (using case insensitive search)
+function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {
+  nameToCheck = nameToCheck.trim();
+  var officialName = undefined;
+  var fullAliasList = Object.keys(aliasToPlayerMap);
+  for (var i = 0; i < fullAliasList.length; i++) { 
+    if (nameToCheck.toUpperCase() == fullAliasList[i].toUpperCase()) {
+      officialName = aliasToPlayerMap[nameToCheck.toUpperCase()]
+    }
+  }
+  /*if (!officialName) {
+    console.log("WARNING: Failed to find official name for:", nameToCheck);
+  }*/
+  return officialName;
 }
