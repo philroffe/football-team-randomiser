@@ -55,16 +55,7 @@
 
   <div class="panel" id="two-panel">
     <div class="content">
-      <div class="panel-title">Attendance</div>For admin access only.
-
-      <div id="tempPasswordEntryDiv">
-        <form>
-        <input type="password" id="passwordInput" placeholder="Enter Password" minlength="8" required>
-        <button type="submit" id="checkPasswordButton" onclick="checkPassword();">Submit</button>
-        </form>
-      </div>
-
-      <div id="tempPasswordOKDiv" hidden>
+      <div class="panel-title">Attendance</div>
         <!-- Simple (insecure) way to hide a feature - a form of feature flag rather than password -->
         <div class="panelcontentouter">
           <!-- do not put anything directly in here, use innerleft and innerright -->
@@ -78,19 +69,28 @@
         </div>
 
         <div style="clear:both;"></div>
-        <div id="scoreHeader" class="gameheader"></div>
-        <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled>&larr; Copy from Availability</button>
-        <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled>Save</button>
-        <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled>Cancel</button>
+        <br>For admin access only.
+        <div id="tempPasswordEntryDiv">
+          <form>
+          <input type="password" id="passwordInput" placeholder="Enter Password" minlength="8" required>
+          <button type="submit" id="checkPasswordButton" onclick="checkPassword();">Submit</button>
+          </form>
+        </div>
 
-        <p>Problem with the list? <a href="/admin-aliases">Check the aliases...</a>
-      </div>
+        <div id="tempPasswordOKDiv" hidden>
+          <div id="scoreHeader" class="gameheader"></div>
+          <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled>&larr; Copy from Availability</button>
+          <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled>Save</button>
+          <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled>Cancel</button>
+
+          <p>Problem with the list? <a href="/admin-aliases">Check the aliases...</a>
+        </div>
     </div>
   </div>
   <div class="panel" id="three-panel">
     <div class="panel-title">Payments</div>
     <p>Payment summary coming at the end of the month...</p>
-    <div class="content" id="tempPaymentsEntryDiv" hidden>
+    <div class="content" id="tempPaymentsEntryDiv">
       <div class="panelcontentouter">
         <div class="panelcontentinnerleft">
           <div id="paymentsNameHeader" class="gameheader1">Name<br></div>
@@ -104,8 +104,10 @@
       </div>
       
       <div style="clear:both;"></div>
-      <button id="editPaymentsButton" style="background-color: #90EE90;" type="button" onclick="editPayments();">Edit</button>
-      <button id="cancelPaymentsButton" onclick="location.reload()" disabled>Cancel</button>
+      <div id="paymentsAdmin" hidden>
+        <button id="editPaymentsButton" style="background-color: #90EE90;" type="button" onclick="editPayments();">Edit</button>
+        <button id="cancelPaymentsButton" onclick="location.reload()" disabled>Cancel</button>
+      </div>
     </div>
   </div>
   </div>
@@ -207,7 +209,12 @@
     if (accessLevelCookie == adminPasswordHash) {
       document.getElementById("tempPasswordOKDiv").hidden = false;
       document.getElementById("tempPasswordEntryDiv").hidden = true;
-      document.getElementById("tempPaymentsEntryDiv").hidden = false;
+      document.getElementById("paymentsAdmin").hidden = false;
+    } else {
+      const weekEditButtons = document.getElementsByClassName("rotated");
+      for (let i = 0; i < weekEditButtons.length; i++) {
+        weekEditButtons[i].disabled = true;
+      }
     }
 
     function checkPassword() {
@@ -215,8 +222,12 @@
       if (btoa(password) == adminPasswordHash) {
         document.getElementById("tempPasswordOKDiv").hidden = false;
         document.getElementById("tempPasswordEntryDiv").hidden = true;
-        document.getElementById("tempPaymentsEntryDiv").hidden = false;
+        document.getElementById("paymentsAdmin").hidden = false;
         setCookie("accessLevel", adminPasswordHash, 8);
+        const weekEditButtons = document.getElementsByClassName("rotated");
+        for (let i = 0; i < weekEditButtons.length; i++) {
+          weekEditButtons[i].disabled = false;
+        }
       }
     }
     function getCookie(cname) {
