@@ -91,18 +91,6 @@
     <div class="panel-title">Payments</div>
     <p>Payment summary coming at the end of the month...</p>
     <div class="content" id="tempPaymentsEntryDiv">
-      <!-- <div class="panelcontentouter">
-        <div class="panelcontentinnerleft">
-          <div id="paymentsNameHeader" class="gameheader1">Name<br></div>
-        </div>
-        <div class="panelcontentinnerright">
-          <div id="paymentsGamesHeader" class="gameheader" style="text-align: center;">Games<br></div>
-          <div id="paymentsOwesHeader" class="gameheader" style="text-align: center;">Owes<br></div>
-          <div id="paymentsPaypalHeader" class="gameheader" style="text-align: center;">PayPal<br></div>
-          <div id="paidHeader" class="gameheader" style="text-align: right;">Paid (£)<br></div>
-        </div>
-      </div> -->
-      
       <div style="clear:both;"></div>
       <div id="paymentsAdmin" hidden>
         <button id="editPaymentsButton" style="background-color: #90EE90;" type="button" onclick="editPayments();">Edit</button>
@@ -985,7 +973,9 @@ function addPlayerListToTab(tabName) {
         var playerPaymentAmountElement = document.getElementById("player" + currentPlayerNumber + "AmountPayment"); 
         var paymentLinkElement = document.getElementById("player" + currentPlayerNumber + "LinkPayment"); 
         playerPaymentAmountElement.hidden = isEditing;
-        paydetails[playerNameElement.innerHTML] = playerPaymentAmountElement.value;
+        var paymentNumber = 0;
+        (playerPaymentAmountElement.value) ? paymentNumber += playerPaymentAmountElement.value : newURL += 0;
+        paydetails[playerNameElement.innerHTML] = paymentNumber;
         currentPlayerNumber++;
       })
 
@@ -1009,11 +999,6 @@ function addPlayerListToTab(tabName) {
 
     function addPaymentsToTab() {
       var currentPlayerNumber = 0;
-      var paymentsNameHeader = document.getElementById("paymentsNameHeader");
-      var paymentsGamesHeader = document.getElementById("paymentsGamesHeader");
-      var paymentsOwesHeader = document.getElementById("paymentsOwesHeader");
-      var paymentsPaypalHeader = document.getElementById("paymentsPaypalHeader");
-      var paidHeader = document.getElementById("paidHeader");
 
       // sort by paid status, split names into separate arrays and then concat together
       var playersPaid = {};
@@ -1083,8 +1068,8 @@ function addPlayerListToTab(tabName) {
           if (attendanceMap[playerName][games]) { numberOfGames++; }
         })
         var amountPaid = 0;
-        if (paydetailsMap[playerName]) { amountPaid = paydetailsMap[playerName]; }
-        var amountOwed = playersOrdered[playerName];
+        if (paydetailsMap[playerName]) { amountPaid = Number(paydetailsMap[playerName]); }
+        var amountOwed = Number(playersOrdered[playerName]);
         var outstandingBalance = (numberOfGames*4) - amountPaid;
         //console.log(playerName, (numberOfGames), amountOwed, amountPaid, outstandingBalance)
 
@@ -1164,7 +1149,11 @@ function addPlayerListToTab(tabName) {
       const tdOwesTotal = tr.insertCell();
       tdOwesTotal.style.textAlign = 'center';
       tdOwesTotal.appendChild(document.createTextNode("£" + overallOwesTotal));
-      // paid total
+      // outstanding total
+      const tdOutstandingTotal = tr.insertCell();
+      tdOutstandingTotal.style.textAlign = 'center';
+      tdOutstandingTotal.appendChild(document.createTextNode("£" + (overallOwesTotal - overallPaidTotal)));
+      // tdOutstandingTotal total
       const tdPaidTotal = tr.insertCell();
       tdPaidTotal.style.textAlign = 'center';
       tdPaidTotal.appendChild(document.createTextNode("£" + overallPaidTotal));
