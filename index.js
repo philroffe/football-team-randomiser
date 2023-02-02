@@ -34,6 +34,41 @@ express()
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
+.post('/services/payment', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT PAYMENT POST FROM EMAIL:', ip, req.body);
+  var emailDate = new Date(req.body.email_sent_date.split(' at')[0]);
+  var transactionDate = new Date(req.body.transaction_date);
+  var transactionId = req.body.transaction_id;
+  var payeeName = req.body.payee_name.replace(/:/, '');
+  var amountReceived = req.body.amount_received;
+
+  // read the list of players and aliases
+  var playerAliasMaps = {};
+  playerAliasMaps = await getDefinedPlayerAliasMaps();
+  var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+  var officialPlayerName = getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
+
+  try {
+    //TODO identify previous month (emailDate.getMonth()-1);
+    var gameMonth = "01"
+    var gameYear = emailDate.getFullYear();
+    var paydetails = {};
+    var amount = Number(amountReceived.split(' ')[0].replace(/£/, ''));
+    paydetails[officialPlayerName] = amount;
+
+    console.log('Inserting payment DB data:', JSON.stringify(paydetails));
+
+    var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
+    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+    var savedata = { "paydetails": paydetails };
+    await docRef.set(savedata, { merge: true });
+    res.json({'result': 'OK'})
+  } catch (err) {
+    console.error(err);
+    res.send({'result': err});
+  }
+})
 .post('/services/teams', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT TEAMS POST FROM EMAIL:', ip, req.body);

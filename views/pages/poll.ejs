@@ -91,7 +91,7 @@
     <div class="panel-title">Payments</div>
     <p>Payment summary coming at the end of the month...</p>
     <div class="content" id="tempPaymentsEntryDiv">
-      <div class="panelcontentouter">
+      <!-- <div class="panelcontentouter">
         <div class="panelcontentinnerleft">
           <div id="paymentsNameHeader" class="gameheader1">Name<br></div>
         </div>
@@ -101,7 +101,7 @@
           <div id="paymentsPaypalHeader" class="gameheader" style="text-align: center;">PayPal<br></div>
           <div id="paidHeader" class="gameheader" style="text-align: right;">Paid (£)<br></div>
         </div>
-      </div>
+      </div> -->
       
       <div style="clear:both;"></div>
       <div id="paymentsAdmin" hidden>
@@ -1043,7 +1043,39 @@ function addPlayerListToTab(tabName) {
           ...playersPaid
       };
 
+      var overallGamesTotal = 0;
+      var overallOwesTotal = 0;
+      var overallPaidTotal = 0;
+
+
+      var panelcontentouter = document.getElementById("tempPaymentsEntryDiv");
+      const tbl = document.createElement('table');
+      //tbl.style.width = '100%';
+      const trHeader = tbl.insertRow();
+      trHeader.insertCell()
+      // games total
+      const tdGamesHeader = trHeader.insertCell();
+      tdGamesHeader.style.textAlign = 'center';
+      tdGamesHeader.appendChild(document.createTextNode("Games"));
+      // owes total
+      const tdOwesHeader = trHeader.insertCell();
+      tdOwesHeader.style.textAlign = 'center';
+      tdOwesHeader.appendChild(document.createTextNode("Owes"));
+      // paypal total
+      const tdPaypalHeader = trHeader.insertCell();
+      tdPaypalHeader.style.textAlign = 'center';
+      tdPaypalHeader.appendChild(document.createTextNode("PayPal"));
+      // paid total
+      const tdPaidHeader = trHeader.insertCell();
+      tdPaidHeader.style.textAlign = 'center';
+      tdPaidHeader.appendChild(document.createTextNode("Paid (£)"));
+      panelcontentouter.appendChild(tbl);
+
+
       Object.keys(playersOrdered).forEach(function(playerName) {
+        // create new row for table
+        const tr = tbl.insertRow();
+
         //var playerName = playersOrdered[i];
         var numberOfGames = 0;
         // count the number of games that they actively played
@@ -1056,25 +1088,19 @@ function addPlayerListToTab(tabName) {
         var outstandingBalance = (numberOfGames*4) - amountPaid;
         //console.log(playerName, (numberOfGames), amountOwed, amountPaid, outstandingBalance)
 
-        var playerNameElement = document.createElement("b");
-        playerNameElement.setAttribute("id", "player" + currentPlayerNumber + "NamePayment"); 
-        playerNameElement.innerHTML = playerName;
-        paymentsNameHeader.appendChild(playerNameElement);
-        paymentsNameHeader.appendChild(document.createElement("br"));
+        // add table cell
+        const tdName = tr.insertCell();
+        tdName.appendChild(document.createTextNode(playerName));
 
-        var totalGamesElement = document.createElement("text");
-        totalGamesElement.setAttribute("id", "player" + currentPlayerNumber + "GamesPayment"); 
-        totalGamesElement.innerHTML = numberOfGames;
-        totalGamesElement.style.textAlign = "center";
-        paymentsGamesHeader.appendChild(totalGamesElement);
-        paymentsGamesHeader.appendChild(document.createElement("br"));
+        // add table cell
+        const tdGames = tr.insertCell();
+        tdGames.style.textAlign = 'center';
+        tdGames.appendChild(document.createTextNode(numberOfGames));
 
-        var totalOwesElement = document.createElement("text");
-        totalOwesElement.setAttribute("id", "player" + currentPlayerNumber + "OwesPayment"); 
-        totalOwesElement.innerHTML = "£" + amountOwed;
-        totalOwesElement.style.textAlign = "center";
-        paymentsOwesHeader.appendChild(totalOwesElement);
-        paymentsOwesHeader.appendChild(document.createElement("br"));
+        // add table cell
+        const tdOwed = tr.insertCell();
+        tdOwed.style.textAlign = 'center';
+        tdOwed.appendChild(document.createTextNode("£" + amountOwed));
 
         var paymentLinkElement = document.createElement("a");
         paymentLinkElement.setAttribute("id", "player" + currentPlayerNumber + "LinkPayment"); 
@@ -1084,8 +1110,10 @@ function addPlayerListToTab(tabName) {
           paymentLinkElement.appendChild(linkText);
           paymentLinkElement.href = paymentLink;
         }
-        paymentsPaypalHeader.appendChild(paymentLinkElement);
-        paymentsPaypalHeader.appendChild(document.createElement("br"));
+        // add table cell
+        const tdLink = tr.insertCell();
+        tdLink.style.textAlign = 'center';
+        tdLink.appendChild(paymentLinkElement);
 
         // add input field for amount paid
         var playerPaymentAmountElement = document.createElement("input"); 
@@ -1097,8 +1125,6 @@ function addPlayerListToTab(tabName) {
         playerPaymentAmountElement.style.maxHeight = "22px";
         playerPaymentAmountElement.style.maxWidth = "40px";
         playerPaymentAmountElement.style.padding = "0px 0px 0px 5px";
-        paidHeader.appendChild(playerPaymentAmountElement);
-
         // add text for amount paid
         var paidElement = document.createElement("text");
         paidElement.setAttribute("id", "player" + currentPlayerNumber + "PaidPayment"); 
@@ -1113,12 +1139,37 @@ function addPlayerListToTab(tabName) {
           }
           paidElement.innerHTML = text;
         }
-        paidHeader.appendChild(paidElement);
-        paidHeader.appendChild(document.createElement("br"));
+        // add table cell
+        const tdPaid = tr.insertCell();
+        tdPaid.style.textAlign = 'center';
+        tdPaid.appendChild(paidElement);
+        tdPaid.appendChild(playerPaymentAmountElement);
+        
+        overallGamesTotal += numberOfGames;
+        overallOwesTotal += amountOwed;
+        overallPaidTotal += amountPaid;
+
         currentPlayerNumber++;
       })
 
+      // create new row for table
+      const tr = tbl.insertRow();
+      const tdNameTotal = tr.insertCell();
+
+      // games total
+      const tdGamesTotal = tr.insertCell();
+      tdGamesTotal.style.textAlign = 'center';
+      tdGamesTotal.appendChild(document.createTextNode(overallGamesTotal));
+      // owes total
+      const tdOwesTotal = tr.insertCell();
+      tdOwesTotal.style.textAlign = 'center';
+      tdOwesTotal.appendChild(document.createTextNode("£" + overallOwesTotal));
+      // paid total
+      const tdPaidTotal = tr.insertCell();
+      tdPaidTotal.style.textAlign = 'center';
+      tdPaidTotal.appendChild(document.createTextNode("£" + overallPaidTotal));
     }
+
 
   </script>
 </div>
