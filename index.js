@@ -57,12 +57,12 @@ express()
     var amount = Number(amountReceived.split(' ')[0].replace(/£/, ''));
     paydetails[officialPlayerName] = amount;
 
-    console.log('Inserting payment DB data:', JSON.stringify(paydetails));
-
     var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
+    console.log('Inserting payment DB data:', gamesCollectionId, JSON.stringify(paydetails));
     const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
     var savedata = { "paydetails": paydetails };
     await docRef.set(savedata, { merge: true });
+    
     res.json({'result': 'OK'})
   } catch (err) {
     console.error(err);
@@ -237,6 +237,11 @@ express()
     console.log('Rendering POLL page with data' + req.query.date);
     var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
     console.log('SCORES POLL page with data' + JSON.stringify(rowdata.scores));
+
+
+    var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments(req.query.date);
+    rowdata.outstandingPayments = outstandingPayments;
+    console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
 
     var tabName = "";
     if (req.query.tab) {
@@ -443,6 +448,82 @@ function downloadPage(url) {
       resolve(body);
     });
   });
+}
+
+async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3) {
+    var requestedDate = new Date();
+    if (reqDate) {
+      requestedDate = new Date(reqDate);
+    } else {
+      // if date not specified just default to beginning of this month
+      requestedDate.setDate(1);
+    }
+
+    var playersUnPaid = {};
+    for (var i = 0; i < noOfMonths; i ++) {
+      requestedDate.setMonth(requestedDate.getMonth() - 1);
+      var gameYear = requestedDate.getFullYear();
+      //var gameMonth = gameMonth.getMonth();
+      var gameMonth = requestedDate.toISOString().split('-')[1];
+      var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
+      //JSON.stringify(paydetails)
+      console.log('GETTING ATTENDANCE data:', gamesCollectionId);
+      const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+      var existingDoc = await docRef.get();
+      if (existingDoc.data()) {
+        var attendanceData = existingDoc.data();
+        var paydetailsMap = existingDoc.data().paydetails;
+        paydetailsMap = (paydetailsMap) ? paydetailsMap : {};
+
+        // get list of all players for the month
+        var allPlayers = {};
+        var maxWeekNumber = 0;
+        // get all players for the month
+        for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
+          if (attendanceData[weekNumber]) {
+            allPlayers = {
+              ...allPlayers,
+              ...Object.keys(attendanceData[weekNumber])
+            };
+            maxWeekNumber = weekNumber;
+          }
+        }
+        //console.log('USING PLAYERS:', allPlayers);
+
+        // loop through players, add amount owed each week, subtract total amount paid for month
+        Object.values(allPlayers).sort().forEach(function(playerName) {
+          if (playerName != "scores") {
+            // count the amount owed for each game that they actively played
+            var numberOfGames = 0;
+            var amountOwed = 0;
+            var amountPaid = 0;
+            var outstandingBalance = 0;
+            for (var weekNumber = 0; weekNumber <= maxWeekNumber; weekNumber ++) {
+              if (attendanceData[weekNumber][playerName]) { numberOfGames++; amountOwed += 4; }
+            }
+
+            outstandingBalance = amountOwed;
+            if (paydetailsMap[playerName]) {
+              outstandingBalance = amountOwed - paydetailsMap[playerName];
+              amountPaid = paydetailsMap[playerName];
+            }
+            //console.log(playerName, amountOwed, paydetailsMap[playerName], outstandingBalance)
+            if (outstandingBalance != 0) {
+              var totalAmountOwed = 0;
+              if (playersUnPaid[playerName]) {
+                totalAmountOwed = playersUnPaid[playerName]["amountOwed"] + amountOwed;
+              } else {
+                totalAmountOwed = amountOwed;
+              }
+              playersUnPaid[playerName] = { "numberOfGames": Number(numberOfGames), "amountOwed": Number(totalAmountOwed), "amountPaid": Number(amountPaid), "outstandingBalance": Number(outstandingBalance)}
+            }
+          }
+        })
+      }
+    }
+
+    //outstandingPaymentsThisMonthMap[playerName] = { "numberOfGames": numberOfGames, "amountOwed": amountOwed, "amountPaid": amountPaid, "outstandingBalance": outstandingBalance}
+    return playersUnPaid;
 }
 
 async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQUE_FILTER) {

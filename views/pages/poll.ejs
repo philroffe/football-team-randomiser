@@ -75,6 +75,7 @@
           <input type="password" id="passwordInput" placeholder="Enter Password" minlength="8" required>
           <button type="submit" id="checkPasswordButton" onclick="checkPassword();">Submit</button>
           </form>
+          <a href="/auth/google" class="btn-danger"><span class="fa fa-google"></span> Sign in with Google</a>
         </div>
 
         <div id="tempPasswordOKDiv" hidden>
@@ -89,8 +90,7 @@
   </div>
   <div class="panel" id="three-panel">
     <div class="panel-title">Payments</div>
-    <p>Payment summary coming at the end of the month...</p>
-    <div class="content" id="tempPaymentsEntryDiv">
+    <div class="content" id="paymentsEntryDiv">
       <div style="clear:both;"></div>
       <div id="paymentsAdmin" hidden>
         <button id="editPaymentsButton" style="background-color: #90EE90;" type="button" onclick="editPayments();">Edit</button>
@@ -157,6 +157,8 @@
     if (!attendanceMap) { attendanceMap = {}; }
     var paydetailsMap = pagedata.data.paydetails;
     if (!paydetailsMap) { paydetailsMap = {}; }
+    var outstandingPaymentsMap = pagedata.data.outstandingPayments;
+    if (!outstandingPaymentsMap) { outstandingPaymentsMap = {}; }
 
     var playerAliasMaps = pagedata.data.playerAliasMaps;
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
@@ -1024,16 +1026,52 @@ function addPlayerListToTab(tabName) {
 
       //var playersOrdered = playersUnPaid.concat(playersPaid);
       let playersOrdered = {
+          ...outstandingPaymentsMap,
           ...playersUnPaid,
           ...playersPaid
       };
 
+
+
+      var outstandingPaymentsThisMonthMap = {};
+      // count the number of games that they actively played
+      Object.keys(playersOrdered).forEach(function(playerName) {
+        var numberOfGames = 0;
+        var amountOwed = 0;
+        var amountPaid = 0;
+        var outstandingBalance = 0;
+        if (attendanceMap[playerName]) {
+          Object.keys(attendanceMap[playerName]).sort().forEach(function(games) {
+            if (attendanceMap[playerName][games]) { numberOfGames++; }
+          })
+          if (paydetailsMap[playerName]) { amountPaid = Number(paydetailsMap[playerName]); }
+          amountOwed = Number(playersOrdered[playerName]);
+          outstandingBalance = (numberOfGames*4) - amountPaid;
+          //console.log(playerName, (numberOfGames), amountOwed, amountPaid, outstandingBalance)
+        } else {
+          numberOfGames = 0;
+        }
+        // add to the map
+        outstandingPaymentsThisMonthMap[playerName] = { "numberOfGames": numberOfGames, "amountOwed": amountOwed, "amountPaid": amountPaid, "outstandingBalance": outstandingBalance}
+      });
+
+      var panelcontentouter = document.getElementById("paymentsEntryDiv");
+      if (Object.keys(outstandingPaymentsMap).length > 0) {
+        panelcontentouter.appendChild(document.createTextNode("Outstanding Balances (last 3 months):"));
+        addPaymentsTableRows(outstandingPaymentsMap, false);
+        panelcontentouter.appendChild(document.createElement("br"));
+      }
+      panelcontentouter.appendChild(document.createTextNode("This Month:"));
+      addPaymentsTableRows(outstandingPaymentsThisMonthMap, true);
+
+}
+function addPaymentsTableRows(paymentsMap, showEditTotals = true) {
       var overallGamesTotal = 0;
       var overallOwesTotal = 0;
       var overallPaidTotal = 0;
+      var currentPlayerNumber = 0;
 
-
-      var panelcontentouter = document.getElementById("tempPaymentsEntryDiv");
+      var panelcontentouter = document.getElementById("paymentsEntryDiv");
       const tbl = document.createElement('table');
       //tbl.style.width = '100%';
       const trHeader = tbl.insertRow();
@@ -1056,107 +1094,104 @@ function addPlayerListToTab(tabName) {
       tdPaidHeader.appendChild(document.createTextNode("Paid (£)"));
       panelcontentouter.appendChild(tbl);
 
-
-      Object.keys(playersOrdered).forEach(function(playerName) {
+      Object.keys(paymentsMap).forEach(function(playerName) {
         // create new row for table
-        const tr = tbl.insertRow();
+        var numberOfGames = paymentsMap[playerName]["numberOfGames"];
+        if (numberOfGames > 0) {
+          const tr = tbl.insertRow();
+          var amountOwed = paymentsMap[playerName]["amountOwed"];
+          var amountPaid = paymentsMap[playerName]["amountPaid"];
+          var outstandingBalance = paymentsMap[playerName]["outstandingBalance"];
 
-        //var playerName = playersOrdered[i];
-        var numberOfGames = 0;
-        // count the number of games that they actively played
-        Object.keys(attendanceMap[playerName]).sort().forEach(function(games) {
-          if (attendanceMap[playerName][games]) { numberOfGames++; }
-        })
-        var amountPaid = 0;
-        if (paydetailsMap[playerName]) { amountPaid = Number(paydetailsMap[playerName]); }
-        var amountOwed = Number(playersOrdered[playerName]);
-        var outstandingBalance = (numberOfGames*4) - amountPaid;
-        //console.log(playerName, (numberOfGames), amountOwed, amountPaid, outstandingBalance)
+          // add table cell
+          const tdName = tr.insertCell();
+          tdName.appendChild(document.createTextNode(playerName));
 
-        // add table cell
-        const tdName = tr.insertCell();
-        tdName.appendChild(document.createTextNode(playerName));
+          // add table cell
+          const tdGames = tr.insertCell();
+          tdGames.style.textAlign = 'center';
+          tdGames.appendChild(document.createTextNode(numberOfGames));
 
-        // add table cell
-        const tdGames = tr.insertCell();
-        tdGames.style.textAlign = 'center';
-        tdGames.appendChild(document.createTextNode(numberOfGames));
+          // add table cell
+          const tdOwed = tr.insertCell();
+          tdOwed.style.textAlign = 'center';
+          tdOwed.appendChild(document.createTextNode("£" + amountOwed));
 
-        // add table cell
-        const tdOwed = tr.insertCell();
-        tdOwed.style.textAlign = 'center';
-        tdOwed.appendChild(document.createTextNode("£" + amountOwed));
-
-        var paymentLinkElement = document.createElement("a");
-        paymentLinkElement.setAttribute("id", "player" + currentPlayerNumber + "LinkPayment"); 
-        if (outstandingBalance > 0) {
-          var paymentLink = "https://www.paypal.me/philroffe/" + outstandingBalance;
-          var linkText = document.createTextNode("(PayPal £" + outstandingBalance + ")");
-          paymentLinkElement.appendChild(linkText);
-          paymentLinkElement.href = paymentLink;
-        }
-        // add table cell
-        const tdLink = tr.insertCell();
-        tdLink.style.textAlign = 'center';
-        tdLink.appendChild(paymentLinkElement);
-
-        // add input field for amount paid
-        var playerPaymentAmountElement = document.createElement("input"); 
-        playerPaymentAmountElement.setAttribute("type", "text"); 
-        playerPaymentAmountElement.setAttribute("id", "player" + currentPlayerNumber + "AmountPayment"); 
-        playerPaymentAmountElement.setAttribute("name", currentPlayerNumber + "myPayments[]"); 
-        playerPaymentAmountElement.value = amountPaid;
-        playerPaymentAmountElement.hidden = true;
-        playerPaymentAmountElement.style.maxHeight = "22px";
-        playerPaymentAmountElement.style.maxWidth = "40px";
-        playerPaymentAmountElement.style.padding = "0px 0px 0px 5px";
-        // add text for amount paid
-        var paidElement = document.createElement("text");
-        paidElement.setAttribute("id", "player" + currentPlayerNumber + "PaidPayment"); 
-        if (amountPaid > 0) {
-          var text = "£" + amountPaid;
-          if (outstandingBalance == 0) {
-            text += " &#10003;";
-          } else if (outstandingBalance < 0) {
-            text += " &#10003; £" + outstandingBalance;
-          } else {
-            text += " (?) £" + outstandingBalance;
+          var paymentLinkElement = document.createElement("a");
+          paymentLinkElement.setAttribute("id", "player" + currentPlayerNumber + "LinkPayment"); 
+          if (outstandingBalance > 0) {
+            var paymentLink = "https://www.paypal.me/philroffe/" + outstandingBalance;
+            var linkText = document.createTextNode("(PayPal £" + outstandingBalance + ")");
+            paymentLinkElement.appendChild(linkText);
+            paymentLinkElement.href = paymentLink;
           }
-          paidElement.innerHTML = text;
-        }
-        // add table cell
-        const tdPaid = tr.insertCell();
-        tdPaid.style.textAlign = 'center';
-        tdPaid.appendChild(paidElement);
-        tdPaid.appendChild(playerPaymentAmountElement);
-        
-        overallGamesTotal += numberOfGames;
-        overallOwesTotal += amountOwed;
-        overallPaidTotal += amountPaid;
+          // add table cell
+          const tdLink = tr.insertCell();
+          tdLink.style.textAlign = 'center';
+          tdLink.appendChild(paymentLinkElement);
 
-        currentPlayerNumber++;
+          // add input field for amount paid
+          var playerPaymentAmountElement = document.createElement("input"); 
+          playerPaymentAmountElement.setAttribute("type", "text"); 
+          if (showEditTotals) {
+            playerPaymentAmountElement.setAttribute("id", "player" + currentPlayerNumber + "AmountPayment"); 
+            playerPaymentAmountElement.setAttribute("name", currentPlayerNumber + "myPayments[]"); 
+          }
+          playerPaymentAmountElement.value = amountPaid;
+          playerPaymentAmountElement.hidden = true;
+          playerPaymentAmountElement.style.maxHeight = "22px";
+          playerPaymentAmountElement.style.maxWidth = "40px";
+          playerPaymentAmountElement.style.padding = "0px 0px 0px 5px";
+          // add text for amount paid
+          var paidElement = document.createElement("text");
+          paidElement.setAttribute("id", "player" + currentPlayerNumber + "PaidPayment"); 
+          if (amountPaid > 0) {
+            var text = "£" + amountPaid;
+            if (outstandingBalance == 0) {
+              text += " &#10003;";
+            } else if (outstandingBalance < 0) {
+              text += " &#10003; £" + outstandingBalance;
+            } else {
+              text += " (?) £" + outstandingBalance;
+            }
+            paidElement.innerHTML = text;
+          }
+          // add table cell
+          const tdPaid = tr.insertCell();
+          tdPaid.style.textAlign = 'center';
+          tdPaid.appendChild(paidElement);
+          tdPaid.appendChild(playerPaymentAmountElement);
+          
+          overallGamesTotal += numberOfGames;
+          overallOwesTotal += amountOwed;
+          overallPaidTotal += amountPaid;
+
+          currentPlayerNumber++;
+        }
       })
 
-      // create new row for table
-      const tr = tbl.insertRow();
-      const tdNameTotal = tr.insertCell();
+      if (showEditTotals) {
+        // create new row for table
+        const tr = tbl.insertRow();
+        const tdNameTotal = tr.insertCell();
 
-      // games total
-      const tdGamesTotal = tr.insertCell();
-      tdGamesTotal.style.textAlign = 'center';
-      tdGamesTotal.appendChild(document.createTextNode(overallGamesTotal));
-      // owes total
-      const tdOwesTotal = tr.insertCell();
-      tdOwesTotal.style.textAlign = 'center';
-      tdOwesTotal.appendChild(document.createTextNode("£" + overallOwesTotal));
-      // outstanding total
-      const tdOutstandingTotal = tr.insertCell();
-      tdOutstandingTotal.style.textAlign = 'center';
-      tdOutstandingTotal.appendChild(document.createTextNode("£" + (overallOwesTotal - overallPaidTotal)));
-      // tdOutstandingTotal total
-      const tdPaidTotal = tr.insertCell();
-      tdPaidTotal.style.textAlign = 'center';
-      tdPaidTotal.appendChild(document.createTextNode("£" + overallPaidTotal));
+        // games total
+        const tdGamesTotal = tr.insertCell();
+        tdGamesTotal.style.textAlign = 'center';
+        tdGamesTotal.appendChild(document.createTextNode(overallGamesTotal));
+        // owes total
+        const tdOwesTotal = tr.insertCell();
+        tdOwesTotal.style.textAlign = 'center';
+        tdOwesTotal.appendChild(document.createTextNode("£" + overallOwesTotal));
+        // outstanding total
+        const tdOutstandingTotal = tr.insertCell();
+        tdOutstandingTotal.style.textAlign = 'center';
+        tdOutstandingTotal.appendChild(document.createTextNode("£" + (overallOwesTotal - overallPaidTotal)));
+        // tdOutstandingTotal total
+        const tdPaidTotal = tr.insertCell();
+        tdPaidTotal.style.textAlign = 'center';
+        tdPaidTotal.appendChild(document.createTextNode("£" + overallPaidTotal));
+      }
     }
 
 
