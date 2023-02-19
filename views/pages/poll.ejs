@@ -69,14 +69,6 @@
         </div>
 
         <div style="clear:both;"></div>
-        <br>For admin access only.
-        <div id="tempPasswordEntryDiv">
-          <form>
-          <input type="password" id="passwordInput" placeholder="Enter Password" minlength="8" required>
-          <button type="submit" id="checkPasswordButton" onclick="checkPassword();">Submit</button>
-          </form>
-          <a href="/auth/google" class="btn-danger"><span class="fa fa-google"></span> Sign in with Google</a>
-        </div>
 
         <div id="tempPasswordOKDiv" hidden>
           <div id="scoreHeader" class="gameheader"></div>
@@ -150,6 +142,15 @@
       document.location.href = '/poll?date=' + selectedDate + '-01'
     });
 
+
+    var user = pagedata.user;
+    if (user) {
+      document.getElementById("authHeaderSmall").innerHTML = user.name;
+      document.getElementById("authHeaderLarge").innerHTML = user.name;
+      console.log("Logged in User:", user.name);
+    }
+    
+
     var players = pagedata.data.players;
     if (!players) { players = {}; }
     var attendanceMap = pagedata.data.attendance;
@@ -192,54 +193,16 @@
     calcWeeklyTotals(ATTENDANCE);
     //calcWeeklyTotals("PAYMENT");
 
-    var adminPasswordHash = "YmlnY2hhbmNl";
-
-    // if admin cookie (feature toggle) already set then check it and auto show
-    var accessLevelCookie = getCookie("accessLevel");
-    if (accessLevelCookie == adminPasswordHash) {
+    if (user) {
+      // show edit functionality if there is a valid logged-in user
       document.getElementById("tempPasswordOKDiv").hidden = false;
-      document.getElementById("tempPasswordEntryDiv").hidden = true;
       document.getElementById("paymentsAdmin").hidden = false;
     } else {
+      // no logged-in user so ensure edit buttons are disabled
       const weekEditButtons = document.getElementsByClassName("rotated");
       for (let i = 0; i < weekEditButtons.length; i++) {
         weekEditButtons[i].disabled = true;
       }
-    }
-
-    function checkPassword() {
-      var password = document.getElementById("passwordInput").value;
-      if (btoa(password) == adminPasswordHash) {
-        document.getElementById("tempPasswordOKDiv").hidden = false;
-        document.getElementById("tempPasswordEntryDiv").hidden = true;
-        document.getElementById("paymentsAdmin").hidden = false;
-        setCookie("accessLevel", adminPasswordHash, 8);
-        const weekEditButtons = document.getElementsByClassName("rotated");
-        for (let i = 0; i < weekEditButtons.length; i++) {
-          weekEditButtons[i].disabled = false;
-        }
-      }
-    }
-    function getCookie(cname) {
-      let name = cname + "=";
-      let decodedCookie = decodeURIComponent(document.cookie);
-      let ca = decodedCookie.split(';');
-      for(let i = 0; i <ca.length; i++) {
-        let c = ca[i];
-        while (c.charAt(0) == ' ') {
-          c = c.substring(1);
-        }
-        if (c.indexOf(name) == 0) {
-          return c.substring(name.length, c.length);
-        }
-      }
-      return "";
-    }
-    function setCookie(cname, cvalue, exhours) {
-      const d = new Date();
-      d.setTime(d.getTime() + (exhours*60*60*1000));
-      let expires = "expires="+ d.toUTCString();
-      document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
     }
 
     function changeTab(tabName) {
@@ -506,7 +469,11 @@ function addPlayerListToTab(tabName) {
       newPlayerName.setAttribute("name", "myPlayers[]"); 
       if (officialPlayerName) {
         newPlayerName.setAttribute("title", officialPlayerName);
-        newPlayerName.style.background = "url(/regular.png)";
+        if (outstandingPaymentsMap[officialPlayerName]) {
+          newPlayerName.style.background = "url(/pound-payment.png)";
+        } else {
+          newPlayerName.style.background = "url(/regular.png)";
+        }
       } else {
         //newPlayerName.style.backgroundColor = "transparent";
         newPlayerName.style.background = "url(/new-icon.png)";
@@ -936,11 +903,11 @@ function addPlayerListToTab(tabName) {
             location.reload(true);
           }
         };
-        xmlhttp.open("POST", "/save-result");
+        xmlhttp.open("POST", "/save-availability");
         xmlhttp.setRequestHeader("Content-Type", "application/json");
         xmlhttp.send(JSON.stringify(gamedetails));
       } catch (error) {
-        console.error('There has been a problem with the save-result operation:', error);
+        console.error('There has been a problem with the save-availability operation:', error);
         // log this error back to the server to help with debugging
         var xmlhttp = new XMLHttpRequest();
         xmlhttp.open("POST", "/logging");
@@ -980,7 +947,6 @@ function addPlayerListToTab(tabName) {
         paydetails[playerNameElement.innerHTML] = paymentNumber;
         currentPlayerNumber++;
       })
-
 
       if (editPaymentsButton.innerHTML == "Edit") {
         // now send the POST request with the data

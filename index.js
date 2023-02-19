@@ -4,6 +4,7 @@ const PORT = process.env.PORT || 5000
 const https = require('https')
 const ical = require('node-ical');
 const request = require('request');
+const session = require('express-session');
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -27,13 +28,49 @@ var maxCacheSecs = 86400; // 1 day
 const PLAYER_UNIQUE_FILTER = "PLAYER_UNIQUE_FILTER_TYPE";
 const PLAYER_LOG_FILTER = "PLAYER_LOG_FILTER_TYPE";
 
-express()
-.use(express.static(path.join(__dirname, 'public')))
+const app = express();
+app.use(session({
+  resave: false,
+  saveUninitialized: true,
+  secret: 'SECRET' 
+}));
+/*  PASSPORT SETUP (for OAuth) */
+const passport = require('passport');
+var userProfile;
+app.use(passport.initialize());
+app.use(passport.session());
+passport.serializeUser(function(user, cb) { cb(null, user); });
+passport.deserializeUser(function(obj, cb) { cb(null, obj); });
+/*  Google AUTH  */
+const GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
+const GOOGLE_CLIENT_ID = '650268485011-edm8ul9glf6netd878rfkl4itok1n57f.apps.googleusercontent.com';
+const GOOGLE_CLIENT_SECRET = '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';
+passport.use(new GoogleStrategy({
+    clientID: GOOGLE_CLIENT_ID,
+    clientSecret: GOOGLE_CLIENT_SECRET,
+    callbackURL: "http://localhost:5000/auth/google/callback"
+  },
+  function(accessToken, refreshToken, profile, done) {
+    userProfile=profile;
+    return done(null, userProfile);
+  }
+));
+app.get('/auth/google', passport.authenticate('google', { scope : ['profile', 'email'] }));
+app.get('/auth/google/callback', 
+  passport.authenticate('google', { failureRedirect: '/error' }),
+  function(req, res) {
+    // Successful authentication, redirect success.
+    res.redirect('/poll');
+});
+
+app.use(express.static(path.join(__dirname, 'public')))
 .use(express.urlencoded({ extended: true }))
 .use(express.json())
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
+.get('/login', (req, res) => res.render('pages/auth'))
+.get('/error', (req, res) => res.send("error logging ixn"))
 .post('/services/payment', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT PAYMENT POST FROM EMAIL:', ip, req.body);
@@ -262,9 +299,12 @@ express()
     } else {
       console.log("Using CACHED bank holidays: " + Object.keys(bankHolidaysCache).length)
     }
-
     // combine database data with any additional page data
     var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, selectTab: tabName };
+    if (userProfile) {
+      //console.log(userProfile["_json"]);
+      pageData.user = userProfile["_json"];
+    }
 
     res.render('pages/poll', { pageData: pageData } );
   } catch (err) {
@@ -285,9 +325,10 @@ express()
         res.send("Error " + err);
       }
     })
-.post('/save-result', async (req, res) => {
+.post('/save-availability', async (req, res) => {
     var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
-    console.log('Got /save-result POST:', ip, JSON.stringify(req.body));
+    console.log('Got /save-availability POST:', ip, JSON.stringify(req.body));
+
     var gameMonth = req.body.gameMonth;
     var gameYear = req.body.gameYear;
     var playerName = req.body.playerName;
@@ -326,6 +367,13 @@ express()
 .post('/save-week-attendance', async (req, res) => {
     var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
     console.log('Got /save-week-attendance POST:', ip, JSON.stringify(req.body));
+    
+    if (!userProfile) {
+      console.warn('WARNING: attempting to save WEEK ATTENDANCE but user not logged in.  Denied.');
+      res.status(401).send({'result': 'Denied. User not logged in...'});
+      return;
+    }
+
     var gameWeek = req.body.gameWeek;
     var gameMonth = req.body.gameMonth;
     var gameYear = req.body.gameYear;
@@ -370,6 +418,13 @@ express()
 .post('/save-payment', async function (req, res) {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
   console.log('Got /save-payment POST:', ip, JSON.stringify(req.body));
+
+  if (!userProfile) {
+    console.warn('WARNING: attempting to save PAYMENT but user not logged in.  Denied.');
+    res.status(401).send({'result': 'Denied. User not logged in...'});
+    return;
+  }
+
   var gameMonth = req.body.gameMonth;
   var gameYear = req.body.gameYear;
   var paydetails = req.body.paydetails;
@@ -409,6 +464,13 @@ express()
 .post('/admin-save-aliases', async (req, res) => {
     var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
     console.log('Got /admin-save-aliases POST:', ip, JSON.stringify(req.body));
+
+    if (!userProfile) {
+      console.warn('WARNING: attempting to save PAYMENT but user not logged in.  Denied.');
+      res.status(401).send({'result': 'Denied. User not logged in...'});
+      return;
+    }
+
     var playerAliasMap = req.body.playerAliasMap;
 
     console.log('Inserting ALIAS data:', JSON.stringify(playerAliasMap));
