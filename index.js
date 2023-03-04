@@ -46,13 +46,15 @@ const GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_CALLBACK_URL = (process.env.GOOGLE_CALLBACK_URL) ? process.env.GOOGLE_CALLBACK_URL : "http://localhost:5000/auth/google/callback";
+const ALLOWED_ADMIN_EMAILS = (process.env.ALLOWED_ADMIN_EMAILS) ? process.env.ALLOWED_ADMIN_EMAILS : "philroffe@gmail.com";
+
 passport.use(new GoogleStrategy({
     clientID: GOOGLE_CLIENT_ID,
     clientSecret: GOOGLE_CLIENT_SECRET,
     callbackURL: GOOGLE_CALLBACK_URL
   },
   function(accessToken, refreshToken, profile, done) {
-    var allowedUsers = process.env.ALLOWED_ADMIN_EMAILS.split(",");
+    var allowedUsers = ALLOWED_ADMIN_EMAILS.split(",");
     if (profile) {
       if (allowedUsers.includes(profile["_json"].email)) {
         userProfile = profile;
@@ -322,16 +324,16 @@ app.use(express.static(path.join(__dirname, 'public')))
       pageData.user = userProfile["_json"];
     }
 
-    var playerAliasMap = {};
+    var playerAliasData = {};
     if (userProfile) {
       //console.log('Generating ALIASES page with data');
       var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-      playerAliasMap = playerAliasDoc.data();
-      if (!playerAliasMap) {
-        playerAliasMap = {};
+      playerAliasData = playerAliasDoc.data();
+      if (!playerAliasData) {
+        playerAliasData = {};
       }
     }
-    pageData.playerAliasMap = playerAliasMap;
+    pageData.playerAliasData = playerAliasData;
 
     res.render('pages/poll', { pageData: pageData } );
   } catch (err) {
