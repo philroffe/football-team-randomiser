@@ -26,10 +26,12 @@
   <input class="radio" id="one" name="group" type="radio" onclick="changeTab('one');" checked>
   <input class="radio" id="two" name="group" type="radio" onclick="changeTab('two');">
   <input class="radio" id="three" name="group" type="radio" onclick="changeTab('three');">
+  <input class="radio" id="four" name="group" type="radio" onclick="changeTab('four');">
   <div class="tabs">
   <label class="tab" id="one-tab" for="one">Availability</label>
   <label class="tab" id="two-tab" for="two">Attendance</label>
   <label class="tab" id="three-tab" for="three">Payments</label>
+  <label class="tab" id="four-tab" for="four">Aliases</label>
     </div>
   <div id="panels" class="panels">
   <div class="panel" id="one-panel">
@@ -56,7 +58,8 @@
   <div class="panel" id="two-panel">
     <div class="content">
       <div class="panel-title">Attendance</div>
-        <!-- Simple (insecure) way to hide a feature - a form of feature flag rather than password -->
+      To edit you need to be an admin and login (see menu).<br>
+      Tip: Auto populate by sending standard teams email to: <code>pswdkhmu@mailparser.io</code>
         <div class="panelcontentouter">
           <!-- do not put anything directly in here, use innerleft and innerright -->
           <div class="panelcontentinnerleft">
@@ -82,14 +85,29 @@
   </div>
   <div class="panel" id="three-panel">
     <div class="panel-title">Payments</div>
-    <div class="content" id="paymentsEntryDiv">
-      <div style="clear:both;"></div>
-      <div id="paymentsAdmin" hidden>
-        <button id="editPaymentsButton" style="background-color: #90EE90;" type="button" onclick="editPayments();">Edit</button>
-        <button id="cancelPaymentsButton" onclick="location.reload()" disabled>Cancel</button>
-      </div>
+    <div class="content" id="paymentsEntryDiv"></div>
+    <div style="clear:both;"></div>
+    <div id="paymentsAdmin" hidden>
+      <button id="editPaymentsButton" style="background-color: #90EE90;" type="button" onclick="editPayments();">Edit</button>
+      <button id="cancelPaymentsButton" onclick="location.reload()" disabled>Cancel</button>
     </div>
   </div>
+
+  <div class="panel" id="four-panel">
+    <div class="panel-title">Aliases</div>
+      <div class="content" id="aliasEntryDiv">
+      Active Players
+      <div id="playersAliasHeader"></div><br>
+      <button id="addAlias" style="background-color: #90EE90;" type="button" onclick="addAliasPlayer();">(+) Add Player</button>
+      <br>
+      <button id="saveAlias" style="background-color: #90EE90;" onclick="savePlayerAliases()">Save</button>
+      <button id="cancelAliasEdit" onclick="location.reload()" disabled>Cancel</button>
+      <p>Inactive Players</p>
+      <p><div id="inactivePlayersHeader"></div>
+      <br><div id="unusedPlayers"></div><br>
+    </div>
+  </div>
+
   </div>
 </div>
 
@@ -145,9 +163,11 @@
 
     var user = pagedata.user;
     if (user) {
-      document.getElementById("authHeaderSmall").innerHTML = user.name;
-      document.getElementById("authHeaderLarge").innerHTML = user.name;
-      console.log("Logged in User:", user.name);
+      document.getElementById("authHeaderSmall").innerHTML = user.given_name + " (logout)";
+      document.getElementById("authHeaderSmall").href = "/logout";
+      document.getElementById("authHeaderLarge").innerHTML = user.given_name + " (logout)";
+      document.getElementById("authHeaderLarge").href = "/logout";
+      console.log("Logged in User:", user);
     }
     
 
@@ -202,7 +222,11 @@
       const weekEditButtons = document.getElementsByClassName("rotated");
       for (let i = 0; i < weekEditButtons.length; i++) {
         weekEditButtons[i].disabled = true;
+        weekEditButtons[i].hidden = true;
       }
+      // remove the alias tab completely
+      document.getElementById("four-tab").remove();
+      document.getElementById("four").remove();
     }
 
     function changeTab(tabName) {
@@ -938,13 +962,16 @@ function addPlayerListToTab(tabName) {
       var paydetails = {};
 
       Object.keys(attendanceMap).sort().forEach(function(playerName) {
-        var playerNameElement = document.getElementById("player" + currentPlayerNumber + "NamePayment"); 
+        var playerNameElement = document.getElementById("player" + playerName + "NamePayment"); 
         var playerPaymentAmountElement = document.getElementById("player" + currentPlayerNumber + "AmountPayment"); 
         var paymentLinkElement = document.getElementById("player" + currentPlayerNumber + "LinkPayment"); 
-        playerPaymentAmountElement.hidden = isEditing;
-        var paymentNumber = 0;
-        (playerPaymentAmountElement.value) ? paymentNumber += playerPaymentAmountElement.value : newURL += 0;
-        paydetails[playerNameElement.innerHTML] = paymentNumber;
+        if (playerPaymentAmountElement) {
+          playerPaymentAmountElement.hidden = isEditing;
+
+          var paymentNumber = 0;
+          (playerPaymentAmountElement.value) ? paymentNumber += playerPaymentAmountElement.value : newURL += 0;
+          paydetails[playerNameElement.innerHTML] = paymentNumber;
+        }
         currentPlayerNumber++;
       })
 
@@ -1072,6 +1099,7 @@ function addPaymentsTableRows(paymentsMap, showEditTotals = true) {
           // add table cell
           const tdName = tr.insertCell();
           tdName.appendChild(document.createTextNode(playerName));
+          tdName.setAttribute("id", "player" + playerName + "NamePayment");
 
           // add table cell
           const tdGames = tr.insertCell();
@@ -1160,8 +1188,27 @@ function addPaymentsTableRows(paymentsMap, showEditTotals = true) {
       }
     }
 
+    var playerAliasMap = pagedata.playerAliasMap;
 
+    var playersHeader = document.getElementById("playersHeader")
+    var playerCount = 0;
+    var collapsedPlayerList = {};
+    Object.keys(playerAliasMap).sort().forEach(function(key) {
+      //console.log("key", playerAliasMap[key]);
+      var playerName = key;
+      var playerActive = playerAliasMap[key].active;
+      var aliasesList = playerAliasMap[key].aliases;
+      addPlayer(playerName, playerActive, aliasesList);
+      
+      collapsedPlayerList[playerName.toUpperCase()] = playerName;
+      for (var i = 0; i < aliasesList.length; i ++) {
+        collapsedPlayerList[aliasesList[i].toUpperCase()] = playerName;
+      }
+    });
   </script>
+
+  <%- include ("./admin-aliases.ejs") %>
+
 </div>
 </body>
 </html>

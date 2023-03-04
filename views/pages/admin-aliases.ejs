@@ -1,34 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <%- include ("../partials/header.ejs") %>
-</head>
 
-<body class="w3-light-grey">
-  <%- include ("../partials/nav.ejs") %>
-  <!-- Page content -->
-  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
-    
-  <H3>Aliases</h3>
-  <p>Active Players</p>
-  <div id="playersHeader"></div><br>
-  <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
-  <br>
-  <button id="save" style="background-color: #90EE90;" onclick="savePlayerAliases()">Save</button>
-  <button id="cancelEdit" onclick="location.reload()" disabled>Cancel</button>
-  <p>Inactive Players</p>
-  <p><div id="inactivePlayersHeader"></div>
-  
-  <br><div id="unusedPlayers"></div><br>
-
-  <script>      
-    // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
-    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&#39;/g, "'"));
-    //console.log('Data=' + JSON.stringify(pagedata));
-
+  <script type="text/javascript">
     var playerAliasMap = pagedata.playerAliasMap;
 
-    var playersHeader = document.getElementById("playersHeader")
+    var playersAliasHeader = document.getElementById("playersAliasHeader")
     var playerCount = 0;
     var collapsedPlayerList = {};
     Object.keys(playerAliasMap).sort().forEach(function(key) {
@@ -36,7 +10,7 @@
       var playerName = key;
       var playerActive = playerAliasMap[key].active;
       var aliasesList = playerAliasMap[key].aliases;
-      addPlayer(playerName, playerActive, aliasesList);
+      addAliasPlayer(playerName, playerActive, aliasesList);
       
       collapsedPlayerList[playerName.toUpperCase()] = playerName;
       for (var i = 0; i < aliasesList.length; i ++) {
@@ -44,7 +18,7 @@
       }
     });
 
-    function addPlayer(playerName, playerActive, aliasesList) {
+    function addAliasPlayer(playerName, playerActive, aliasesList) {
       if (!playerName) {
         playerName = "";
         playerActive = true;
@@ -56,7 +30,7 @@
       var newPlayerName = document.createElement("input"); 
       newPlayerName.setAttribute("type", "text"); 
       newPlayerName.style.verticalAlign = "top";
-      newPlayerName.setAttribute("id", "player" + playerCount); 
+      newPlayerName.setAttribute("id", "player" + playerCount + "Alias"); 
       newPlayerName.setAttribute("name", "myPlayers[]"); 
       newPlayerName.value = playerName; 
 
@@ -64,7 +38,7 @@
       var newPlayerActive = document.createElement("input");
       newPlayerActive.setAttribute("type", "checkbox");  
       newPlayerActive.style.verticalAlign = "top";
-      newPlayerActive.setAttribute("id", "playerActive" + playerCount); 
+      newPlayerActive.setAttribute("id", "playerActive" + playerCount + "Alias"); 
       newPlayerActive.setAttribute("name", "myActivePlayers[]"); 
       newPlayerActive.checked = playerActive;
       newPlayerActive.style.width = "25px";
@@ -75,7 +49,7 @@
       // create text area for the aliases
       var newPlayerAliases = document.createElement("textarea"); 
       newPlayerAliases.setAttribute("type", "textarea"); 
-      newPlayerAliases.setAttribute("id", "playerAlias" + playerCount); 
+      newPlayerAliases.setAttribute("id", "playerAlias" + playerCount + "Alias"); 
       newPlayerAliases.setAttribute("name", "myPlayerAliases[]"); 
       var newPlayerAliasesText = "";
       for (var i = 0; i < aliasesList.length; i ++) {
@@ -84,7 +58,7 @@
       }
       newPlayerAliases.value = newPlayerAliasesText; 
 
-      var header = playersHeader;
+      var header = playersAliasHeader;
       if (!playerActive) {
         header = inactivePlayersHeader;
       }
@@ -97,8 +71,8 @@
 
       if (playerName == "") {
         // new player so enable the save/cancel button, and disable
-        document.getElementById("cancelEdit").disabled = false; 
-        document.getElementById("cancelEdit").style.backgroundColor = "lightsalmon";
+        document.getElementById("cancelAliasEdit").disabled = false; 
+        document.getElementById("cancelAliasEdit").style.backgroundColor = "lightsalmon";
       }
     }
 
@@ -106,9 +80,9 @@
     function savePlayerAliases(playerName, aliasesList) {
       var playerAliasMap = {};
       for (var i = 0; i < playerCount; i ++) {
-        var player = document.getElementById("player" + i).value;
-        var isActive = document.getElementById("playerActive" + i).checked;
-        var aliases = document.getElementById("playerAlias" + i).value;
+        var player = document.getElementById("player" + i + "Alias").value;
+        var isActive = document.getElementById("playerActive" + i + "Alias").checked;
+        var aliases = document.getElementById("playerAlias" + i + "Alias").value;
         var aliasesArray = aliases.trim().split('\n');
         playerAliasMap[player] = { "active": isActive, "aliases": aliasesArray };
       }
@@ -130,6 +104,3 @@
     }
 
   </script>
-  </div>
-</body>
-</html>

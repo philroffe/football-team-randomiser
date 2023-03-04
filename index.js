@@ -43,7 +43,7 @@ passport.serializeUser(function(user, cb) { cb(null, user); });
 passport.deserializeUser(function(obj, cb) { cb(null, obj); });
 /*  Google AUTH  */
 const GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
-const GOOGLE_CLIENT_ID = '650268485011-edm8ul9glf6netd878rfkl4itok1n57f.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_CALLBACK_URL = (process.env.GOOGLE_CALLBACK_URL) ? process.env.GOOGLE_CALLBACK_URL : "http://localhost:5000/auth/google/callback";
 passport.use(new GoogleStrategy({
@@ -52,7 +52,15 @@ passport.use(new GoogleStrategy({
     callbackURL: GOOGLE_CALLBACK_URL
   },
   function(accessToken, refreshToken, profile, done) {
-    userProfile=profile;
+    var allowedUsers = process.env.ALLOWED_ADMIN_EMAILS.split(",");
+    if (profile) {
+      if (allowedUsers.includes(profile["_json"].email)) {
+        userProfile = profile;
+      } else {
+        userProfile = undefined;
+        console.warn("WARNING: Denied attempt to login from unknown user: " + profile["_json"].email);
+      }
+    }
     return done(null, userProfile);
   }
 ));
@@ -71,7 +79,14 @@ app.use(express.static(path.join(__dirname, 'public')))
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index'))
 .get('/login', (req, res) => res.render('pages/auth'))
-.get('/error', (req, res) => res.send("error logging ixn"))
+.get('/error', (req, res) => res.send("error logging in - invalid account for this site"))
+.get('/logout', function(req, res, next){
+  req.logout(function(err) {
+    if (err) { return next(err); }
+    userProfile = undefined;
+    res.redirect('/poll');
+  });
+})
 .post('/services/payment', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT PAYMENT POST FROM EMAIL:', ip, req.body);
@@ -89,7 +104,7 @@ app.use(express.static(path.join(__dirname, 'public')))
 
   try {
     //TODO identify previous month (emailDate.getMonth()-1);
-    var gameMonth = "01"
+    var gameMonth = "02"
     var gameYear = emailDate.getFullYear();
     var paydetails = {};
     var amount = Number(amountReceived.split(' ')[0].replace(/£/, ''));
@@ -307,6 +322,17 @@ app.use(express.static(path.join(__dirname, 'public')))
       pageData.user = userProfile["_json"];
     }
 
+    var playerAliasMap = {};
+    if (userProfile) {
+      //console.log('Generating ALIASES page with data');
+      var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+      playerAliasMap = playerAliasDoc.data();
+      if (!playerAliasMap) {
+        playerAliasMap = {};
+      }
+    }
+    pageData.playerAliasMap = playerAliasMap;
+
     res.render('pages/poll', { pageData: pageData } );
   } catch (err) {
     console.error(err);
@@ -442,26 +468,6 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.send({'result': err});
   }
  })
-.get('/admin-aliases', async (req, res) => {
-  try {
-    console.log('Generating ALIASES page with data');
-    var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-    var playerAliasMap = playerAliasDoc.data();
-    if (!playerAliasMap) {
-      playerAliasMap = {};
-    }
-
-    // combine database data with supplimentary game data and render the page
-    var pageData = { playerAliasMap: playerAliasMap };
-
-    var rowdata = await queryDatabaseAndBuildPlayerList("2022-12-01");
-    //console.log('rowdata......... Generating TEAMS page with data', rowdata);
-    res.render('pages/admin-aliases', { pageData: pageData, rowdata: rowdata} );
-  } catch (err) {
-    console.error(err);
-    res.send("Error " + err);
-  }
-})
 .post('/admin-save-aliases', async (req, res) => {
     var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
     console.log('Got /admin-save-aliases POST:', ip, JSON.stringify(req.body));
@@ -571,14 +577,20 @@ async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3)
               amountPaid = paydetailsMap[playerName];
             }
             //console.log(playerName, amountOwed, paydetailsMap[playerName], outstandingBalance)
+            var totalAmountOwed = 0;
+            var totalNoGames = Number(numberOfGames);
+            var totalOutstandingBalance = Number(outstandingBalance);
             if (outstandingBalance != 0) {
-              var totalAmountOwed = 0;
               if (playersUnPaid[playerName]) {
                 totalAmountOwed = playersUnPaid[playerName]["amountOwed"] + amountOwed;
+                totalNoGames = playersUnPaid[playerName]["numberOfGames"] + Number(numberOfGames);
+                totalOutstandingBalance = playersUnPaid[playerName]["outstandingBalance"] + Number(outstandingBalance);
               } else {
                 totalAmountOwed = amountOwed;
+                totalNoGames = Number(numberOfGames);
+                totalOutstandingBalance = Number(outstandingBalance);
               }
-              playersUnPaid[playerName] = { "numberOfGames": Number(numberOfGames), "amountOwed": Number(totalAmountOwed), "amountPaid": Number(amountPaid), "outstandingBalance": Number(outstandingBalance)}
+              playersUnPaid[playerName] = { "numberOfGames": Number(totalNoGames), "amountOwed": Number(totalAmountOwed), "amountPaid": Number(amountPaid), "outstandingBalance": Number(totalOutstandingBalance)}
             }
           }
         })
