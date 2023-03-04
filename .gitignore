@@ -8,6 +8,8 @@ npm-debug.log
 .DS_Store
 keyfile.json
 iam-policy.json
+.app-prod.yaml
+.env-local
 
 # Docker
 Dockerfile
