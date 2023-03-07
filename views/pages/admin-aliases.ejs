@@ -3,7 +3,7 @@
     var playerAliasMap = pagedata.playerAliasData;
 
     var playersAliasHeader = document.getElementById("playersAliasHeader")
-    var playerCount = 0;
+    var playerAliasCount = 0;
     var collapsedPlayerList = {};
     Object.keys(playerAliasMap).sort().forEach(function(key) {
       //console.log("key", playerAliasMap[key]);
@@ -30,7 +30,7 @@
       var newPlayerName = document.createElement("input"); 
       newPlayerName.setAttribute("type", "text"); 
       newPlayerName.style.verticalAlign = "top";
-      newPlayerName.setAttribute("id", "player" + playerCount + "Alias"); 
+      newPlayerName.setAttribute("id", "player" + playerAliasCount + "Alias"); 
       newPlayerName.setAttribute("name", "myPlayers[]"); 
       newPlayerName.value = playerName; 
 
@@ -38,7 +38,7 @@
       var newPlayerActive = document.createElement("input");
       newPlayerActive.setAttribute("type", "checkbox");  
       newPlayerActive.style.verticalAlign = "top";
-      newPlayerActive.setAttribute("id", "playerActive" + playerCount + "Alias"); 
+      newPlayerActive.setAttribute("id", "playerActive" + playerAliasCount + "Alias"); 
       newPlayerActive.setAttribute("name", "myActivePlayers[]"); 
       newPlayerActive.checked = playerActive;
       newPlayerActive.style.width = "25px";
@@ -49,7 +49,7 @@
       // create text area for the aliases
       var newPlayerAliases = document.createElement("textarea"); 
       newPlayerAliases.setAttribute("type", "textarea"); 
-      newPlayerAliases.setAttribute("id", "playerAlias" + playerCount + "Alias"); 
+      newPlayerAliases.setAttribute("id", "playerAlias" + playerAliasCount + "Alias"); 
       newPlayerAliases.setAttribute("name", "myPlayerAliases[]"); 
       var newPlayerAliasesText = "";
       for (var i = 0; i < aliasesList.length; i ++) {
@@ -67,7 +67,7 @@
       header.appendChild(newPlayerAliases);
       header.appendChild(document.createElement("br"));
 
-      playerCount++;
+      playerAliasCount++;
 
       if (playerName == "") {
         // new player so enable the save/cancel button, and disable
@@ -79,7 +79,7 @@
 
     function savePlayerAliases(playerName, aliasesList) {
       var playerAliasMap = {};
-      for (var i = 0; i < playerCount; i ++) {
+      for (var i = 0; i < playerAliasCount; i ++) {
         var player = document.getElementById("player" + i + "Alias").value;
         var isActive = document.getElementById("playerActive" + i + "Alias").checked;
         var aliases = document.getElementById("playerAlias" + i + "Alias").value;

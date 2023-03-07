@@ -1188,23 +1188,6 @@ function addPaymentsTableRows(paymentsMap, showEditTotals = true) {
       }
     }
 
-    var playerAliasMap = pagedata.playerAliasMap;
-
-    var playersHeader = document.getElementById("playersHeader")
-    var playerCount = 0;
-    var collapsedPlayerList = {};
-    Object.keys(playerAliasMap).sort().forEach(function(key) {
-      //console.log("key", playerAliasMap[key]);
-      var playerName = key;
-      var playerActive = playerAliasMap[key].active;
-      var aliasesList = playerAliasMap[key].aliases;
-      addPlayer(playerName, playerActive, aliasesList);
-      
-      collapsedPlayerList[playerName.toUpperCase()] = playerName;
-      for (var i = 0; i < aliasesList.length; i ++) {
-        collapsedPlayerList[aliasesList[i].toUpperCase()] = playerName;
-      }
-    });
   </script>
 
   <%- include ("./admin-aliases.ejs") %>
