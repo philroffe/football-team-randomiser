@@ -321,6 +321,8 @@ app.use(express.static(path.join(__dirname, 'public')))
       try {
         console.log('Generating TEAMS page with data');
         var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
+        var playerratio = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date);
+        rowdata.playerratio = playerratio;
         var nextMonday = getDateNextMonday();
         // combine database data with supplimentary game data and render the page
         var pageData = { data: rowdata, nextMonday: nextMonday.toISOString() };
@@ -629,6 +631,96 @@ function downloadPage(url) {
   });
 }
 
+async function queryDatabaseAndCalcGamesPlayedRatio(reqDate, noOfMonths = 3) {
+    var requestedDate = new Date();
+    if (reqDate) {
+      requestedDate = new Date(reqDate);
+    } else {
+      // if date not specified just default to beginning of this month
+      requestedDate.setDate(1);
+    }
+    
+    var playersGamesPlayedRatio = {};
+    playersGamesPlayedRatio["stats"] = {};
+    playersGamesPlayedRatio["players"] = {};
+    var maxNumberOfGameWeeks = 0;
+    for (var i = 0; i < noOfMonths; i ++) {
+      var thisDate = new Date(requestedDate);
+      thisDate.setMonth(requestedDate.getMonth() - i);
+      var gameYear = thisDate.getFullYear();
+      var gameMonth = thisDate.toISOString().split('-')[1];
+      var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
+      console.log('GETTING ATTENDANCE data:', gamesCollectionId);
+      const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+      var existingDoc = await docRef.get();
+      if (existingDoc.data()) {
+        var attendanceData = existingDoc.data();
+        var attendanceMap = {};
+
+        // get list of all players for the month
+        var allPlayers = {};
+        var maxWeekNumber = 0;
+        // get all players for the month
+        for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
+          if (attendanceData[weekNumber]) {
+            allPlayers = {
+              ...allPlayers,
+              ...Object.keys(attendanceData[weekNumber])
+            };
+            maxWeekNumber = weekNumber;
+          }
+        }
+        if (maxWeekNumber > 0) {
+          maxNumberOfGameWeeks += (maxWeekNumber + 1);
+        }
+        //console.log('maxNumberOfGameWeeks:', maxNumberOfGameWeeks, "maxWeekNumber:", maxWeekNumber);
+        //console.log('USING PLAYERS:', allPlayers);
+
+        playersGamesPlayedRatio["stats"]["totalNumberOfGameWeeks"] = maxNumberOfGameWeeks;
+        playersGamesPlayedRatio["stats"]["totalNumberMonths"] = noOfMonths;
+
+
+        // loop through players, add amount owed each week, subtract total amount paid for month
+        Object.values(allPlayers).sort().forEach(function(playerName) {
+          if (playerName != "scores") {
+            // count the amount owed for each game that they actively played
+            var numberOfGamesPlayed = 0;
+            var numberOfGamesWon = 0;
+            for (var weekNumber = 0; weekNumber <= maxWeekNumber; weekNumber ++) {
+              if (attendanceData[weekNumber]) {
+                if (attendanceData[weekNumber][playerName]) { numberOfGamesPlayed++; }
+                if (attendanceData[weekNumber].scores) {
+                  if (attendanceData[weekNumber].scores.winner == attendanceData[weekNumber][playerName]) {
+                    numberOfGamesWon++;
+                  }
+                }
+              }
+            }
+
+            // now add to any existing totals
+            var totalGamesPlayed = numberOfGamesPlayed;
+            var totalGamesWon = numberOfGamesWon;
+            if (playersGamesPlayedRatio["players"][playerName]) {
+              totalGamesPlayed = totalGamesPlayed + playersGamesPlayedRatio["players"][playerName]["totalGamesPlayed"];
+              totalGamesWon = totalGamesWon + playersGamesPlayedRatio["players"][playerName]["totalGamesWon"];
+            }
+            playersGamesPlayedRatio["players"][playerName] = { "totalGamesPlayed": Number(totalGamesPlayed), "totalGamesWon": Number(totalGamesWon)}
+          }
+        })
+      }
+    }
+
+    // now calculate the player ratios
+    Object.keys(playersGamesPlayedRatio.players).forEach(function(player) {
+      var playerDetails = playersGamesPlayedRatio.players[player];
+      var playedRatio = playerDetails.totalGamesPlayed / maxNumberOfGameWeeks;
+      var winRatio = playerDetails.totalGamesWon / playerDetails.totalGamesPlayed;
+      playersGamesPlayedRatio.players[player].playedRatio = playedRatio;
+      playersGamesPlayedRatio.players[player].winRatio = winRatio;
+    });
+
+    return playersGamesPlayedRatio;
+}
 
 async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3) {
     var requestedDate = new Date();
