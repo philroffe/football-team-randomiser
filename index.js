@@ -27,6 +27,7 @@ var cacheLastRefresh = new Date();
 var maxCacheSecs = 86400; // 1 day
 const PLAYER_UNIQUE_FILTER = "PLAYER_UNIQUE_FILTER_TYPE";
 const PLAYER_LOG_FILTER = "PLAYER_LOG_FILTER_TYPE";
+const COST_PER_GAME = 4;
 
 const app = express();
 app.use(session({
@@ -89,6 +90,56 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.redirect('/poll');
   });
 })
+.post('/create-payments-for-month', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+  console.log('Got /create-payments-for-month POST:', ip, JSON.stringify(req.body));
+
+  var gameMonth = req.body.gameMonth;
+  var gameYear = req.body.gameYear;
+  var gameId = gameYear + "-" + gameMonth + "-01";
+  try {
+    var gamesCollectionId = "games_" + gameId;
+    console.log('Setting month status to closed:', gamesCollectionId);
+    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+
+    var existingDoc = await docRef.get();
+    var attendanceData = existingDoc.data();
+
+    var savedata = { "status": "closed" };
+    await docRef.set(savedata, { merge: true });
+
+    // now request payment for all game attendance
+    var mondaysDates = mondaysInMonth(Number(gameMonth), Number(gameYear));  //=> [ 7,14,21,28 ]
+    for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
+      console.log("week", weekNumber)
+      var playerList = attendanceData[weekNumber];
+      if (playerList) {
+        Object.keys(playerList).forEach(await function(playerName) {
+          // check a real player (not the scores) and that the player actually played
+          if ((playerName != "scores") && (playerList[playerName] > 0)) {
+            var gameWeek = gameId + "_" + weekNumber;
+
+            //const playerLedgerDocRef = firestore.collection("PAYMENTS").doc(playerName);
+            const playerLedgerDocRef = firestore.collection("OPEN_LEDGER").doc(playerName);
+            var gameDay = mondaysDates[weekNumber];
+            if (gameDay < 10) {
+              gameDay = "0" + gameDay;
+            }
+            var thisDate = gameYear + "-" + gameMonth + "-" + gameDay;
+            var playerTransactionSavedata = {};
+            playerTransactionSavedata["charge_" + thisDate] = { "amount": (COST_PER_GAME * -1) };
+            console.log('Adding game cost:', playerName, thisDate, JSON.stringify(playerTransactionSavedata));
+            playerLedgerDocRef.set(playerTransactionSavedata, { merge: true });
+          }
+        });
+      }
+    }
+    res.json({'result': 'OK'})
+  } catch (err) {
+    console.error(err);
+    res.send({'result': err});
+  }
+})
 .post('/services/payment', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT PAYMENT POST FROM EMAIL:', ip, req.body);
@@ -97,6 +148,16 @@ app.use(express.static(path.join(__dirname, 'public')))
   var transactionId = req.body.transaction_id;
   var payeeName = req.body.payee_name.replace(/:/, '');
   var amountReceived = req.body.amount_received;
+  var amount = Number(amountReceived.split(' ')[0].replace(/£/, ''));
+
+  var dayString = "" + transactionDate.getDate();
+  if (dayString.length == 1) {
+    dayString = "0" + dayString;
+  }
+  var monthString = "" + (transactionDate.getMonth()+1);
+  if (monthString.length == 1) {
+    monthString = "0" + monthString;
+  }
 
   // read the list of players and aliases
   var playerAliasMaps = {};
@@ -105,19 +166,61 @@ app.use(express.static(path.join(__dirname, 'public')))
   var officialPlayerName = getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
 
   try {
-    //TODO identify previous month (emailDate.getMonth()-1);
-    var gameMonth = "02"
-    var gameYear = emailDate.getFullYear();
-    var paydetails = {};
-    var amount = Number(amountReceived.split(' ')[0].replace(/£/, ''));
-    paydetails[officialPlayerName] = amount;
+    // read list of outstanding payments for the player
+    const playerClosedLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc(officialPlayerName);
+    var thisDate = transactionDate.getFullYear() + "-" + monthString + "-" + dayString;
+    var playerTransactionName = "payment_" + thisDate + "_" + transactionId;
+    var playerClosedLedgerDoc = await playerClosedLedgerDocRef.get();
+    if (playerClosedLedgerDoc.data() && playerClosedLedgerDoc.data()[playerTransactionName]) {
+      console.warn("transaction already exists, skipping to avoid double counting...", playerTransactionName);
+      res.send({'result': 'Already exists: ' + playerTransactionName});
+      return;
+    }
+    var playerTransactionSavedata = {};
+    playerTransactionSavedata[playerTransactionName] = { "amount": amount, "paypalTransactionId": transactionId };
+    console.log('Adding PAYMENTS:', officialPlayerName, thisDate, JSON.stringify(playerTransactionSavedata));
+    playerClosedLedgerDocRef.set(playerTransactionSavedata, { merge: true });
 
-    var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
-    console.log('Inserting payment DB data:', gamesCollectionId, JSON.stringify(paydetails));
-    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
-    var savedata = { "paydetails": paydetails };
-    await docRef.set(savedata, { merge: true });
-    
+    ////////////////// TODO: Store payment in dead-letter queue if officialPlayerName not found (throws exception)
+
+    // now mark off the games for that payment
+    const playerOpenLedgerDocRef = firestore.collection("OPEN_LEDGER").doc(officialPlayerName);
+    var playerLedgerDoc = await playerOpenLedgerDocRef.get();
+    if (playerLedgerDoc.data()) {
+      var playerLedgerData = playerLedgerDoc.data();
+      var amountLeft = amount;
+      if (Object.keys(playerLedgerData).length > 0) {
+        Object.keys(playerLedgerData).sort().forEach( async function(transactionName) {
+          if (transactionName.startsWith("charge_")) {
+            var thisTransaction = playerLedgerData[transactionName];
+            if (amountLeft >= (thisTransaction.amount * -1)) {
+              console.log('Moving transaction from open to closed ledger:', officialPlayerName, amountLeft, thisTransaction.amount, JSON.stringify(thisTransaction));
+              amountLeft += thisTransaction.amount;
+              thisTransaction.paid = transactionId;
+              // add it to the closed ledger
+              var closedTransaction = {};
+              closedTransaction[transactionName] = thisTransaction;
+              playerClosedLedgerDocRef.set( closedTransaction, { merge: true });
+              // remove this transaction from the open ledger
+              delete playerLedgerData[transactionName];
+            }
+          }
+        });
+      }
+      if (amountLeft != amount) {
+        // some ledger transactions have changed so update
+        if (Object.keys(playerLedgerData).length == 0) {
+          playerOpenLedgerDocRef.delete();
+        } else {
+          playerOpenLedgerDocRef.set(playerLedgerData);
+        }
+      }
+
+      ////////////////// TODO: Store amount left if >0
+
+      console.log('Got playerLedgerData for:', officialPlayerName, JSON.stringify(playerLedgerData));
+    }
+
     res.json({'result': 'OK'})
   } catch (err) {
     console.error(err);
@@ -202,6 +305,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         await docRef.set(req.body);
       }
     }
+    attendanceMapByYearCache = {}; // clear the stats cache - needs recalculating next time it reloads
     res.json({'result': 'OK'})
   } catch (err) {
     console.error(err);
@@ -293,8 +397,12 @@ app.use(express.static(path.join(__dirname, 'public')))
     var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
     console.log('SCORES POLL page with data' + JSON.stringify(rowdata.scores));
 
-
-    var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments(req.query.date);
+    var nextMonday = getDateNextMonday();
+    var calcPaymentsFromDate = nextMonday;
+    if (req.query.date) {
+      calcPaymentsFromDate = req.query.date;
+    }
+    var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments(calcPaymentsFromDate);
     rowdata.outstandingPayments = outstandingPayments;
     console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
 
@@ -521,6 +629,7 @@ function downloadPage(url) {
   });
 }
 
+
 async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3) {
     var requestedDate = new Date();
     if (reqDate) {
@@ -530,76 +639,34 @@ async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3)
       requestedDate.setDate(1);
     }
 
+    const paymentsCollection = firestore.collection("OPEN_LEDGER");
+    const allPaymentsDocs = await paymentsCollection.get();
     var playersUnPaid = {};
-    for (var i = 0; i < noOfMonths; i ++) {
-      requestedDate.setMonth(requestedDate.getMonth() - 1);
-      var gameYear = requestedDate.getFullYear();
-      //var gameMonth = gameMonth.getMonth();
-      var gameMonth = requestedDate.toISOString().split('-')[1];
-      var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
-      //JSON.stringify(paydetails)
-      console.log('GETTING ATTENDANCE data:', gamesCollectionId);
-      const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
-      var existingDoc = await docRef.get();
-      if (existingDoc.data()) {
-        var attendanceData = existingDoc.data();
-        var paydetailsMap = existingDoc.data().paydetails;
-        paydetailsMap = (paydetailsMap) ? paydetailsMap : {};
-
-        // get list of all players for the month
-        var allPlayers = {};
-        var maxWeekNumber = 0;
-        // get all players for the month
-        for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
-          if (attendanceData[weekNumber]) {
-            allPlayers = {
-              ...allPlayers,
-              ...Object.keys(attendanceData[weekNumber])
-            };
-            maxWeekNumber = weekNumber;
-          }
+    allPaymentsDocs.forEach(doc => {
+      var playerName = doc.id;
+      var playerPaymentData = doc.data();
+      var totalCharges = 0;
+      var totalPayments = 0;
+      Object.keys(playerPaymentData).sort().forEach(function(transaction) {
+      //console.log('GOT transaction:', playerName, transaction, playerPaymentData[transaction]);
+        if (transaction.startsWith("charge_")) {
+          // TODO: Consider whether noOfMonths is still needed and if a filter is needed
+          totalCharges += playerPaymentData[transaction].amount;
         }
-        //console.log('USING PLAYERS:', allPlayers);
-
-        // loop through players, add amount owed each week, subtract total amount paid for month
-        Object.values(allPlayers).sort().forEach(function(playerName) {
-          if (playerName != "scores") {
-            // count the amount owed for each game that they actively played
-            var numberOfGames = 0;
-            var amountOwed = 0;
-            var amountPaid = 0;
-            var outstandingBalance = 0;
-            for (var weekNumber = 0; weekNumber <= maxWeekNumber; weekNumber ++) {
-              if (attendanceData[weekNumber][playerName]) { numberOfGames++; amountOwed += 4; }
-            }
-
-            outstandingBalance = amountOwed;
-            if (paydetailsMap[playerName]) {
-              outstandingBalance = amountOwed - paydetailsMap[playerName];
-              amountPaid = paydetailsMap[playerName];
-            }
-            //console.log(playerName, amountOwed, paydetailsMap[playerName], outstandingBalance)
-            var totalAmountOwed = 0;
-            var totalNoGames = Number(numberOfGames);
-            var totalOutstandingBalance = Number(outstandingBalance);
-            if (outstandingBalance != 0) {
-              if (playersUnPaid[playerName]) {
-                totalAmountOwed = playersUnPaid[playerName]["amountOwed"] + amountOwed;
-                totalNoGames = playersUnPaid[playerName]["numberOfGames"] + Number(numberOfGames);
-                totalOutstandingBalance = playersUnPaid[playerName]["outstandingBalance"] + Number(outstandingBalance);
-              } else {
-                totalAmountOwed = amountOwed;
-                totalNoGames = Number(numberOfGames);
-                totalOutstandingBalance = Number(outstandingBalance);
-              }
-              playersUnPaid[playerName] = { "numberOfGames": Number(totalNoGames), "amountOwed": Number(totalAmountOwed), "amountPaid": Number(amountPaid), "outstandingBalance": Number(totalOutstandingBalance)}
-            }
-          }
-        })
+        if (transaction.startsWith("payment_")) {
+          totalPayments += playerPaymentData[transaction].amount;
+        }
+      })
+      //console.log('GOT player payment data:', playerName, totalCharges, totalPayments);
+      var outstandingBalance = totalCharges + totalPayments;
+      if (outstandingBalance < 0) {
+        totalAmountOwed = (totalCharges * -1);
+        totalNoGames = (totalAmountOwed / COST_PER_GAME) - (totalPayments / COST_PER_GAME);
+        totalOutstandingBalance = (outstandingBalance * -1);
+        playersUnPaid[playerName] = { "numberOfGames": totalNoGames, "amountOwed": (outstandingBalance * -1), "amountPaid": 0, "outstandingBalance": totalOutstandingBalance}
       }
-    }
+    });
 
-    //outstandingPaymentsThisMonthMap[playerName] = { "numberOfGames": numberOfGames, "amountOwed": amountOwed, "amountPaid": amountPaid, "outstandingBalance": outstandingBalance}
     return playersUnPaid;
 }
 

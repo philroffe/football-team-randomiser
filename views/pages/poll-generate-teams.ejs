@@ -57,10 +57,12 @@
   function generateTeams() {
     // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
     var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
-    console.log('Data=' + JSON.stringify(pagedata));
+    //console.log('Data=' + JSON.stringify(pagedata));
 
     var players = pagedata.data.players;
     if (!players) { players = {}; }
+    var playerratio = pagedata.data.playerratio;
+    if (!playerratio) { playerratio = {}; }
     var gameMonth = pagedata.data.gameMonth;
     if (!gameMonth) gameMonth = monthDateNumericFormat.format(todayDate);
     var gameYear = pagedata.data.gameYear;
@@ -69,6 +71,25 @@
     pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
     console.log(pollDate);
     var gameMonthString = monthDateFormat.format(todayDate);
+
+    console.log("playerratio=", playerratio);
+    if (playerratio.stats) {
+      // playing around with the stats
+      var totalNumberOfGameWeeks = playerratio.stats.totalNumberOfGameWeeks;
+
+      console.log("Sorted Played Ratios=", getSortedPlayerMap(playerratio.players, "playedRatio"));
+      console.log("Sorted Win Ratios=", getSortedPlayerMap(playerratio.players, "winRatio"));
+    }
+
+    function getSortedPlayerMap(orginialPlayerMap, sortFieldName) {
+      // sort by games played
+      let sortable = [];
+      Object.keys(playerratio.players).forEach(function(player) {
+        sortable.push([player, playerratio.players[player][sortFieldName]]);
+      });
+      sortable.sort(function(a, b) { return a[1] - b[1]; });
+      return sortable;
+    }
 
     function mondaysInMonth(m,y) {
       var days = new Date(y,m,0).getDate();
