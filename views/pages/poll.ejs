@@ -75,9 +75,9 @@
 
         <div id="tempPasswordOKDiv" hidden>
           <div id="scoreHeader" class="gameheader"></div>
-          <button id="copyAvailabilityButton" style="background-color: #90EE90;" type="button" onclick="copyAttendanceFromAvailability();" disabled>&larr; Copy from Availability</button>
           <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled>Save</button>
           <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled>Cancel</button>
+          <p><button id="closeMonthGeneratePaymentsButton" style="background-color: #90EE90;" type="button" onclick="closeMonthGeneratePayments();" disabled>Close Month & Copy Availability</button>
 
           <p>Problem with the list? <a href="/admin-aliases">Check the aliases...</a>
         </div>
@@ -171,6 +171,7 @@
     }
     
 
+    //console.log("pagedata", pagedata);
     var players = pagedata.data.players;
     if (!players) { players = {}; }
     var attendanceMap = pagedata.data.attendance;
@@ -180,12 +181,24 @@
     if (!paydetailsMap) { paydetailsMap = {}; }
     var outstandingPaymentsMap = pagedata.data.outstandingPayments;
     if (!outstandingPaymentsMap) { outstandingPaymentsMap = {}; }
+    /*
+    console.log("players", players);
+    console.log("attendanceMap", attendanceMap);
+    console.log("scoresMap", scoresMap);
+    console.log("paydetailsMap", paydetailsMap);
+    console.log("outstandingPaymentsMap", outstandingPaymentsMap);
+    */
 
     var playerAliasMaps = pagedata.data.playerAliasMaps;
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
     var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap));
-    //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
+    /*
+    console.log("playerAliasMaps", playerAliasMaps);
+    console.log("playerToAliasMap", playerToAliasMap);
+    console.log("aliasToPlayerMap", aliasToPlayerMap);
+    console.log("playerNameSuggestions", playerNameSuggestions);
+    */
 
     // now quickly add any players not yet attended to the attendanceMap
     Object.keys(players).sort().forEach(function(player) {
@@ -195,7 +208,7 @@
         //console.log("player:" + player + " _officialPlayerName:" + officialPlayerName);
         if (!attendanceMap[officialPlayerName]) {
           // player name and official name not found, so treat as a new player and add blank entry
-          attendanceMap[player] = {};
+          attendanceMap[officialPlayerName] = {};
         }
       }
     });
@@ -227,6 +240,24 @@
       // remove the alias tab completely
       document.getElementById("four-tab").remove();
       document.getElementById("four").remove();
+    }
+
+
+    // check if all scores are in (enables close month and gen payments button)
+    var allScoresCompleted = true;
+    if (scoresMap.status != "closed") {
+      for (var i = 0; i < mondaysDates.length; i ++) {
+        if (!document.getElementById("week" + i + "Editattendance").hidden) {
+          if (!scoresMap[i]) {
+            allScoresCompleted = false;
+          }
+        }
+      }
+      if (allScoresCompleted) {
+        document.getElementById("closeMonthGeneratePaymentsButton").disabled = false; 
+      }
+    } else {
+      document.getElementById("closeMonthGeneratePaymentsButton").innerHTML = "Month already closed"
     }
 
     function changeTab(tabName) {
@@ -268,6 +299,23 @@
             default: return "th";
         }
     }
+
+
+function closeMonthGeneratePayments() {
+  var attendanceDetails = { "gameYear": gameYear, "gameMonth": gameMonth };
+  // now send the POST request with the data
+  var xmlhttp = new XMLHttpRequest();
+  xmlhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      console.log("Saved response", this.responseText);
+      location.reload(true);
+    }
+  };
+  xmlhttp.open("POST", "/create-payments-for-month");
+  xmlhttp.setRequestHeader("Content-Type", "application/json");
+  xmlhttp.send(JSON.stringify(attendanceDetails));
+}
+
 
 function addPlayerListToTab(tabName) {
     var nameHeader = document.getElementById("nameHeader" + tabName);
@@ -629,32 +677,6 @@ function addPlayerListToTab(tabName) {
       document.getElementById("panels").style.minHeight = minHeight + "px";
   }
 
-  function copyAttendanceFromAvailability() {
-    var tabName = ATTENDANCE;
-    var tabPlayerCount = playerCount[tabName];
-    // check which weekEdit button is active
-    var weekNumberActive;
-    for (var i = 0; i < mondaysDates.length; i ++) {
-      var weekEditButton = document.getElementById("week" + i + "Edit" + ATTENDANCE); 
-      if (weekEditButton.innerHTML == "s") {
-        weekNumberActive = i;
-      }
-    }
-    //console.log("WeekActive:" + weekNumberActive);
-    // look through attendance players and lookup the players
-    for (var i = 0; i < tabPlayerCount; i ++) {
-      var currentPlayerCheckbox = document.getElementById("player" + i + ATTENDANCE);
-      var currentPlayerName = currentPlayerCheckbox.value
-      // loopup if available from the availability (players) map
-      var playerAvailability = players[currentPlayerName];
-      //console.log("Player:=" + currentPlayerName + " week:" + weekNumberActive + " isAvailable:" + JSON.stringify(playerAvailability) + " AvailabileWeek:" + playerAvailability[weekNumberActive]);
-      if (playerAvailability) {
-        document.getElementById("player" + i + "Week" + weekNumberActive + ATTENDANCE).checked = playerAvailability[weekNumberActive];
-      }
-    }
-    calcWeeklyTotals(ATTENDANCE);
-  }
-
   function updateTeamShirt(checkboxElement, newValue) {
     if (newValue == 0) {
       checkboxElement.style.background = "url(/black-cross.png)";
@@ -716,7 +738,6 @@ function addPlayerListToTab(tabName) {
           document.getElementById("week" + i + "Score2" + tabName).hidden = false;
         }
       }
-      document.getElementById("copyAvailabilityButton").disabled = true; 
       document.getElementById("saveAttendanceButton").disabled = true;
       document.getElementById("cancelAttendanceEditButton").disabled = true;
       return;
@@ -758,7 +779,6 @@ function addPlayerListToTab(tabName) {
 
     // button currently as Edit, so toggle to "save" mode
     weekEditButton.innerHTML = "s";
-    document.getElementById("copyAvailabilityButton").disabled = false; 
     document.getElementById("saveAttendanceButton").disabled = false; 
     document.getElementById("cancelAttendanceEditButton").disabled = false;
   }

@@ -830,6 +830,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
           }
         }
         paymentData = doc.data().paydetails;
+        scoresData.status = doc.data().status;
         //
       }
     });
