@@ -17,6 +17,9 @@ const firestore = new Firestore({
   keyFilename: './keyfile.json',
 });
 
+// this happens automatically, but add a message in the log as a reminder
+(process.env.FIRESTORE_EMULATOR_HOST) ? console.log("RUNNING LOCALLY WITH FIREBASE EMULATOR") : true;
+
 // store a cache of the data for X seconds
 // useful to allow a quick refresh of the screen to randomise players
 var nextMonday = new Date();
@@ -474,7 +477,6 @@ app.use(express.static(path.join(__dirname, 'public')))
     var playerAvailability = req.body.playerAvailability;
     var saveType = req.body.saveType;
     var originalPlayerName = (req.body.originalPlayerName === undefined) ? "" : req.body.originalPlayerName;
-
     
     gameId = gameYear + "-" + gameMonth + "-01";
     var timestamp = new Date();
@@ -829,8 +831,8 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
             delete attendedData[weekNumber].scores;
           }
         }
-        paymentData = doc.data().paydetails;
-        scoresData.status = doc.data().status;
+        //paymentData = doc.data().paydetails;
+        scoresData.status = (doc.data().status) ? doc.data().status : "open";
         //
       }
     });
@@ -853,7 +855,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
 
     rowdata.attendance = attendedDataByPlayer;
     rowdata.scores = scoresData;
-    rowdata.paydetails = paymentData;
+    //  rowdata.paydetails = paymentData;
 
     //console.log('rowdata=' + JSON.stringify(rowdata));
     return rowdata;
