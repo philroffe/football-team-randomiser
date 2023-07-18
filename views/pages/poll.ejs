@@ -1070,7 +1070,7 @@ function addPlayerListToTab(tabName) {
 
       var panelcontentouter = document.getElementById("paymentsEntryDiv");
       if (Object.keys(outstandingPaymentsMap).length > 0) {
-        panelcontentouter.appendChild(document.createTextNode("Outstanding Balances (last 3 months):"));
+        panelcontentouter.appendChild(document.createTextNode("Outstanding Balances:"));
         addPaymentsTableRows(outstandingPaymentsMap, false);
         panelcontentouter.appendChild(document.createElement("br"));
       }
@@ -1138,6 +1138,7 @@ function addPaymentsTableRows(paymentsMap, showEditTotals = true) {
             var linkText = document.createTextNode("(PayPal £" + outstandingBalance + ")");
             paymentLinkElement.appendChild(linkText);
             paymentLinkElement.href = paymentLink;
+            paymentLinkElement.style.color = "darkblue";
           }
           // add table cell
           const tdLink = tr.insertCell();
