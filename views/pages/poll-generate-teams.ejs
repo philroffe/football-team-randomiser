@@ -4,15 +4,7 @@
   <%- include ("../partials/header.ejs") %>
 
   <style>
-  pre {
-    font-size: 90%;
-    white-space: pre-wrap;       /* Since CSS 2.1 */
-    white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
-    white-space: -pre-wrap;      /* Opera 4-6 */
-    white-space: -o-pre-wrap;    /* Opera 7 */
-    word-wrap: break-word;       /* Internet Explorer 5.5+ */
-  }
-  .linkborder a:link, .emailHeader {
+  .linkborder, .emailHeader {
     background-color: #D5EDF6;
     color: #333333;
     padding: 2px 6px 2px 6px;
@@ -32,13 +24,47 @@
     <h3>Team Randomiser</h3>
     <div id="pollLink">Not Yet Available</div>
     <div id="optionDates">Not Yet Available</div><br>
-    <div id="emailTitle">Not Yet Available</div> 
-    <pre class="emailHeader" id="emailBody">Not Yet Available</pre>
-    <div class="linkborder" onclick=";updateDivText()"><a href="">Randomise Players Again!</a></div>
-    <hr><p>
-    <div style="float:left;">Send Email:</div> 
-    <div class="linkborder" style="float:left;" id="emailLinkMobile">Not Yet Available</div> 
-    <div class="linkborder" style="float:left;" id="emailLinkDesktop">Not Yet Available</div>
+
+    <div style="display: flex;">
+      <div id="chooseOption" style="display:inline;">
+        Email Template:
+        <select name="emailChoice" id="emailChoice" checked onchange="changeOption(this.value)">
+          <option value="teams">Teams</option>
+          <option value="availability">Availability</option>
+          <option value="payments">Payments</option>
+        </select>
+      </div>
+
+      <div id="chooseOptionAlgorithm" style="display:inline;margin-left:10px;">
+        Order By:
+        <select name="algorithmChoice" id="algorithmChoice" checked onchange="changeAlgorithm(this.value)">
+          <option value="algorithm0">Random</option>
+          <option value="algorithm1">Win Ratio</option>
+          <option value="algorithm2">Win+Draw Ratio</option>
+          <option value="algorithm3">Win+50%Draw Ratio</option>
+          <option value="algorithm4">Avg Score Per Game</option>
+        </select>
+        <button class="linkborder" onclick=";changeAlgorithm('algorithm0')" id="randomiseAgain">Randomise Players Again!</button>
+      </div>
+    </div>
+      
+
+      <input type="text" id="emailTitle" style="width:100%;font-size: 90%;" data-lpignore=true>
+      <br>
+    <div style="width:100%;display:flex;">
+      <div id="emailEntryDiv" style="display:inline;width:70%"><textarea id="emailBody" rows="30" style="width:95%;font-size: 90%;margin-top:10px" >Not Yet Available</textarea></div>
+      <div id="paymentsEntryDiv" style="display:inline;width:29%;font-size: 90%;"></div>
+    </div> 
+    <br>
+
+    <div id="sendEmailDiv">
+      <input type="checkbox" id="sendTestEmailList" name="sendTestEmailList" value="Test" style="background: #eee;" onclick="updateEmailButton();"><label for="sendTestEmailList">Send Test Email?</label>
+      <p>
+      <button id="sendEmail" style="background-color: #90EE90;float:left;" type="button" onclick="sendEmail();">Send Email to ALL players</button>
+      <div style="float:left;margin-left:20px;padding:5px;">... Or Manual Email Creation:</div>
+        <div class="linkborder" style="float:left;" id="emailLinkMobile">Not Yet Available</div>
+        <div class="linkborder" style="float:left;" id="emailLinkDesktop">Not Yet Available</div>
+    </div>
   </div>
 
   <script>
@@ -54,41 +80,57 @@
   var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
   var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
 
-  function generateTeams() {
+  var playerNameSuggestions, allAttendanceData, outstandingPayments;
+  //var playersList = [];
+
+  var algorithmTitle = { "algorithm0": "Everyone Randomly Weighted", 
+                         "algorithm1": "Win Ratio", 
+                         "algorithm2": "Win+Draw ratio",
+                         "algorithm3": "Win+(50% draw) ratio", 
+                         "algorithm4": "Average generated score per game\n(5 for win, 3 for draw, 1 for loss,\n 0 for not-played)" }
+
     // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
-    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
+    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
     //console.log('Data=' + JSON.stringify(pagedata));
 
     var players = pagedata.data.players;
     if (!players) { players = {}; }
-    var playerratio = pagedata.data.playerratio;
-    if (!playerratio) { playerratio = {}; }
     var gameMonth = pagedata.data.gameMonth;
     if (!gameMonth) gameMonth = monthDateNumericFormat.format(todayDate);
     var gameYear = pagedata.data.gameYear;
     if (!gameYear) gameYear = todayDate.getFullYear();
+    allAttendanceData = pagedata.data.allAttendanceData;
+    if (!allAttendanceData) { allAttendanceData = {}; }
+    outstandingPayments = pagedata.data.outstandingPayments;
+    if (!outstandingPayments) { outstandingPayments = {}; }
 
     pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
-    console.log(pollDate);
+    //console.log(pollDate);
     var gameMonthString = monthDateFormat.format(todayDate);
 
-    console.log("playerratio=", playerratio);
-    if (playerratio.stats) {
-      // playing around with the stats
-      var totalNumberOfGameWeeks = playerratio.stats.totalNumberOfGameWeeks;
+    //console.log("allAttendanceData=", allAttendanceData);
+    //console.log("outstandingPayments=", outstandingPayments);
 
-      console.log("Sorted Played Ratios=", getSortedPlayerMap(playerratio.players, "playedRatio"));
-      console.log("Sorted Win Ratios=", getSortedPlayerMap(playerratio.players, "winRatio"));
-    }
+    // collate the aliases
+    var playerAliasMaps = pagedata.data.playerAliasMaps;
+    var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
+    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+    playerNameSuggestions = Array.from(Object.keys(playerToAliasMap));
+    // define some test email addresses
+    var testEmailList = [ "Phil RT1 <philroffe+test1@gmail.com>", "Phil RT2 <philroffe+test2@gmail.com>"];
+    // update Send Email button to show the number of people on the mailiing list
+    document.getElementById("sendEmail").innerHTML = "Send Email to " + Object.keys(playerAliasMaps.activeEmailList).length + " players";
 
-    function getSortedPlayerMap(orginialPlayerMap, sortFieldName) {
-      // sort by games played
-      let sortable = [];
-      Object.keys(playerratio.players).forEach(function(player) {
-        sortable.push([player, playerratio.players[player][sortFieldName]]);
-      });
-      sortable.sort(function(a, b) { return a[1] - b[1]; });
-      return sortable;
+    var user = pagedata.user;
+    if (user) {
+      document.getElementById("authHeaderSmall").innerHTML = user.given_name + " (logout)";
+      document.getElementById("authHeaderSmall").href = "/logout";
+      document.getElementById("authHeaderLarge").innerHTML = user.given_name + " (logout)";
+      document.getElementById("authHeaderLarge").href = "/logout";
+      console.log("Logged in User:", user);
+      document.getElementById("sendEmailDiv").style.visibility = "visible";
+    } else {
+      document.getElementById("sendEmailDiv").style.visibility = "hidden";
     }
 
     function mondaysInMonth(m,y) {
@@ -108,7 +150,7 @@
     mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
     options = mondaysDates
 
-    console.log("options:" + options);
+    //console.log("options:" + options);
 
     // loop throught the options and find the index for next Monday
     var nextMondayOptionIndex = -1
@@ -127,33 +169,18 @@
         optionDates += " : " + optionDateText
       }
     });
-    // if (nextMondayOptionIndex != -1) {
-    //   console.log('Found next Monday option:' + nextMondayOptionIndex);
-    // } else {
-    //   console.log('No game this upcoming Monday:' + nextMondayDate);
-    // }
 
-    // Get the players who have ticked this option
-    var playersList = []
-    console.log(players);
-    Object.keys(players).forEach(function(key) {
-      playerName = key;
-      playerCanPlay = players[key][nextMondayOptionIndex];
-      //console.log("playerName:" + playerName + " --- " + playerCanPlay);
-      if (playerCanPlay) {
-        playersList.push(playerName);
-      }
-    });
+    if (nextMondayOptionIndex != -1) {
+      console.log('Found next Monday option:' + nextMondayOptionIndex);
+    } else {
+      console.log('No game this upcoming Monday:' + nextMondayDate);
+    }
 
-    // randomise the player list
-    //console.log(playersList);
-    shuffle(playersList);
-    //console.log(playersList);
+  function generateRedBlueTeams(playersList) {
+    var redPlayers = [];
+    var bluePlayers = [];
+    var standbyPlayers = [];
 
-    // divide into reds and blues
-    var redPlayers = []
-    var bluePlayers = []
-    var standbyPlayers = []
     var playerCount = playersList.length;
     var maxPlayersPerTeam = Math.floor(playerCount/2)
     for (var i = 0; i < playerCount; i++) {
@@ -177,15 +204,23 @@
       }
     }
 
-    // console.log("Red :" + redPlayers);
-    // console.log("Blue:" + bluePlayers);
-    // console.log("StandBy:" + standbyPlayers);
+    // console.log("Generated Teams:", generatedTeams);
+    var generatedTeams = {'redPlayers': redPlayers, 'bluePlayers': bluePlayers, 'standbyPlayers':standbyPlayers}
+    return generatedTeams;
+  }
 
+  function generateTeamsEmailText(generatedTeams) {
+    //console.log("GENERATING TEAMS...", generatedTeams)
+    var redPlayers = generatedTeams.redPlayers
+    var bluePlayers = generatedTeams.bluePlayers
+    var standbyPlayers = generatedTeams.standbyPlayers
     //////////////////////
     // generate email text
     //////////////////////
     var emailHeader = ""
     var emailSubject = ""
+    //var playerCount = playersList.length;
+    var playerCount = generatedTeams.redPlayers.length + generatedTeams.bluePlayers.length + generatedTeams.standbyPlayers.length;
     if (playerCount == 0) {
       emailHeader = "Only " + playerCount + " players this week - any more or should I cancel?"
       emailSubject = "NO PLAYERS FOUND - CHECK DATE AND POLL IS CORRECT: "
@@ -216,7 +251,7 @@
     }
 
     fullEmailSubject = emailSubject + " - Mon " + dayDateFormat.format(nextMondayDate) + " " + monthDateFormat.format(nextMondayDate) + " [Footie, Goodwin, 6pm Mondays]\n"
-    fullEmailText = "Hi all,\n\n" + emailHeader + "\n\nTeams below... (any changes let me know asap)\n\n"
+    fullEmailText = "Hi all,\n\n" + emailHeader + "\n\nTeams below...\n\n"
 
     fullEmailText += "REDS\n"
     for (var i = 0; i < redPlayers.length; i++) {
@@ -240,6 +275,7 @@
 
   }
 
+  // no longer used, but this was the original randomiser
   function shuffle(array) {
     var currentIndex = array.length,  randomIndex;
 
@@ -263,13 +299,11 @@
   }
 
   function updateDivText() {
-      // generate random new teams
-      generateTeams();
       //Update div text values
       document.getElementById("pollLink").innerHTML="Generated from: <a href='" + pollLink + "'>" + monthDateLongFormat.format(pollDate) + "</a>"
       document.getElementById("optionDates").innerHTML = optionDates
-      document.getElementById("emailTitle").innerHTML = fullEmailSubject
-      document.getElementById("emailBody").innerHTML = fullEmailText
+      document.getElementById("emailTitle").value = fullEmailSubject
+      document.getElementById("emailBody").value = fullEmailText
       // generate email link
       emailTo = "footie"
       emailBodyUrlEnc = encodeURI(fullEmailText)
@@ -283,9 +317,290 @@
         emailLinkHTML = "<a href=\"mailto:" + emailTo + "?subject=" + fullEmailSubject + "&body=" + emailBodyUrlEnc + "\">Mobile</a>" 
         document.getElementById("emailLinkMobile").innerHTML = emailLinkHTML
   }
-  //generateTeams();
-  updateDivText();
+
+  function changeAlgorithm(algorithmType) {
+    document.getElementById("paymentsEntryDiv").innerHTML = algorithmType;
+    var playersGamesPlayedRatio = {};
+
+    if (algorithmType == "algorithm0") {
+      document.getElementById("randomiseAgain").style.display = "block";
+    } else {
+      document.getElementById("randomiseAgain").style.display = "none";
+    }
+
+    // create list of all players from allAttendanceData
+    var allPlayers = [];
+    Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
+      var weekAttendanceData = allAttendanceData[gamesCollectionId];
+      Object.keys(weekAttendanceData).forEach(function(weekNumber) {
+        if (weekNumber >= '0' && weekNumber <= '52') {
+          var playerList = weekAttendanceData[weekNumber];
+          Object.keys(playerList).forEach(function(playerName) {
+            if (playerName != "scores") {
+              //console.log("FOUND:", playerName, weekNumber, gamesCollectionId);
+              if (!allPlayers.includes(playerName)) {
+                allPlayers.push(playerName);
+              }
+            }
+          });
+        }
+      });
+    });
+    document.getElementById("paymentsEntryDiv").innerHTML = allPlayers.sort().toString().replaceAll(",", "\n");
+
+
+    // create list of all players who have ticked this option this week
+    console.log(players);
+    var thisWeekPlayers = [];
+    Object.keys(players).forEach(function(key) {
+      playerName = key;
+      var officialName = aliasToPlayerMap[playerName.toUpperCase()];
+      //console.log("ALIAS", playerName, officialName);
+
+      playerCanPlay = players[key][nextMondayOptionIndex];
+      //console.log("playerName:" + playerName + " --- " + playerCanPlay);
+      if (playerCanPlay) {
+        thisWeekPlayers.push(officialName);
+      }
+    });
+
+    // now calculate the ratio for algorithms
+    Object.values(allPlayers).forEach(function(currentPlayer) {
+      //console.log("XXX", currentPlayer)
+      playersGamesPlayedRatio[currentPlayer] = {'algorithm4':0, 'won':0, 'lost':0, 'draw':0, 'didnotplay':0, 'thisWeekPlayer': false};
+      
+      // loop through all of the attendance data, lookup current player
+      Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
+        var weekAttendanceData = allAttendanceData[gamesCollectionId];
+        //console.log("Calculating month data...", gamesCollectionId, weekAttendanceData);
+        
+        // get all players for the month
+        for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
+          if (weekAttendanceData[weekNumber]) {
+            var playerWeekTeamNumber = weekAttendanceData[weekNumber][currentPlayer];
+            //console.log("using player week data...", currentPlayer, playerWeekTeamNumber);
+            var weekScores = weekAttendanceData[weekNumber]['scores'];
+
+            if (playerWeekTeamNumber) {
+              // played
+              var goalsFor = weekScores['team' + playerWeekTeamNumber + 'goals'];
+              var oppositeTeamNumber = (playerWeekTeamNumber == 1) ? 2 : 1;
+              var goalsAgainst = weekScores['team' + oppositeTeamNumber + 'goals'];
+              //console.log("TEAM", playerWeekTeamNumber, oppositeTeamNumber);
+
+              if (weekScores['winner'] == playerWeekTeamNumber) {
+                //console.log("PLAYED, WON", currentPlayer, goalsFor, goalsAgainst);
+                playersGamesPlayedRatio[currentPlayer].won += 1;
+                playersGamesPlayedRatio[currentPlayer].algorithm4 += 5;
+              } else if (weekScores['winner'] == 0) {
+                //console.log("PLAYED, DRAW", currentPlayer, goalsFor, goalsAgainst);
+                playersGamesPlayedRatio[currentPlayer].draw += 1;
+                playersGamesPlayedRatio[currentPlayer].algorithm4 += 3;
+              } else {
+                //console.log("PLAYED, LOST", currentPlayer, goalsFor, goalsAgainst);
+                playersGamesPlayedRatio[currentPlayer].lost += 1;
+                playersGamesPlayedRatio[currentPlayer].algorithm4 += 1;
+              }
+            } else {
+              // did not play
+              //console.log("DID NOT PLAY", currentPlayer);
+              playersGamesPlayedRatio[currentPlayer].didnotplay = playersGamesPlayedRatio[currentPlayer].didnotplay + 1;
+            }
+          }
+        }
+      });
+
+      // first check if this player is available to play this week
+      if (thisWeekPlayers.includes(currentPlayer)) {
+        playersGamesPlayedRatio[currentPlayer].thisWeekPlayer = true;
+      } else {
+        playersGamesPlayedRatio[currentPlayer].thisWeekPlayer = false;
+      }
+    });
+
+    
+    // now calculate the ratio for algorithms
+    Object.keys(playersGamesPlayedRatio).forEach(function(playerName) {
+      //console.log(playerName);
+      var playerStats = playersGamesPlayedRatio[playerName];
+      var totalGamesPlayed = playerStats.won + playerStats.lost + playerStats.draw;
+
+      // algorithm0 = everyone equally weighted
+      playersGamesPlayedRatio[playerName].algorithm0ratio = Math.random().toFixed(3);
+
+      //algorithm1 = win ratio
+      playersGamesPlayedRatio[playerName].algorithm1ratio = (playerStats.won / totalGamesPlayed).toFixed(2);
+
+      //algorithm2 = win+(50% draw) ratio
+      playersGamesPlayedRatio[playerName].algorithm2ratio = ((playerStats.won + (playerStats.draw / 2))  / totalGamesPlayed).toFixed(2);
+
+      //algorithm3 = win+draw ratio)
+      playersGamesPlayedRatio[playerName].algorithm3ratio = ((playerStats.won + playerStats.draw) / totalGamesPlayed).toFixed(2);
+
+      // algorithm4 = average generated score per game (5 for win, 3 for draw, 1 for loss, 0 for not-played)
+      playersGamesPlayedRatio[playerName].algorithm4ratio = (playerStats.algorithm4 / totalGamesPlayed).toFixed(2);
+
+      //algorithm5 = sort by algorithm4 and pick teams by alternating between the top 3 and the bottom 3
+
+      //algorithm6 = sort by algorithm (1, 2, 3 or 4) and pick teams by randomising the top 3 and the bottom 3
+    });
+
+    // create sorted array from the algorithm selected
+    let sortedPlayers = [];
+    for (var ratios in playersGamesPlayedRatio) {
+      sortedPlayers.push([ratios, playersGamesPlayedRatio[ratios]]);
+    }
+    sortedPlayers.sort(function(a, b) {
+      return b[1][algorithmType + "ratio"] - a[1][algorithmType + "ratio"];
+    });
+    //console.log("SORTED PLAYERS:", sortedPlayers);
+    // recreate the object
+    let sortedPlayerNamesThisWeek = [];
+    sortedPlayers.forEach(function(playerName){
+      if (playersGamesPlayedRatio[playerName[0]] && playersGamesPlayedRatio[playerName[0]].thisWeekPlayer) {
+        sortedPlayerNamesThisWeek.push(playerName[0]);
+      }
+    })
+    //console.log("SORTED PLAYERS THIS WEEK:", sortedPlayerNamesThisWeek);
+
+    // generate the teams - divide into reds and blues
+    var generatedTeams = generateRedBlueTeams(sortedPlayerNamesThisWeek);
+    var redPlayers = generatedTeams.redPlayers
+    var bluePlayers = generatedTeams.bluePlayers
+    var standbyPlayers = generatedTeams.standbyPlayers
+    //console.log("NEW TEAMS", generatedTeams)
+    
+    // print the list for viewing
+    var playerStringList = "";
+    for (var i = 0; i < sortedPlayers.length; i++) {
+      playerName = sortedPlayers[i][0];
+      playerNameClean = playerName.replace(/&#39;/g, "'");
+      playerAlgorithmScore = sortedPlayers[i][1][algorithmType + "ratio"]
+
+      var isPlaying = "";
+      //if (playersGamesPlayedRatio[playerName].thisWeekPlayer) {
+      if (redPlayers.includes(playerName)) {
+        isPlaying = " R"
+      } else if (bluePlayers.includes(playerName)) {
+        isPlaying = " B"
+      } else if (standbyPlayers.includes(playerName)) {
+        isPlaying = " S"
+      }
+      playerStringList += playerAlgorithmScore + isPlaying + "\t" + playerNameClean + "\n";
+    }
+    document.getElementById("paymentsEntryDiv").innerHTML = '<pre>' + algorithmTitle[algorithmType] + '\n\n' + playerStringList + '</pre>';
+
+    generateTeamsEmailText(generatedTeams);
+    updateDivText();
+
+    return playersGamesPlayedRatio;
+  }
+
+  function changeOption(emailChoice) {
+    //console.log("email choice:", emailChoice)
+    if (emailChoice == "teams") {
+      document.getElementById("chooseOptionAlgorithm").style.display = "block";
+      changeAlgorithm(document.getElementById("algorithmChoice").value);
+      //console.log("AAA", document.getElementById("algorithmChoice").value)
+      //updateDivText();
+    } else if (emailChoice == "availability") {
+      document.getElementById("chooseOptionAlgorithm").style.display = "none"
+      generateAvailabilityEmailText();
+    } else if (emailChoice == "payments") {
+      document.getElementById("chooseOptionAlgorithm").style.display = "none"
+      generatePaymentsEmailText();
+    }
+  }
+
+  function generateAvailabilityEmailText() {
+    document.getElementById("paymentsEntryDiv").innerHTML = '<p>';
+    addPaymentsTableRows(outstandingPayments, true);
+
+    var dateText = monthDateLongFormat.format(nextMondayDate) + " " + nextMondayDate.getFullYear();
+    var emailSubject = "Availability for " + dateText + " [Footie, Goodwin, 6pm Mondays]"
+    var emailBody = "Hi all,\n\nA new month so a new poll.  You know what to do...\n"
+    emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/poll"
+    emailBody += "\n\nAlso, outstanding payments for games over the last couple of months when you get a sec please...\n"
+    emailBody += "***PAYMENTS WILL GO HERE - DO NOT DELETE THIS LINE***";
+    emailBody += "\n\nCheers,\nPhil\n"
+    emailBody += "\nMobile: 07960951917\n"
+    emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/poll\n"
+    document.getElementById("emailTitle").value = emailSubject;
+    document.getElementById("emailBody").value = emailBody;
+    document.getElementById("emailTitle").style.width = "100%";
+    document.getElementById("emailBody").style.width = "100%";
+  }
+
+  function generatePaymentsEmailText() {
+    document.getElementById("paymentsEntryDiv").innerHTML = '<p>';
+    addPaymentsTableRows(outstandingPayments, true);
+
+    var emailSubject = "Payments for Monday Footie Please [Footie, Goodwin, 6pm Mondays]"
+    var emailBody = "Hi all,\n\nOutstanding payments for games over the last few months when you get a sec please...\n\n"
+    emailBody += "***PAYMENTS WILL GO HERE - DO NOT DELETE THIS LINE***";
+    emailBody += "\n\nCheers,\nPhil\n"
+    emailBody += "\nMobile: 07960951917\n"
+    emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/poll\n"
+    document.getElementById("emailTitle").value = emailSubject;
+    document.getElementById("emailBody").value = emailBody;
+    document.getElementById("emailTitle").style.width = "100%";
+    document.getElementById("emailBody").style.width = "100%";
+
+    //document.getElementById("emailBody").value = document.getElementById("paymentsEntryDiv").innerText;
+  }
+
+  function updateEmailButton() {
+    // check if sending real or test emails
+    if (document.getElementById("sendTestEmailList").checked) {
+      document.getElementById("sendEmail").innerText = "Send Email to Test list"
+    } else {
+      document.getElementById("sendEmail").innerHTML = "Send Email to " + Object.keys(playerAliasMaps.activeEmailList).length + " players";
+    }
+  }
+
+  function sendEmail() {
+    var emailTo = [];
+    // check if sending real or test emails
+    if (document.getElementById("sendTestEmailList").checked) {
+      // test so create a dummy array
+      emailTo = testEmailList;
+    } else {
+      // real email list so get array from the values of activeEmailList
+      emailTo = Object.values(playerAliasMaps.activeEmailList);
+      if (!confirm('This will send an email to everyone on the mailing list.\nAre you sure?')) return;
+    }
+
+    var emailSubject = document.getElementById("emailTitle").value;
+    var emailBody = document.getElementById("emailBody").value;
+    emailBody = emailBody.replaceAll("\n", '<br>');
+    emailBody = emailBody.replace("***PAYMENTS WILL GO HERE - DO NOT DELETE THIS LINE***", document.getElementById("paymentsEntryDiv").innerHTML);
+    var emailDetails = { 'emailSubject': emailSubject, 'emailBody': emailBody, 'emailTo': emailTo };
+    // now send the POST request with the data
+    console.log(emailDetails)
+
+    var xmlhttp = new XMLHttpRequest();
+    xmlhttp.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        console.log("Saved response", this.responseText);
+        //location.reload(true);
+        document.getElementById("sendEmail").innerHTML = "EMAIL SENT!";
+        document.getElementById("sendEmail").disabled = true;
+        document.getElementById("emailTitle").disabled = true;
+        document.getElementById("emailBody").disabled = true;
+        document.getElementById("randomiseAgain").style.visibility = "hidden";
+      }
+    };
+    xmlhttp.open("POST", "/send-email");
+    xmlhttp.setRequestHeader("Content-Type", "application/json");
+    xmlhttp.send(JSON.stringify(emailDetails));
+  }
+
+  // auto select the
+  document.getElementById("algorithmChoice").selectedIndex = 1;
+  document.getElementById('algorithmChoice').dispatchEvent(new Event('change'));
+
   </script>
+  <%- include ("./admin-payments.ejs") %>
 
   </body>
 </html>

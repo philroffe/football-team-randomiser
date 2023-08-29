@@ -5,6 +5,8 @@ const https = require('https')
 const ical = require('node-ical');
 const request = require('request');
 const session = require('express-session');
+const nodemailer = require('nodemailer');
+
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -51,6 +53,11 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_CALLBACK_URL = (process.env.GOOGLE_CALLBACK_URL) ? process.env.GOOGLE_CALLBACK_URL : "http://localhost:5000/auth/google/callback";
 const ALLOWED_ADMIN_EMAILS = (process.env.ALLOWED_ADMIN_EMAILS) ? process.env.ALLOWED_ADMIN_EMAILS : "philroffe@gmail.com";
+
+const GOOGLE_MAIL_FROM_NAME = (process.env.GOOGLE_MAIL_FROM_NAME) ? process.env.GOOGLE_MAIL_FROM_NAME : "Phil Roffe <philroffe@gmail.com>";
+const GOOGLE_MAIL_USERNAME = (process.env.GOOGLE_MAIL_USERNAME) ? process.env.GOOGLE_MAIL_USERNAME : "NOT_SET";
+const GOOGLE_MAIL_APP_PASSWORD = (process.env.GOOGLE_MAIL_APP_PASSWORD) ? process.env.GOOGLE_MAIL_APP_PASSWORD : "NOT_SET";
+
 
 passport.use(new GoogleStrategy({
     clientID: GOOGLE_CLIENT_ID,
@@ -322,13 +329,33 @@ app.use(express.static(path.join(__dirname, 'public')))
   })
 .get('/teams', async (req, res) => {
       try {
-        console.log('Generating TEAMS page with data');
+        console.log('Generating TEAMS page with data for date: ', req.query.date);
         var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
-        var playerratio = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date);
-        rowdata.playerratio = playerratio;
+        
+        // read the list of players and aliases
+        var playerAliasMaps = {};
+        playerAliasMaps = await getDefinedPlayerAliasMaps();
+        rowdata.playerAliasMaps = playerAliasMaps;
+
+        var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date, 6);
+        rowdata.allAttendanceData = allAttendanceData;
+
+
         var nextMonday = getDateNextMonday();
+        var calcPaymentsFromDate = nextMonday;
+        if (req.query.date) {
+          calcPaymentsFromDate = req.query.date;
+        }
+        var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments(calcPaymentsFromDate);
+        rowdata.outstandingPayments = outstandingPayments;
+        console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
+        
         // combine database data with supplimentary game data and render the page
         var pageData = { data: rowdata, nextMonday: nextMonday.toISOString() };
+        if (userProfile) {
+          //console.log(userProfile["_json"]);
+          pageData.user = userProfile["_json"];
+        }
         res.render('pages/poll-generate-teams', { pageData: pageData} );
       } catch (err) {
         console.error(err);
@@ -587,7 +614,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     console.log('Got /admin-save-aliases POST:', ip, JSON.stringify(req.body));
 
     if (!userProfile) {
-      console.warn('WARNING: attempting to save PAYMENT but user not logged in.  Denied.');
+      console.warn('WARNING: attempting to save ALIASES but user not logged in.  Denied.');
       res.status(401).send({'result': 'Denied. User not logged in...'});
       return;
     }
@@ -605,6 +632,54 @@ app.use(express.static(path.join(__dirname, 'public')))
       res.send({'result': err});
     }
   })
+
+.post('/send-email', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+  console.log('Got /send-email POST:', ip, JSON.stringify(req.body));
+  
+  if (!userProfile) {
+    console.warn('WARNING: attempting to SEND EMAIL but user not logged in.  Denied.');
+    res.status(401).send({'result': 'Denied. User not logged in...'});
+    return;
+  }
+
+  // get email list
+  var emailTo = "";
+  if (req.body.emailTo) {
+    // convert emails array to csv
+    emailTo = req.body.emailTo.toString();
+  } else {
+    res.json({'result': 'ERROR: No emailTo list defined'})
+    return;
+  }
+
+  var mailOptions = {
+    from: GOOGLE_MAIL_FROM_NAME,
+    to: emailTo,
+    subject: req.body.emailSubject,
+    html: req.body.emailBody
+  };
+  console.log(mailOptions);
+  
+  var transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: GOOGLE_MAIL_USERNAME,
+      pass: GOOGLE_MAIL_APP_PASSWORD
+    }
+  });
+
+  transporter.sendMail(mailOptions, function(error, info){
+    console.log('Trying to send email: ', mailOptions);
+    if (error) {
+      console.log(error);
+      res.send({'result': error});
+    } else {
+      console.log('Email sent: ' + info.response);
+      res.json({'result': 'OK'})
+    }
+  });
+})
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
 
 function getDateNextMonday(fromDate = new Date()) {
@@ -634,94 +709,30 @@ function downloadPage(url) {
 }
 
 async function queryDatabaseAndCalcGamesPlayedRatio(reqDate, noOfMonths = 3) {
-    var requestedDate = new Date();
-    if (reqDate) {
-      requestedDate = new Date(reqDate);
-    } else {
-      // if date not specified just default to beginning of this month
-      requestedDate.setDate(1);
-    }
+  var requestedDate = new Date();
+  if (reqDate) {
+    requestedDate = new Date(reqDate);
+  } else {
+    // if date not specified just default to beginning of this month
+    requestedDate.setDate(1);
+  }
     
-    var playersGamesPlayedRatio = {};
-    playersGamesPlayedRatio["stats"] = {};
-    playersGamesPlayedRatio["players"] = {};
-    var maxNumberOfGameWeeks = 0;
-    for (var i = 0; i < noOfMonths; i ++) {
-      var thisDate = new Date(requestedDate);
-      thisDate.setMonth(requestedDate.getMonth() - i);
-      var gameYear = thisDate.getFullYear();
-      var gameMonth = thisDate.toISOString().split('-')[1];
-      var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
-      console.log('GETTING ATTENDANCE data:', gamesCollectionId);
-      const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
-      var existingDoc = await docRef.get();
-      if (existingDoc.data()) {
-        var attendanceData = existingDoc.data();
-        var attendanceMap = {};
-
-        // get list of all players for the month
-        var allPlayers = {};
-        var maxWeekNumber = 0;
-        // get all players for the month
-        for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
-          if (attendanceData[weekNumber]) {
-            allPlayers = {
-              ...allPlayers,
-              ...Object.keys(attendanceData[weekNumber])
-            };
-            maxWeekNumber = weekNumber;
-          }
-        }
-        if (maxWeekNumber > 0) {
-          maxNumberOfGameWeeks += (maxWeekNumber + 1);
-        }
-        //console.log('maxNumberOfGameWeeks:', maxNumberOfGameWeeks, "maxWeekNumber:", maxWeekNumber);
-        //console.log('USING PLAYERS:', allPlayers);
-
-        playersGamesPlayedRatio["stats"]["totalNumberOfGameWeeks"] = maxNumberOfGameWeeks;
-        playersGamesPlayedRatio["stats"]["totalNumberMonths"] = noOfMonths;
-
-
-        // loop through players, add amount owed each week, subtract total amount paid for month
-        Object.values(allPlayers).sort().forEach(function(playerName) {
-          if (playerName != "scores") {
-            // count the amount owed for each game that they actively played
-            var numberOfGamesPlayed = 0;
-            var numberOfGamesWon = 0;
-            for (var weekNumber = 0; weekNumber <= maxWeekNumber; weekNumber ++) {
-              if (attendanceData[weekNumber]) {
-                if (attendanceData[weekNumber][playerName]) { numberOfGamesPlayed++; }
-                if (attendanceData[weekNumber].scores) {
-                  if (attendanceData[weekNumber].scores.winner == attendanceData[weekNumber][playerName]) {
-                    numberOfGamesWon++;
-                  }
-                }
-              }
-            }
-
-            // now add to any existing totals
-            var totalGamesPlayed = numberOfGamesPlayed;
-            var totalGamesWon = numberOfGamesWon;
-            if (playersGamesPlayedRatio["players"][playerName]) {
-              totalGamesPlayed = totalGamesPlayed + playersGamesPlayedRatio["players"][playerName]["totalGamesPlayed"];
-              totalGamesWon = totalGamesWon + playersGamesPlayedRatio["players"][playerName]["totalGamesWon"];
-            }
-            playersGamesPlayedRatio["players"][playerName] = { "totalGamesPlayed": Number(totalGamesPlayed), "totalGamesWon": Number(totalGamesWon)}
-          }
-        })
-      }
+  var allAttendanceData = {};
+  for (var i = 0; i < noOfMonths; i ++) {
+    var thisDate = new Date(requestedDate);
+    thisDate.setMonth(requestedDate.getMonth() - i);
+    var gameYear = thisDate.getFullYear();
+    var gameMonth = thisDate.toISOString().split('-')[1];
+    var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
+    console.log('GETTING ATTENDANCE data:', gamesCollectionId);
+    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+    var existingDoc = await docRef.get();
+    if (existingDoc.data()) {
+      var attendanceData = existingDoc.data();
+      allAttendanceData[gamesCollectionId] = attendanceData;
     }
-
-    // now calculate the player ratios
-    Object.keys(playersGamesPlayedRatio.players).forEach(function(player) {
-      var playerDetails = playersGamesPlayedRatio.players[player];
-      var playedRatio = playerDetails.totalGamesPlayed / maxNumberOfGameWeeks;
-      var winRatio = playerDetails.totalGamesWon / playerDetails.totalGamesPlayed;
-      playersGamesPlayedRatio.players[player].playedRatio = playedRatio;
-      playersGamesPlayedRatio.players[player].winRatio = winRatio;
-    });
-
-    return playersGamesPlayedRatio;
+  }
+  return allAttendanceData;
 }
 
 async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3) {
@@ -926,11 +937,17 @@ async function getDefinedPlayerAliasMaps() {
   }
 
   var collapsedPlayerMap = {};
+  var activeEmailList = {};
   Object.keys(playerAliasMap).sort().forEach(function(key) {
     //console.log("key", playerAliasMap[key]);
     var officialName = key.trim();
     var playerActive = playerAliasMap[key].active;
     var aliasesList = playerAliasMap[key].aliases;
+    var playerEmail = playerAliasMap[key].email;
+
+    if (playerActive && playerEmail) {
+      activeEmailList[officialName] = officialName + " <" + playerEmail + ">";
+    }
 
     //collapsedPlayerMap[playerName.toUpperCase()] = playerName;
     collapsedPlayerMap[officialName.toUpperCase()] = officialName;
@@ -947,7 +964,7 @@ async function getDefinedPlayerAliasMaps() {
   //playerToAliasMap: new Map([...playerAliasMap].sort()
   //aliasToPlayerMap: new Map([...collapsedPlayerMap].sort())
 
-  var playerAliasMaps = { playerToAliasMap: playerAliasMap, aliasToPlayerMap: collapsedPlayerMap };
+  var playerAliasMaps = { playerToAliasMap: playerAliasMap, aliasToPlayerMap: collapsedPlayerMap, activeEmailList: activeEmailList };
   return playerAliasMaps;
 }
 

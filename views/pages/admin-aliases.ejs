@@ -10,7 +10,9 @@
       var playerName = key;
       var playerActive = playerAliasMap[key].active;
       var aliasesList = playerAliasMap[key].aliases;
-      addAliasPlayer(playerName, playerActive, aliasesList);
+      var playerEmail = playerAliasMap[key].email;
+      if (!playerEmail) { playerEmail = ""; }
+      addAliasPlayer(playerName, playerActive, aliasesList, playerEmail);
       
       collapsedPlayerList[playerName.toUpperCase()] = playerName;
       for (var i = 0; i < aliasesList.length; i ++) {
@@ -18,7 +20,7 @@
       }
     });
 
-    function addAliasPlayer(playerName, playerActive, aliasesList) {
+    function addAliasPlayer(playerName, playerActive, aliasesList, playerEmail) {
       if (!playerName) {
         playerName = "";
         playerActive = true;
@@ -45,6 +47,13 @@
       newPlayerActive.style.height = "27px";
       newPlayerActive.style.margin = "1px 5px 0px 0px";
 
+      // create Player Name field
+      var newPlayerEmail = document.createElement("input"); 
+      newPlayerEmail.setAttribute("type", "text"); 
+      newPlayerEmail.style.verticalAlign = "top";
+      newPlayerEmail.setAttribute("id", "playerEmail" + playerAliasCount + "Alias"); 
+      newPlayerEmail.setAttribute("name", "myPlayerEmails[]"); 
+      newPlayerEmail.value = playerEmail;
 
       // create text area for the aliases
       var newPlayerAliases = document.createElement("textarea"); 
@@ -64,6 +73,7 @@
       }
       header.appendChild(newPlayerActive);
       header.appendChild(newPlayerName);
+      header.appendChild(newPlayerEmail);
       header.appendChild(newPlayerAliases);
       header.appendChild(document.createElement("br"));
 
@@ -83,8 +93,9 @@
         var player = document.getElementById("player" + i + "Alias").value;
         var isActive = document.getElementById("playerActive" + i + "Alias").checked;
         var aliases = document.getElementById("playerAlias" + i + "Alias").value;
+        var playerEmail = document.getElementById("playerEmail" + i + "Alias").value;
         var aliasesArray = aliases.trim().split('\n');
-        playerAliasMap[player] = { "active": isActive, "aliases": aliasesArray };
+        playerAliasMap[player] = { "active": isActive, "email": playerEmail, "aliases": aliasesArray };
       }
       console.log("SAVING ALIASES:" + JSON.stringify(playerAliasMap));
 
