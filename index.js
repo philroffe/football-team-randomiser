@@ -27,9 +27,10 @@ const firestore = new Firestore({
 var nextMonday = new Date();
 var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
 var bankHolidaysCache = {};
+var bankHolidaysCacheLastRefresh = new Date();
+var bankHolidaysMaxCacheSecs = 86400; // 1 day
 var attendanceMapByYearCache = {};
-var cacheLastRefresh = new Date();
-var maxCacheSecs = 86400; // 1 day
+var rawDatabaseCache = {};
 const PLAYER_UNIQUE_FILTER = "PLAYER_UNIQUE_FILTER_TYPE";
 const PLAYER_LOG_FILTER = "PLAYER_LOG_FILTER_TYPE";
 const COST_PER_GAME = 4;
@@ -57,7 +58,13 @@ const ALLOWED_ADMIN_EMAILS = (process.env.ALLOWED_ADMIN_EMAILS) ? process.env.AL
 const GOOGLE_MAIL_FROM_NAME = (process.env.GOOGLE_MAIL_FROM_NAME) ? process.env.GOOGLE_MAIL_FROM_NAME : "Phil Roffe <philroffe@gmail.com>";
 const GOOGLE_MAIL_USERNAME = (process.env.GOOGLE_MAIL_USERNAME) ? process.env.GOOGLE_MAIL_USERNAME : "NOT_SET";
 const GOOGLE_MAIL_APP_PASSWORD = (process.env.GOOGLE_MAIL_APP_PASSWORD) ? process.env.GOOGLE_MAIL_APP_PASSWORD : "NOT_SET";
-
+var transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: GOOGLE_MAIL_USERNAME,
+    pass: GOOGLE_MAIL_APP_PASSWORD
+  }
+});
 
 passport.use(new GoogleStrategy({
     clientID: GOOGLE_CLIENT_ID,
@@ -315,7 +322,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         await docRef.set(req.body);
       }
     }
-    attendanceMapByYearCache = {}; // clear the stats cache - needs recalculating next time it reloads
+    invalidateDataCaches();
     res.json({'result': 'OK'})
   } catch (err) {
     console.error(err);
@@ -366,7 +373,7 @@ app.use(express.static(path.join(__dirname, 'public')))
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('Stats access from IP:' + ip + " with user-agent:" + req.get('User-Agent'));
   // Check if cache needs clearing
-  /*var diffSeconds = (new Date().getTime() - cacheLastRefresh.getTime()) / 1000;
+  /*var diffSeconds = (new Date().getTime() - bankHolidaysCacheLastRefresh.getTime()) / 1000;
   if (diffSeconds > maxCacheSecs) {
     attendanceMapByYearCache = {};
     console.log('CLEARED Attendance CACHE as diffSeconds was:' + diffSeconds);
@@ -396,6 +403,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     }
     attendanceMapByYearCache = attendanceMapByYear;
 
+
     // read the list of players and aliases
     var playerAliasMaps = {};
     playerAliasMaps = await getDefinedPlayerAliasMaps();
@@ -418,8 +426,8 @@ app.use(express.static(path.join(__dirname, 'public')))
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('Poll access from IP:' + ip + " with user-agent:" + req.get('User-Agent'));
   // Check if cache needs clearing
-  var diffSeconds = (new Date().getTime() - cacheLastRefresh.getTime()) / 1000;
-  if (diffSeconds > maxCacheSecs) {
+  var diffSeconds = (new Date().getTime() - bankHolidaysCacheLastRefresh.getTime()) / 1000;
+  if (diffSeconds > bankHolidaysMaxCacheSecs) {
     bankHolidaysCache = {};
     console.log('CLEARED CACHE as diffSeconds was:' + diffSeconds);
   }
@@ -511,6 +519,9 @@ app.use(express.static(path.join(__dirname, 'public')))
     "playerName": playerName, "playerAvailability": playerAvailability, 
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": ip };
 
+    var eventDetails = convertAvailibilityToDates(gameMonth, gameYear, playerAvailability);
+    sendAdminEvent("Player Change " + playerName, playerName + "\n" + eventDetails);
+
     console.log('Inserting DB game data:', JSON.stringify(gamedetails_new));
     try {
       var gamesCollectionId = "games_" + gameId;
@@ -577,6 +588,10 @@ app.use(express.static(path.join(__dirname, 'public')))
         // now update with the new data
         await docRef.update(attendanceDetails);
       }
+
+      //now invalidate any caches
+      attendanceMapByYearCache = {}; // clear the stats cache - needs recalculating next time it reloads
+
       res.json({'result': 'OK'})
     } catch (err) {
       console.error(err);
@@ -997,4 +1012,49 @@ function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {
     console.log("WARNING: Failed to find official name for:", nameToCheck);
   }*/
   return officialName;
+}
+
+// clear the stats and database cache - need recalculating next time it reloads
+function invalidateDataCaches() {
+  attendanceMapByYearCache = {};
+  rawDatabaseCache = {};
+}
+
+// helper function to convert availabilityMap to human readable string
+// From: availabilityMap = {"0":true, "1":false, "2":true, "3":true };
+// To: '2023-10-08: YES\n2023-10-16: NO...'
+function convertAvailibilityToDates(gameMonth, gameYear, availabilityMap) {
+  var mondaysDates = mondaysInMonth(Number(gameMonth), Number(gameYear));  //=> [ 7,14,21,28 ]
+
+  var returnString = "";
+  Object.keys(availabilityMap).forEach(function(weekNumber) {
+    var mondaysDate = new Date(gameYear + "-" + gameMonth + "-" + mondaysDates[weekNumber]);
+    var dateString = mondaysDate.toISOString()
+    var canPlay = "YES";
+    (availabilityMap[weekNumber]) ? canPlay = "YES" : canPlay = "NO";
+    returnString += dateString.substring(0, dateString.indexOf("T")) + ": " + canPlay + "\n";
+  });
+  return returnString;
+}
+
+// send an email to the admins to notify of certain events (such as a player availability change)
+function sendAdminEvent(title, details) {
+  var mailOptions = {
+    from: "philroffe+footie@gmail.com",
+    to: "philroffe@gmail.com",
+    subject: title,
+    html: "<pre>" + details + "</pre>"
+  };
+  console.log(mailOptions);
+
+  transporter.sendMail(mailOptions, function(error, info){
+    console.log('Trying to send admin email: ', mailOptions);
+    if (error) {
+      console.log(error);
+      return false;
+    } else {
+      console.log('Admin email sent: ' + info.response);
+      return true;
+    }
+  });
 }
