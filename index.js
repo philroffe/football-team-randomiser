@@ -97,6 +97,33 @@ app.use(express.static(path.join(__dirname, 'public')))
 .use(express.json())
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
+
+.post('/_ah/mail/teams@tensile-spirit-360708.appspotmail.com', async (req, res) => {
+  console.log('Got /_ah/mail/teams@... with Content-Type:', req.get('Content-Type'));
+  try {
+    var body = "";
+    await req.on('readable', function() {
+      body += req.read();
+    });
+    req.on('end', function() {
+      // body is now a raw email message
+      // parse the email and extract the teams
+      var redsIndex = body.indexOf("REDS");
+      var bluesIndex = body.indexOf("BLUES", redsIndex);
+      var endIndex = body.indexOf("Cheers", bluesIndex);
+
+      var redTeam = body.substring(redsIndex, bluesIndex);
+      var blueTeam = body.substring(bluesIndex, endIndex);
+
+      console.log('RED TEAM:', redTeam);
+      console.log('BLUE TEAM:', blueTeam);
+    });
+    res.json({'result': 'OK'})
+  } catch (err) {
+    console.error(err);
+    res.json({'result': 'OK'})
+  }
+})
 .get('/', (req, res) => res.render('pages/index'))
 .get('/login', (req, res) => res.render('pages/auth'))
 .get('/error', (req, res) => res.send("error logging in - invalid account for this site"))
@@ -248,7 +275,7 @@ app.use(express.static(path.join(__dirname, 'public')))
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT TEAMS POST FROM EMAIL:', ip, req.body);
   var emailDate = new Date(req.body.Email_Sent_Date.split(' at')[0]);
-  var emailSubjectGameDate = new Date(req.body.Subject_Game_Date + " 2023");
+  var emailSubjectGameDate = new Date(req.body.Subject_Game_Date + " " + emailDate.getFullYear());
   var redTeam = req.body.Red_Team;
   var blueTeam = req.body.Blue_Team;
 
