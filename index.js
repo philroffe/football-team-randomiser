@@ -371,7 +371,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         playerAliasMaps = await getDefinedPlayerAliasMaps();
         rowdata.playerAliasMaps = playerAliasMaps;
 
-        var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date, 6);
+        var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date, 12);
         rowdata.allAttendanceData = allAttendanceData;
 
 
@@ -750,17 +750,19 @@ function downloadPage(url) {
   });
 }
 
-async function queryDatabaseAndCalcGamesPlayedRatio(reqDate, noOfMonths = 3) {
+// calculate no of months between two dates
+function monthDiff(dateFrom, dateTo) {
+  return dateTo.getMonth() - dateFrom.getMonth() + 
+    (12 * (dateTo.getFullYear() - dateFrom.getFullYear()))
+}
+
+async function queryDatabaseAndCalcGamesPlayedRatio() {
+  // game scores and win/lose/draw only available from 2023-01-01 (game played available from 2019-08-01)
   var requestedDate = new Date();
-  if (reqDate) {
-    requestedDate = new Date(reqDate);
-  } else {
-    // if date not specified just default to beginning of this month
-    requestedDate.setDate(1);
-  }
-    
+  noOfMonths = monthDiff(new Date("2023-01-01"), new Date());
+
   var allAttendanceData = {};
-  for (var i = 0; i < noOfMonths; i ++) {
+  for (var i = 0; i <= noOfMonths; i ++) {
     var thisDate = new Date(requestedDate);
     thisDate.setMonth(requestedDate.getMonth() - i);
     var gameYear = thisDate.getFullYear();

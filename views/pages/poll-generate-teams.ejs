@@ -43,6 +43,7 @@
           <option value="algorithm2">Win+Draw Ratio</option>
           <option value="algorithm3">Win+50%Draw Ratio</option>
           <option value="algorithm4">Avg Score Per Game</option>
+          <option value="algorithm5">Most Played</option>
         </select>
         <button class="linkborder" onclick=";changeAlgorithm('algorithm0')" id="randomiseAgain">Randomise Players Again!</button>
       </div>
@@ -84,10 +85,11 @@
   //var playersList = [];
 
   var algorithmTitle = { "algorithm0": "Everyone Randomly Weighted", 
-                         "algorithm1": "Win Ratio", 
-                         "algorithm2": "Win+Draw ratio",
-                         "algorithm3": "Win+(50% draw) ratio", 
-                         "algorithm4": "Average generated score per game\n(5 for win, 3 for draw, 1 for loss,\n 0 for not-played)" }
+                         "algorithm1": "Win Ratio (W|D|L)", 
+                         "algorithm2": "Win+Draw ratio (W|D|L)",
+                         "algorithm3": "Win+(50% draw) ratio (W|D|L)", 
+                         "algorithm4": "Average generated score per game\n(5 for win, 3 for draw, 1 for loss,\n 0 for not-played)",
+                         "algorithm5": "Most Played (W|D|L)"}
 
     // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
     var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
@@ -176,31 +178,78 @@
       console.log('No game this upcoming Monday:' + nextMondayDate);
     }
 
-  function generateRedBlueTeams(playersList) {
+
+  function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek) {
+    var standbyPlayers = [];
+    var numberStandbyNeeded = 0;
+    if (sortedPlayerNamesThisWeek.length >= 12) {
+      numberStandbyNeeded = sortedPlayerNamesThisWeek.length - 12;
+    } else {
+      numberStandbyNeeded = sortedPlayerNamesThisWeek.length - 10;
+    }
+    if (numberStandbyNeeded > 0) {
+      // we have standby players
+      var sortedPlayersByGamesPlayed = [...sortedPlayers];
+      sortedPlayersByGamesPlayed.sort(function(a, b) {
+        return b[1].algorithm5ratio - a[1].algorithm5ratio;
+      });
+      sortedPlayersByGamesPlayed = sortedPlayersByGamesPlayed.reverse();
+
+      // filter players playing this week
+      var randomStandbyOptions = [];
+      for (var i = 0; i < sortedPlayersByGamesPlayed.length; i++) {
+        var standbyPlayerName = sortedPlayersByGamesPlayed[i][0];
+        if (sortedPlayerNamesThisWeek.includes(standbyPlayerName)) {
+          randomStandbyOptions.push(standbyPlayerName);
+        }
+      }
+      // take half(ish) of the ordered list
+      randomStandbyOptions = randomStandbyOptions.slice(0, Math.floor(randomStandbyOptions.length/2) - 2);
+      // randomise the list
+      randomStandbyOptions = shuffle(randomStandbyOptions);
+      //console.log("RANDOMISED STANDBY OPTIONS", randomStandbyOptions);
+
+      for (var i = 0; i < numberStandbyNeeded; i++) {
+        // add player to standby
+        var standbyPlayerName = randomStandbyOptions[i];
+        //console.log("ADDING STANDBY:", standbyPlayerName);
+        standbyPlayers.push(standbyPlayerName);
+      }
+    }
+    return standbyPlayers;
+  }
+
+  function generateRedBlueTeams(playersList, optionalStandbyPlayers = []) {
     var redPlayers = [];
     var bluePlayers = [];
-    var standbyPlayers = [];
+    var standbyPlayers = optionalStandbyPlayers;
 
     var playerCount = playersList.length;
-    var maxPlayersPerTeam = Math.floor(playerCount/2)
+    var maxPlayersPerTeam = Math.floor(playerCount/2) + 1;
     for (var i = 0; i < playerCount; i++) {
-      if (i < 12) {
-        // evens on reds, odds on blues
-        if (i%2 == 0) {
-          if (redPlayers.length < maxPlayersPerTeam) {
-            redPlayers.push(playersList[i]);
+      var totalPlayerCount = redPlayers.length + bluePlayers.length;
+      if (!standbyPlayers.includes(playersList[i])) {
+        if (totalPlayerCount < 12) {
+          // evens on reds, odds on blues
+          if (totalPlayerCount%2 == 0) {
+            if (redPlayers.length < maxPlayersPerTeam) {
+              redPlayers.push(playersList[i]);
+            } else {
+              standbyPlayers.push(playersList[i]);
+              console.log("REDS", i, redPlayers.length, maxPlayersPerTeam);
+            }
           } else {
-            standbyPlayers.push(playersList[i]);
+            if (bluePlayers.length < maxPlayersPerTeam) {
+              bluePlayers.push(playersList[i]);
+            } else {
+              standbyPlayers.push(playersList[i]);
+              console.log("BLUES", i, redPlayers.length, maxPlayersPerTeam);
+            }
           }
         } else {
-          if (bluePlayers.length < maxPlayersPerTeam) {
-            bluePlayers.push(playersList[i]);
-          } else {
-            standbyPlayers.push(playersList[i]);
-          }
+          standbyPlayers.push(playersList[i]);
+          console.log("PLAY", i, redPlayers.length, maxPlayersPerTeam);
         }
-      } else {
-        standbyPlayers.push(playersList[i]);
       }
     }
 
@@ -319,6 +368,18 @@
   }
 
   function changeAlgorithm(algorithmType) {
+    // calculate updated URL
+    var newURL = window.location.href;
+    if (window.location.href.includes("algorithm=")) {
+      newURL = window.location.href.replace(/(algorithm=)\w+/g, 'algorithm=' + algorithmType.at(-1));
+    } else {
+      (window.location.href.includes("?")) ? newURL += "&" : newURL += "?";
+      newURL += "algorithm=" + algorithmType.at(-1);
+    }
+    // update the URL (without refreshing) to reflect tab change
+    window.history.pushState({}, 'unused', newURL);
+
+    // display the right div
     document.getElementById("paymentsEntryDiv").innerHTML = algorithmType;
     var playersGamesPlayedRatio = {};
 
@@ -355,19 +416,37 @@
     Object.keys(players).forEach(function(key) {
       playerName = key;
       var officialName = aliasToPlayerMap[playerName.toUpperCase()];
+      if (!officialName) {
+        // new player so use unofficial name and add to player list if needed
+        officialName = playerName;
+        if (!allPlayers.includes(officialName)) {
+          allPlayers.push(officialName);
+        }
+      }
       //console.log("ALIAS", playerName, officialName);
 
       playerCanPlay = players[key][nextMondayOptionIndex];
-      //console.log("playerName:" + playerName + " --- " + playerCanPlay);
       if (playerCanPlay) {
+        //console.log("officialName:" + officialName + " --- " + playerCanPlay);
         thisWeekPlayers.push(officialName);
       }
     });
 
+    // get total number of games possible
+    var totalPossibleGames = 0;
+    Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
+      for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
+        if (allAttendanceData[gamesCollectionId][weekNumber] && allAttendanceData[gamesCollectionId][weekNumber]['scores']) {
+          totalPossibleGames++;
+        }
+      }
+    });
+    //console.log("Total games...", totalPossibleGames);
+
     // now calculate the ratio for algorithms
     Object.values(allPlayers).forEach(function(currentPlayer) {
       //console.log("XXX", currentPlayer)
-      playersGamesPlayedRatio[currentPlayer] = {'algorithm4':0, 'won':0, 'lost':0, 'draw':0, 'didnotplay':0, 'thisWeekPlayer': false};
+      playersGamesPlayedRatio[currentPlayer] = {'algorithm4':0, 'won':0, 'lost':0, 'drawn':0, 'didnotplay':0, 'thisWeekPlayer': false};
       
       // loop through all of the attendance data, lookup current player
       Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
@@ -377,34 +456,36 @@
         // get all players for the month
         for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
           if (weekAttendanceData[weekNumber]) {
-            var playerWeekTeamNumber = weekAttendanceData[weekNumber][currentPlayer];
-            //console.log("using player week data...", currentPlayer, playerWeekTeamNumber);
             var weekScores = weekAttendanceData[weekNumber]['scores'];
+            if (weekScores) {
+              // attendance data includes the scores so check if the currentPlayer played
+              var playerWeekTeamNumber = weekAttendanceData[weekNumber][currentPlayer];
+              //console.log("using player week data...", currentPlayer, playerWeekTeamNumber);
+              if (playerWeekTeamNumber) {
+                // played
+                var goalsFor = weekScores['team' + playerWeekTeamNumber + 'goals'];
+                var oppositeTeamNumber = (playerWeekTeamNumber == 1) ? 2 : 1;
+                var goalsAgainst = weekScores['team' + oppositeTeamNumber + 'goals'];
+                //console.log("TEAM", playerWeekTeamNumber, oppositeTeamNumber);
 
-            if (playerWeekTeamNumber) {
-              // played
-              var goalsFor = weekScores['team' + playerWeekTeamNumber + 'goals'];
-              var oppositeTeamNumber = (playerWeekTeamNumber == 1) ? 2 : 1;
-              var goalsAgainst = weekScores['team' + oppositeTeamNumber + 'goals'];
-              //console.log("TEAM", playerWeekTeamNumber, oppositeTeamNumber);
-
-              if (weekScores['winner'] == playerWeekTeamNumber) {
-                //console.log("PLAYED, WON", currentPlayer, goalsFor, goalsAgainst);
-                playersGamesPlayedRatio[currentPlayer].won += 1;
-                playersGamesPlayedRatio[currentPlayer].algorithm4 += 5;
-              } else if (weekScores['winner'] == 0) {
-                //console.log("PLAYED, DRAW", currentPlayer, goalsFor, goalsAgainst);
-                playersGamesPlayedRatio[currentPlayer].draw += 1;
-                playersGamesPlayedRatio[currentPlayer].algorithm4 += 3;
+                if (weekScores['winner'] == playerWeekTeamNumber) {
+                  //console.log("PLAYED, WON", currentPlayer, goalsFor, goalsAgainst);
+                  playersGamesPlayedRatio[currentPlayer].won += 1;
+                  playersGamesPlayedRatio[currentPlayer].algorithm4 += 5;
+                } else if (weekScores['winner'] == 0) {
+                  //console.log("PLAYED, DRAW", currentPlayer, goalsFor, goalsAgainst);
+                  playersGamesPlayedRatio[currentPlayer].drawn += 1;
+                  playersGamesPlayedRatio[currentPlayer].algorithm4 += 3;
+                } else {
+                  //console.log("PLAYED, LOST", currentPlayer, goalsFor, goalsAgainst);
+                  playersGamesPlayedRatio[currentPlayer].lost += 1;
+                  playersGamesPlayedRatio[currentPlayer].algorithm4 += 1;
+                }
               } else {
-                //console.log("PLAYED, LOST", currentPlayer, goalsFor, goalsAgainst);
-                playersGamesPlayedRatio[currentPlayer].lost += 1;
-                playersGamesPlayedRatio[currentPlayer].algorithm4 += 1;
+                // did not play
+                //console.log("DID NOT PLAY", currentPlayer);
+                playersGamesPlayedRatio[currentPlayer].didnotplay = playersGamesPlayedRatio[currentPlayer].didnotplay + 1;
               }
-            } else {
-              // did not play
-              //console.log("DID NOT PLAY", currentPlayer);
-              playersGamesPlayedRatio[currentPlayer].didnotplay = playersGamesPlayedRatio[currentPlayer].didnotplay + 1;
             }
           }
         }
@@ -423,26 +504,39 @@
     Object.keys(playersGamesPlayedRatio).forEach(function(playerName) {
       //console.log(playerName);
       var playerStats = playersGamesPlayedRatio[playerName];
-      var totalGamesPlayed = playerStats.won + playerStats.lost + playerStats.draw;
+      var totalGamesPlayed = playerStats.won + playerStats.lost + playerStats.drawn;
 
-      // algorithm0 = everyone equally weighted
-      playersGamesPlayedRatio[playerName].algorithm0ratio = Math.random().toFixed(3);
+      if (totalGamesPlayed > 5) {
+        // algorithm0 = everyone equally weighted
+        playersGamesPlayedRatio[playerName].algorithm0ratio = Math.random().toFixed(3);
 
-      //algorithm1 = win ratio
-      playersGamesPlayedRatio[playerName].algorithm1ratio = (playerStats.won / totalGamesPlayed).toFixed(2);
+        //algorithm1 = win ratio
+        playersGamesPlayedRatio[playerName].algorithm1ratio = (playerStats.won / totalGamesPlayed).toFixed(2);
 
-      //algorithm2 = win+(50% draw) ratio
-      playersGamesPlayedRatio[playerName].algorithm2ratio = ((playerStats.won + (playerStats.draw / 2))  / totalGamesPlayed).toFixed(2);
+        //algorithm2 = win+(50% draw) ratio
+        playersGamesPlayedRatio[playerName].algorithm2ratio = ((playerStats.won + (playerStats.drawn / 2))  / totalGamesPlayed).toFixed(2);
 
-      //algorithm3 = win+draw ratio)
-      playersGamesPlayedRatio[playerName].algorithm3ratio = ((playerStats.won + playerStats.draw) / totalGamesPlayed).toFixed(2);
+        //algorithm3 = win+draw ratio)
+        playersGamesPlayedRatio[playerName].algorithm3ratio = ((playerStats.won + playerStats.drawn) / totalGamesPlayed).toFixed(2);
 
-      // algorithm4 = average generated score per game (5 for win, 3 for draw, 1 for loss, 0 for not-played)
-      playersGamesPlayedRatio[playerName].algorithm4ratio = (playerStats.algorithm4 / totalGamesPlayed).toFixed(2);
+        // algorithm4 = average generated score per game (5 for win, 3 for draw, 1 for loss, 0 for not-played)
+        playersGamesPlayedRatio[playerName].algorithm4ratio = (playerStats.algorithm4 / totalGamesPlayed).toFixed(2);
 
-      //algorithm5 = sort by algorithm4 and pick teams by alternating between the top 3 and the bottom 3
+        // algorithm5 = most played
+        playersGamesPlayedRatio[playerName].algorithm5ratio = totalGamesPlayed;
 
-      //algorithm6 = sort by algorithm (1, 2, 3 or 4) and pick teams by randomising the top 3 and the bottom 3
+        //algorithm5 = sort by algorithm4 and pick teams by alternating between the top 3 and the bottom 3
+
+        //algorithm6 = sort by algorithm (1, 2, 3 or 4) and pick teams by randomising the top 3 and the bottom 3
+      } else {
+        // new player so defeult to rank as 50/50
+        playersGamesPlayedRatio[playerName].algorithm0ratio = 0.5;
+        playersGamesPlayedRatio[playerName].algorithm1ratio = 0.5;
+        playersGamesPlayedRatio[playerName].algorithm2ratio = 0.5;
+        playersGamesPlayedRatio[playerName].algorithm3ratio = 0.5;
+        playersGamesPlayedRatio[playerName].algorithm4ratio = 2;
+        playersGamesPlayedRatio[playerName].algorithm5ratio = 0;
+      }
     });
 
     // create sorted array from the algorithm selected
@@ -463,32 +557,34 @@
     })
     //console.log("SORTED PLAYERS THIS WEEK:", sortedPlayerNamesThisWeek);
 
-    // generate the teams - divide into reds and blues
-    var generatedTeams = generateRedBlueTeams(sortedPlayerNamesThisWeek);
-    var redPlayers = generatedTeams.redPlayers
-    var bluePlayers = generatedTeams.bluePlayers
-    var standbyPlayers = generatedTeams.standbyPlayers
+    // generate the teams - standby first, then divide into reds and blues
+    var standbyPlayers = generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek);
+    var generatedTeams = generateRedBlueTeams(sortedPlayerNamesThisWeek, standbyPlayers);
     //console.log("NEW TEAMS", generatedTeams)
+    var redPlayers = shuffle(generatedTeams.redPlayers);
+    var bluePlayers = shuffle(generatedTeams.bluePlayers);
     
     // print the list for viewing
     var playerStringList = "";
     for (var i = 0; i < sortedPlayers.length; i++) {
       playerName = sortedPlayers[i][0];
       playerNameClean = playerName.replace(/&#39;/g, "'");
-      playerAlgorithmScore = sortedPlayers[i][1][algorithmType + "ratio"]
+      playerAlgorithmScore = Number(sortedPlayers[i][1][algorithmType + "ratio"]).toFixed(2);
 
-      var isPlaying = "";
-      //if (playersGamesPlayedRatio[playerName].thisWeekPlayer) {
+      var cssStyle = "";
       if (redPlayers.includes(playerName)) {
-        isPlaying = " R"
+        cssStyle = "font-weight:bold;color:white;background-color:red";
       } else if (bluePlayers.includes(playerName)) {
-        isPlaying = " B"
+        cssStyle = "font-weight:bold;color:white;background-color:blue";
       } else if (standbyPlayers.includes(playerName)) {
-        isPlaying = " S"
+        cssStyle = "font-weight:bold;color:white;background-color:gold";
       }
-      playerStringList += playerAlgorithmScore + isPlaying + "\t" + playerNameClean + "\n";
+      playerStringList += "<div style='" + cssStyle + "'>" + playerAlgorithmScore + "  (" + playersGamesPlayedRatio[playerName].won + "|" + playersGamesPlayedRatio[playerName].drawn + "|" + playersGamesPlayedRatio[playerName].lost + ")  " + playerNameClean + "\n</div>";
+
     }
-    document.getElementById("paymentsEntryDiv").innerHTML = '<pre>' + algorithmTitle[algorithmType] + '\n\n' + playerStringList + '</pre>';
+    document.getElementById("paymentsEntryDiv").innerHTML = '<pre>' + algorithmTitle[algorithmType] 
+      + '\n(Total No of Games: ' + totalPossibleGames + ')\n\n'
+      + playerStringList + '</pre>';
 
     generateTeamsEmailText(generatedTeams);
     updateDivText();
@@ -596,9 +692,11 @@
   }
 
   // auto select the
-  document.getElementById("algorithmChoice").selectedIndex = 1;
+  var algorithmIndex = new URL(document.location.href).searchParams.get("algorithm");
+  var selectAlgorithm = (algorithmIndex && algorithmIndex <= document.getElementById("algorithmChoice").length) ? algorithmIndex : 2;
+  document.getElementById("algorithmChoice").selectedIndex = selectAlgorithm;
   document.getElementById('algorithmChoice').dispatchEvent(new Event('change'));
-
+  
   </script>
   <%- include ("./admin-payments.ejs") %>
 
