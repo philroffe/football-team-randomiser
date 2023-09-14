@@ -34,6 +34,9 @@ Install the gcloud CLI as described here: https://cloud.google.com/sdk/docs/inst
 
 ```
 gcloud app deploy .app-prod.yaml
+
+# if you want a weekly scheduled task then deploy the cron too...
+gcloud app deploy cron.yaml
 ```
 
 ## Setting up Google Cloud App Engine and Firebase
@@ -41,10 +44,10 @@ gcloud app deploy .app-prod.yaml
 ```
 # setup backup schedules
 # https://cloud.google.com/firestore/docs/backups
-gcloud alpha firestore backups schedules create --database "(default)" --recurrence=daily --retention=3
-gcloud alpha firestore backups schedules create --database "(default)" --recurrence=weekly --retention=5 --day-of-week=tuesday
+gcloud alpha firestore backups schedules create --database="(default)" --recurrence=daily --retention=3d
+gcloud alpha firestore backups schedules create --database="(default)" --recurrence=weekly --retention=5w --day-of-week=tuesday
 # list backup schedules and backups
-gcloud alpha firestore backups schedules list --database "(default)"
+gcloud alpha firestore backups schedules list --database="(default)"
 gcloud alpha firestore backups list --format="table(name, database, state)"
 ```
 

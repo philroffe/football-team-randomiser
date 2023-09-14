@@ -59,7 +59,10 @@
     <div class="content">
       <div class="panel-title">Attendance</div>
       To edit you need to be an admin and login (see menu).<br>
-      Tip: Auto populate by sending standard teams email to: <code>pswdkhmu@mailparser.io</code>
+      <div id="attendanceAdmin" hidden>
+        Tip: Auto populate email:
+        <br><code>teams@tensile-spirit-360708.appspotmail.com</code>
+      </div>
         <div class="panelcontentouter">
           <!-- do not put anything directly in here, use innerleft and innerright -->
           <div class="panelcontentinnerleft">
@@ -231,6 +234,7 @@
       // show edit functionality if there is a valid logged-in user
       document.getElementById("tempPasswordOKDiv").hidden = false;
       document.getElementById("paymentsAdmin").hidden = false;
+      document.getElementById("attendanceAdmin").hidden = false;
     } else {
       // no logged-in user so ensure edit buttons are disabled
       const weekEditButtons = document.getElementsByClassName("rotated");

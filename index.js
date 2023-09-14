@@ -6,6 +6,7 @@ const ical = require('node-ical');
 const request = require('request');
 const session = require('express-session');
 const nodemailer = require('nodemailer');
+const fs = require('fs');
 
 
 // By default, the client will authenticate using the service account file
@@ -97,33 +98,6 @@ app.use(express.static(path.join(__dirname, 'public')))
 .use(express.json())
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
-
-.post('/_ah/mail/teams@tensile-spirit-360708.appspotmail.com', async (req, res) => {
-  console.log('Got /_ah/mail/teams@... with Content-Type:', req.get('Content-Type'));
-  try {
-    var body = "";
-    await req.on('readable', function() {
-      body += req.read();
-    });
-    req.on('end', function() {
-      // body is now a raw email message
-      // parse the email and extract the teams
-      var redsIndex = body.indexOf("REDS");
-      var bluesIndex = body.indexOf("BLUES", redsIndex);
-      var endIndex = body.indexOf("Cheers", bluesIndex);
-
-      var redTeam = body.substring(redsIndex, bluesIndex);
-      var blueTeam = body.substring(bluesIndex, endIndex);
-
-      console.log('RED TEAM:', redTeam);
-      console.log('BLUE TEAM:', blueTeam);
-    });
-    res.json({'result': 'OK'})
-  } catch (err) {
-    console.error(err);
-    res.json({'result': 'OK'})
-  }
-})
 .get('/', (req, res) => res.render('pages/index'))
 .get('/login', (req, res) => res.render('pages/auth'))
 .get('/error', (req, res) => res.send("error logging in - invalid account for this site"))
@@ -135,7 +109,7 @@ app.use(express.static(path.join(__dirname, 'public')))
   });
 })
 .post('/create-payments-for-month', async (req, res) => {
-  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log('Got /create-payments-for-month POST:', ip, JSON.stringify(req.body));
 
   var gameMonth = req.body.gameMonth;
@@ -272,88 +246,85 @@ app.use(express.static(path.join(__dirname, 'public')))
   }
 })
 .post('/services/teams', async (req, res) => {
+  // DEPRECATED - endpoint for mailparser, now replaced by google appengine inbound email capability
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
-  console.log('GOT TEAMS POST FROM EMAIL:', ip, req.body);
+  console.log('GOT TEAMS POST FROM EMAIL: (MAILPARSER)', ip, req.body);
   var emailDate = new Date(req.body.Email_Sent_Date.split(' at')[0]);
-  var emailSubjectGameDate = new Date(req.body.Subject_Game_Date + " " + emailDate.getFullYear());
+  //var emailSubjectGameDate = new Date(req.body.Subject_Game_Date + " " + emailDate.getFullYear());
   var redTeam = req.body.Red_Team;
   var blueTeam = req.body.Blue_Team;
+  var redTeamPlayers = redTeam.split('\n');
+  var blueTeamPlayers = blueTeam.split('\n');
 
-  try {
-    //calc date - use the next Monday after the email date
-    var nextMonday = getDateNextMonday(emailDate);
-    var nextMondayString = nextMonday.toISOString().split('T')[0]; //2023-11-27
-    var gameMonth = nextMondayString.slice(0, -3); //2023-11
-    var gamesCollectionId = "games_" + gameMonth + "-01";
+  //calc date - use the next Monday after the email date
+  var gameDate = getDateNextMonday(emailDate);
+  // save the details
+  var saveSuccess = saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers);
 
-    // find the index for the week
-    var mondaysDates = mondaysInMonth(nextMonday.getMonth()+1, nextMonday.getFullYear());  //=> [ 7,14,21,28 ]
-    var weekNumber = -1;
-    for (var i = 0; i < mondaysDates.length; i ++) {
-      if (mondaysDates[i] == nextMonday.getDate()) {
-        weekNumber = i;
-        console.log("Found date:" + nextMonday + " with index:" + weekNumber);
-        break;
-      }
-    }
-
-    // read the list of players and aliases
-    var playerAliasMaps = {};
-    playerAliasMaps = await getDefinedPlayerAliasMaps();
-    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
-
-    var timestamp = new Date();
-    var saveType = "ATTENDANCE"
-    var attendanceDetails = { "month": gameMonth, "timestamp": timestamp, "saveType": saveType, "source_ip": "mailparser.io " + ip };
-
-    var allPlayers = {};
-    var redTeamPlayers = redTeam.split('\n')
-    for(var i = 0; i < redTeamPlayers.length; i++) {
-      var playerName = redTeamPlayers[i].replace(/\d+/g, '').replace(/\*/g, '').trim();
-      // check if there is an official name
-      var officialPlayerName = getOfficialNameFromAlias(playerName, aliasToPlayerMap);
-      playerName = (officialPlayerName) ? officialPlayerName : playerName;
-      allPlayers[playerName] = 1;
-    }
-    var blueTeamPlayers = blueTeam.split('\n')
-    for(var i = 0; i < blueTeamPlayers.length; i++) {
-      var playerName = blueTeamPlayers[i].replace(/\d+/g, '').replace(/\*/g, '').trim();
-      // check if there is an official name
-      var officialPlayerName = getOfficialNameFromAlias(playerName, aliasToPlayerMap);
-      playerName = (officialPlayerName) ? officialPlayerName : playerName;
-      allPlayers[playerName] = 2;
-    }
-    attendanceDetails[weekNumber] = allPlayers;
-
-    console.log('Inserting DB data:', gamesCollectionId, JSON.stringify(attendanceDetails));
-    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
-    var existingDoc = await docRef.get();
-    if (!existingDoc.data()) {
-      console.log('CREATING:', JSON.stringify(attendanceDetails));
-      await docRef.set(attendanceDetails);
-    } else {
-      // copy the existing doc to preserve a history
-      var existingDocData = existingDoc.data();
-      existingDocData.saveType = "ATTENDANCE_BACKUP"
-      if (!existingDocData[weekNumber] || !existingDocData[weekNumber].scores) {
-        console.log('UPDATING:', JSON.stringify(attendanceDetails));
-        const backupDocRef = firestore.collection(gamesCollectionId).doc("_attendance_" + existingDocData.timestamp);
-        backupDocRef.set(existingDocData)
-        // now update with the new data
-        await docRef.update(attendanceDetails);
-      } else {
-        console.log('STORING IN DEAD LETTER:', JSON.stringify(attendanceDetails));
-        // scores already in so manually create - be careful
-        // store in dead letter queue
-        const docRef = firestore.collection("INBOUND_EMAILS").doc(emailSubjectGameDate + "_" + emailDate);
-        await docRef.set(req.body);
-      }
-    }
-    invalidateDataCaches();
+  if (saveSuccess) {
     res.json({'result': 'OK'})
+  } else {
+    res.sendStatus(400);
+  }
+})
+.post('/_ah/mail/teams@tensile-spirit-360708.appspotmail.com', async (req, res) => {
+  console.log('Got /_ah/mail/teams@... with Content-Type:', req.get('Content-Type'));
+  try {
+
+    var body = "";
+    await req.on('readable', function() {
+      body += req.read();
+    });
+    req.on('end', function() {
+      var bodyArray = body.split('\n');
+
+      // loop through the email, line-by-line, and extract the payers for each team
+      // assumes REDS first, BLUES second!
+      var cleanRedTeamPlayers = [];
+      var cleanBlueTeamPlayers = [];
+      var gameDate;
+      for (i=0; i<bodyArray.length; i++) {
+        //console.log("Testing", i, bodyArray[i]);
+        var currentUpperCaseText = bodyArray[i].trim().toUpperCase();
+        if (currentUpperCaseText.startsWith("REDS")) {
+          // found the reds team, now parse it
+          var redsIndex = i;
+          if (cleanRedTeamPlayers.length == 0) {
+            cleanRedTeamPlayers = parsePlayerTeamNames(bodyArray, i);
+          }
+        } else if (currentUpperCaseText.startsWith("BLUE")) {
+          var blueIndex = i;
+          if (cleanBlueTeamPlayers.length == 0) {
+            cleanBlueTeamPlayers = parsePlayerTeamNames(bodyArray, i);
+          }
+        } else if (currentUpperCaseText.startsWith("DATE:")) {
+          // update the date until the REDS players are found
+          if (cleanRedTeamPlayers.length == 0) {
+            // clean the date ready for parsing
+            var dateText = currentUpperCaseText.split(" AT")[0];
+            var emailDate = new Date(dateText.split("DATE: ")[1]);
+            //calc date - use the next Monday after the email date
+            gameDate = getDateNextMonday(emailDate);
+            //console.log('WORKING DATE:', dateText, emailDate, gameDate);
+          }
+        }
+      }
+      console.log("REDS", redsIndex, cleanRedTeamPlayers);
+      console.log("BLUES", blueIndex, cleanBlueTeamPlayers);
+      console.log("DATE", dateText, emailDate);
+
+      // save the details
+      var saveSuccess = saveTeamsAttendance(gameDate, cleanRedTeamPlayers, cleanBlueTeamPlayers);
+
+      if (saveSuccess) {
+        res.json({'result': 'OK'})
+      } else {
+        res.sendStatus(400);
+      }
+    });
   } catch (err) {
     console.error(err);
-    res.send({'result': err});
+    res.json({'result': err})
   }
 })
 .post('/logging', async (req, res) => {
@@ -385,7 +356,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
         
         // combine database data with supplimentary game data and render the page
-        var pageData = { data: rowdata, nextMonday: nextMonday.toISOString() };
+        var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString() };
         if (userProfile) {
           //console.log(userProfile["_json"]);
           pageData.user = userProfile["_json"];
@@ -547,7 +518,8 @@ app.use(express.static(path.join(__dirname, 'public')))
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": ip };
 
     var eventDetails = convertAvailibilityToDates(gameMonth, gameYear, playerAvailability);
-    sendAdminEvent("Player Change " + playerName, playerName + "\n" + eventDetails);
+    var headerPostfix = " [Footie, Goodwin, 6pm Mondays]";
+    sendAdminEvent("[Player Change Event] " + playerName + headerPostfix, playerName + "\n" + eventDetails);
 
     console.log('Inserting DB game data:', JSON.stringify(gamedetails_new));
     try {
@@ -674,7 +646,6 @@ app.use(express.static(path.join(__dirname, 'public')))
       res.send({'result': err});
     }
   })
-
 .post('/send-email', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
   console.log('Got /send-email POST:', ip, JSON.stringify(req.body));
@@ -684,14 +655,14 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.status(401).send({'result': 'Denied. User not logged in...'});
     return;
   }
-
+  
   // get email list
   var emailTo = "";
   if (req.body.emailTo) {
     // convert emails array to csv
     emailTo = req.body.emailTo.toString();
   } else {
-    res.json({'result': 'ERROR: No emailTo list defined'})
+    res.json({'result': 'ERROR: No emailTo list defined'});
     return;
   }
 
@@ -701,26 +672,72 @@ app.use(express.static(path.join(__dirname, 'public')))
     subject: req.body.emailSubject,
     html: req.body.emailBody
   };
-  console.log(mailOptions);
-  
-  var transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: GOOGLE_MAIL_USERNAME,
-      pass: GOOGLE_MAIL_APP_PASSWORD
-    }
-  });
 
-  transporter.sendMail(mailOptions, function(error, info){
-    console.log('Trying to send email: ', mailOptions);
-    if (error) {
-      console.log(error);
-      res.send({'result': error});
-    } else {
-      console.log('Email sent: ' + info.response);
-      res.json({'result': 'OK'})
-    }
-  });
+  // now send the email
+  var emailResult = sendEmailToList(mailOptions, req.hostname);
+
+  if (emailResult) {
+    res.json({'result': 'OK'})
+  } else {
+    res.sendStatus(400);
+  }
+})
+.get('/schedule/send-weekly-teams', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  console.log("Scheduling weekly teams GET", ip, req.get('X-Appengine-Cron'));
+  //could also restrict by IP (ip == '0.1.0.2' || ip.endsWith('127.0.0.1'))
+  if ((req.get('X-Appengine-Cron') === 'true') 
+    && (ip.startsWith('0.1.0.2') || ip.endsWith('127.0.0.1'))) {
+    // choose the algorithm to us to select the teams
+    var algorithmType = "algorithm3";
+
+    // TODO find a better way to import the library as a module rather than as a file
+    var nextMonday = getDateNextMonday();
+    eval(fs.readFileSync('./views/pages/generate-teams-utils.js')+'');
+
+    var nextMonday = getDateNextMonday(new Date());
+    var gameYear = nextMonday.getFullYear();
+    var gameMonth = nextMonday.toISOString().split('-')[1];
+    var dateString = gameYear + "-" + gameMonth + "-01";
+
+    console.log('Schedule - Generating TEAMS page with data for date: ', dateString);
+    //calc date - use the next Monday after the email date
+    var rowdata = await queryDatabaseAndBuildPlayerList(dateString);
+    var players = rowdata.players;
+
+    // read the list of players and aliases
+    var playerAliasMaps = {};
+    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+
+    //
+    var mondaysDates = mondaysInMonth(nextMonday.getMonth()+1, nextMonday.getFullYear());  //=> [ 7,14,21,28 ]
+    var nextMondayOptionIndex = getNextMondayIndex(mondaysDates, nextMonday);
+    console.log("mondaysDates:", mondaysDates, nextMondayOptionIndex);
+
+    // change the algorithm for all players and regenerate teams
+    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(nextMonday, 12);
+    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex);
+
+    // get the list of people on the email list
+    var emailTo = Object.values(playerAliasMaps.activeEmailList);
+
+    // now generate the email text and send it
+    var emailDetails = generateTeamsEmailText(playersGamesPlayedRatio.generatedTeams, nextMonday);
+    var mailOptions = {
+      from: GOOGLE_MAIL_FROM_NAME,
+      to: emailTo,
+      subject: emailDetails.emailSubject,
+      text: emailDetails.emailBody
+    };
+    
+    var emailResult = sendEmailToList(mailOptions, req.hostname);
+
+    res.json({'result': 'OK'});
+  } else {
+    console.log("ERROR: Denied - internal endpoint only");
+    res.status(403).end();
+  }
 })
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
 
@@ -1086,4 +1103,123 @@ function sendAdminEvent(title, details) {
       return true;
     }
   });
+}
+
+// send an email to the admins to notify of certain events (such as a player availability change)
+function sendEmailToList(mailOptions, hostname) {
+  if (!hostname || hostname == "localhost") {
+    // if localhost then force testing emails only
+    mailOptions.to = ['Phil R Test1 <philroffe+Test1@gmail.com>'];
+    console.log('FORCING SENDING _TEST_ MSG BECAUSE RUNNING LOCALLY');
+  }
+
+  transporter.sendMail(mailOptions, function(error, info){
+    console.log('Trying to send admin email: ', mailOptions);
+    if (error) {
+      console.log(error);
+      return false;
+    } else {
+      console.log('Admin email sent: ' + info.response);
+      return true;
+    }
+  });
+}
+
+// save players that played for each team
+async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, rawSourceData = undefined) {
+ try {
+   var gameDateString = gameDate.toISOString().split('T')[0]; //2023-11-27
+   var gameMonth = gameDateString.slice(0, -3); //2023-11
+   var gamesCollectionId = "games_" + gameMonth + "-01";
+
+   // find the index for the week
+   var mondaysDates = mondaysInMonth(gameDate.getMonth()+1, gameDate.getFullYear());  //=> [ 7,14,21,28 ]
+   var weekNumber = -1;
+   for (var i = 0; i < mondaysDates.length; i ++) {
+     if (mondaysDates[i] == gameDate.getDate()) {
+       weekNumber = i;
+       console.log("Found date:" + gameDate + " with index:" + weekNumber);
+       break;
+     }
+   }
+
+   // read the list of players and aliases
+   var playerAliasMaps = {};
+   playerAliasMaps = await getDefinedPlayerAliasMaps();
+   var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+
+   var timestamp = new Date();
+   var saveType = "ATTENDANCE"
+   var ip = "UNKNOWN";
+   var attendanceDetails = { "month": gameMonth, "timestamp": timestamp, "saveType": saveType, "source_ip": "email from " + ip };
+
+   var allPlayers = {};
+   for(var i = 0; i < redTeamPlayers.length; i++) {
+     var playerName = redTeamPlayers[i].replace(/\d+/g, '').replace(/\*/g, '').trim();
+     // check if there is an official name
+     var officialPlayerName = getOfficialNameFromAlias(playerName, aliasToPlayerMap);
+     playerName = (officialPlayerName) ? officialPlayerName : playerName;
+     allPlayers[playerName] = 1;
+   }
+   for(var i = 0; i < blueTeamPlayers.length; i++) {
+     var playerName = blueTeamPlayers[i].replace(/\d+/g, '').replace(/\*/g, '').trim();
+     // check if there is an official name
+     var officialPlayerName = getOfficialNameFromAlias(playerName, aliasToPlayerMap);
+     playerName = (officialPlayerName) ? officialPlayerName : playerName;
+     allPlayers[playerName] = 2;
+   }
+   attendanceDetails[weekNumber] = allPlayers;
+
+   console.log('Inserting DB data:', gamesCollectionId, JSON.stringify(attendanceDetails));
+   const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+   var existingDoc = await docRef.get();
+   if (!existingDoc.data()) {
+     console.log('CREATING:', JSON.stringify(attendanceDetails));
+     await docRef.set(attendanceDetails);
+   } else {
+     // copy the existing doc to preserve a history
+     var existingDocData = existingDoc.data();
+     existingDocData.saveType = "ATTENDANCE_BACKUP"
+     if (!existingDocData[weekNumber] || !existingDocData[weekNumber].scores) {
+       console.log('UPDATING:', JSON.stringify(attendanceDetails));
+       const backupDocRef = firestore.collection(gamesCollectionId).doc("_attendance_" + existingDocData.timestamp);
+       backupDocRef.set(existingDocData)
+       // now update with the new data
+       await docRef.update(attendanceDetails);
+     } else {
+       console.log('STORING IN DEAD LETTER:', JSON.stringify(attendanceDetails));
+       // scores already in so needs manual intervention as need to be careful
+       // store in dead letter queue
+       var emailSubjectGameDate = "DUPLICATE";
+       const docRef = firestore.collection("INBOUND_EMAILS").doc(emailSubjectGameDate + "_" + gameDate);
+       await docRef.set(attendanceDetails);
+     }
+   }
+   invalidateDataCaches();
+   return true;
+ } catch (err) {
+   console.log(err);
+   return false;
+ } 
+}
+
+// parse a list (array) of text containing the teams and extracts the player names
+function parsePlayerTeamNames(playerArray, startIndex) {
+  var nameArray = [];
+  for (j=0; j<11; j++) {
+    var cleanName = playerArray[startIndex+j+1].trim().replace(/^\d/, '').replace(/^\./g, '').replace(/^/g, '').replace(/\*+/i, '').trim();
+    //.replace(/(red.*|BLUE.*|\*+)/i, '').trim();
+    if (cleanName.toUpperCase().startsWith("BLUE") 
+      || cleanName.toUpperCase().startsWith("RED") 
+      || cleanName.toUpperCase().startsWith("STAND")
+      || cleanName.toUpperCase() == "") {
+      // found the header/blank so exit from the loop
+      //console.log("Exiting loop here:", j, cleanName);
+      break;
+    } else if (cleanName) {
+      //console.log("Adding player to team", j, cleanName);
+      nameArray.push(cleanName);
+    }
+  }
+  return nameArray;
 }
