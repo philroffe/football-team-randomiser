@@ -7,6 +7,7 @@ const request = require('request');
 const session = require('express-session');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
+const jsdom = require('jsdom');
 
 
 // By default, the client will authenticate using the service account file
@@ -168,81 +169,12 @@ app.use(express.static(path.join(__dirname, 'public')))
   var amountReceived = req.body.amount_received;
   var amount = Number(amountReceived.split(' ')[0].replace(/£/, ''));
 
-  var dayString = "" + transactionDate.getDate();
-  if (dayString.length == 1) {
-    dayString = "0" + dayString;
-  }
-  var monthString = "" + (transactionDate.getMonth()+1);
-  if (monthString.length == 1) {
-    monthString = "0" + monthString;
-  }
-
-  // read the list of players and aliases
-  var playerAliasMaps = {};
-  playerAliasMaps = await getDefinedPlayerAliasMaps();
-  var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
-  var officialPlayerName = getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
-
-  try {
-    // read list of outstanding payments for the player
-    const playerClosedLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc(officialPlayerName);
-    var thisDate = transactionDate.getFullYear() + "-" + monthString + "-" + dayString;
-    var playerTransactionName = "payment_" + thisDate + "_" + transactionId;
-    var playerClosedLedgerDoc = await playerClosedLedgerDocRef.get();
-    if (playerClosedLedgerDoc.data() && playerClosedLedgerDoc.data()[playerTransactionName]) {
-      console.warn("transaction already exists, skipping to avoid double counting...", playerTransactionName);
-      res.send({'result': 'Already exists: ' + playerTransactionName});
-      return;
-    }
-    var playerTransactionSavedata = {};
-    playerTransactionSavedata[playerTransactionName] = { "amount": amount, "paypalTransactionId": transactionId };
-    console.log('Adding PAYMENTS:', officialPlayerName, thisDate, JSON.stringify(playerTransactionSavedata));
-    playerClosedLedgerDocRef.set(playerTransactionSavedata, { merge: true });
-
-    ////////////////// TODO: Store payment in dead-letter queue if officialPlayerName not found (throws exception)
-
-    // now mark off the games for that payment
-    const playerOpenLedgerDocRef = firestore.collection("OPEN_LEDGER").doc(officialPlayerName);
-    var playerLedgerDoc = await playerOpenLedgerDocRef.get();
-    if (playerLedgerDoc.data()) {
-      var playerLedgerData = playerLedgerDoc.data();
-      var amountLeft = amount;
-      if (Object.keys(playerLedgerData).length > 0) {
-        Object.keys(playerLedgerData).sort().forEach( async function(transactionName) {
-          if (transactionName.startsWith("charge_")) {
-            var thisTransaction = playerLedgerData[transactionName];
-            if (amountLeft >= (thisTransaction.amount * -1)) {
-              console.log('Moving transaction from open to closed ledger:', officialPlayerName, amountLeft, thisTransaction.amount, JSON.stringify(thisTransaction));
-              amountLeft += thisTransaction.amount;
-              thisTransaction.paid = transactionId;
-              // add it to the closed ledger
-              var closedTransaction = {};
-              closedTransaction[transactionName] = thisTransaction;
-              playerClosedLedgerDocRef.set( closedTransaction, { merge: true });
-              // remove this transaction from the open ledger
-              delete playerLedgerData[transactionName];
-            }
-          }
-        });
-      }
-      if (amountLeft != amount) {
-        // some ledger transactions have changed so update
-        if (Object.keys(playerLedgerData).length == 0) {
-          playerOpenLedgerDocRef.delete();
-        } else {
-          playerOpenLedgerDocRef.set(playerLedgerData);
-        }
-      }
-
-      ////////////////// TODO: Store amount left if >0
-
-      console.log('Got playerLedgerData for:', officialPlayerName, JSON.stringify(playerLedgerData));
-    }
-
+  // save the details
+  var saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+  if (saveSuccess) {
     res.json({'result': 'OK'})
-  } catch (err) {
-    console.error(err);
-    res.send({'result': err});
+  } else {
+    res.sendStatus(400);
   }
 })
 .post('/services/teams', async (req, res) => {
@@ -265,6 +197,69 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.json({'result': 'OK'})
   } else {
     res.sendStatus(400);
+  }
+})
+.post('/_ah/mail/payment@tensile-spirit-360708.appspotmail.com', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT /_ah/mail/payment@... PAYMENT POST FROM EMAIL:', ip, req.body);
+  try {
+    var body = "";
+    await req.on('readable', function() {
+      body += req.read();
+    });
+    req.on('end', function() {
+      // extract just the html from the paypal email
+      var startPaypalIndex = body.indexOf("@paypal.co.uk");
+      var startPaypalHtmlIndex = body.indexOf("<html", startPaypalIndex);
+      var endPaypalHtmlIndex = body.indexOf("</html>", startPaypalIndex);
+      var html = body.substring(startPaypalHtmlIndex, endPaypalHtmlIndex + 7);
+      // join back to one line and use JSDOM to allow parsing
+      html = html.replace(/(=\n)/g, '');
+      const dom = new jsdom.JSDOM(html);
+
+      // now loop through the body of the html and extract the relevant text
+      var payeeName;
+      var amount;
+      var transactionId;
+      var transactionDate;
+      var bodyTextArray = dom.window.document.querySelector("body").textContent.split('\n');
+      for (i=0; i<bodyTextArray.length; i++) {
+        var thisString = bodyTextArray[i].trim();
+        //console.log("Line:", thisString)
+        if (thisString) {
+          var payeeNameMatch = thisString.match(/(.*)( has sent you)(.*)/);
+          if (payeeNameMatch) {
+            payeeName = payeeNameMatch[1];
+            // sometimes can get the amount here too, but paypal is inconsistent so not using it
+            //amount = payeeNameMatch[3].replace(/.*=C2=A3/, '').replace(/=C2.*/, '');
+          } else if (thisString.startsWith("Transaction ID")) {
+            // get value of next line
+            transactionId = thisString.replace("Transaction ID", "");
+          } else if (thisString.startsWith("Transaction date")) {
+            // get value of next line
+            transactionDate = new Date(thisString.replace("Transaction date", ""));
+          } else if (thisString.startsWith("Amount received")) {
+            // get value of next line (and replace the strange chars)
+            amount = Number(bodyTextArray[i+1].replace(/.*=C2=A3/, '').replace(/=C2.*/, ''));
+            // this is the last message so quit loop
+            i = bodyTextArray.length;
+          }
+        }
+      }
+      console.log("Parsed paypal email:", payeeName, amount, transactionId, transactionDate);
+
+      // save the details
+      var saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+
+      if (saveSuccess) {
+        res.json({'result': 'OK'})
+      } else {
+        res.sendStatus(400);
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.json({'result': err})
   }
 })
 .post('/_ah/mail/teams@tensile-spirit-360708.appspotmail.com', async (req, res) => {
@@ -1222,4 +1217,83 @@ function parsePlayerTeamNames(playerArray, startIndex) {
     }
   }
   return nameArray;
+}
+
+// record a payment transaction
+async function receivePaymentEmail(payeeName, amount, transactionId, transactionDate) {
+  var dayString = "" + transactionDate.getDate();
+  if (dayString.length == 1) {
+    dayString = "0" + dayString;
+  }
+  var monthString = "" + (transactionDate.getMonth()+1);
+  if (monthString.length == 1) {
+    monthString = "0" + monthString;
+  }
+
+  // read the list of players and aliases
+  var playerAliasMaps = {};
+  playerAliasMaps = await getDefinedPlayerAliasMaps();
+  var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+  var officialPlayerName = getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
+
+  try {
+    // read list of outstanding payments for the player
+    const playerClosedLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc(officialPlayerName);
+    var thisDate = transactionDate.getFullYear() + "-" + monthString + "-" + dayString;
+    var playerTransactionName = "payment_" + thisDate + "_" + transactionId;
+    var playerClosedLedgerDoc = await playerClosedLedgerDocRef.get();
+    if (playerClosedLedgerDoc.data() && playerClosedLedgerDoc.data()[playerTransactionName]) {
+      console.warn("transaction already exists, skipping to avoid double counting...", playerTransactionName);
+      //res.send({'result': 'Already exists: ' + playerTransactionName});
+      return true;
+    }
+    var playerTransactionSavedata = {};
+    playerTransactionSavedata[playerTransactionName] = { "amount": amount, "paypalTransactionId": transactionId };
+    console.log('Adding PAYMENTS:', officialPlayerName, thisDate, JSON.stringify(playerTransactionSavedata));
+    playerClosedLedgerDocRef.set(playerTransactionSavedata, { merge: true });
+
+    ////////////////// TODO: Store payment in dead-letter queue if officialPlayerName not found (throws exception)
+
+    // now mark off the games for that payment
+    const playerOpenLedgerDocRef = firestore.collection("OPEN_LEDGER").doc(officialPlayerName);
+    var playerLedgerDoc = await playerOpenLedgerDocRef.get();
+    if (playerLedgerDoc.data()) {
+      var playerLedgerData = playerLedgerDoc.data();
+      var amountLeft = amount;
+      if (Object.keys(playerLedgerData).length > 0) {
+        Object.keys(playerLedgerData).sort().forEach( async function(transactionName) {
+          if (transactionName.startsWith("charge_")) {
+            var thisTransaction = playerLedgerData[transactionName];
+            if (amountLeft >= (thisTransaction.amount * -1)) {
+              console.log('Moving transaction from open to closed ledger:', officialPlayerName, amountLeft, thisTransaction.amount, JSON.stringify(thisTransaction));
+              amountLeft += thisTransaction.amount;
+              thisTransaction.paid = transactionId;
+              // add it to the closed ledger
+              var closedTransaction = {};
+              closedTransaction[transactionName] = thisTransaction;
+              playerClosedLedgerDocRef.set( closedTransaction, { merge: true });
+              // remove this transaction from the open ledger
+              delete playerLedgerData[transactionName];
+            }
+          }
+        });
+      }
+      if (amountLeft != amount) {
+        // some ledger transactions have changed so update
+        if (Object.keys(playerLedgerData).length == 0) {
+          playerOpenLedgerDocRef.delete();
+        } else {
+          playerOpenLedgerDocRef.set(playerLedgerData);
+        }
+      }
+
+      ////////////////// TODO: Store amount left if >0
+
+      console.log('Got playerLedgerData for:', officialPlayerName, JSON.stringify(playerLedgerData));
+    }
+    return true;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
 }
