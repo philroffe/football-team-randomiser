@@ -208,6 +208,7 @@ app.use(express.static(path.join(__dirname, 'public')))
       body += req.read();
     });
     req.on('end', function() {
+      /* NOT USED - was needed for the html paypal email, but the forward gives me plain text
       // extract just the html from the paypal email
       var startPaypalIndex = body.indexOf("@paypal.co.uk");
       var startPaypalHtmlIndex = body.indexOf("<html", startPaypalIndex);
@@ -216,15 +217,17 @@ app.use(express.static(path.join(__dirname, 'public')))
       // join back to one line and use JSDOM to allow parsing
       html = html.replace(/(=\n)/g, '');
       const dom = new jsdom.JSDOM(html);
+      */
 
-      // now loop through the body of the html and extract the relevant text
+      // now loop through and extract the relevant text
       var payeeName;
       var amount;
       var transactionId;
       var transactionDate;
-      var bodyTextArray = dom.window.document.querySelector("body").textContent.split('\n');
+      //var bodyTextArray = dom.window.document.querySelector("body").textContent.split('\n');
+      bodyTextArray = body.split('\n');
       for (i=0; i<bodyTextArray.length; i++) {
-        var thisString = bodyTextArray[i].trim();
+        var thisString = bodyTextArray[i].trim().replace(/\*/, '');
         //console.log("Line:", thisString)
         if (thisString) {
           var payeeNameMatch = thisString.match(/(.*)( has sent you)(.*)/);
@@ -234,13 +237,18 @@ app.use(express.static(path.join(__dirname, 'public')))
             //amount = payeeNameMatch[3].replace(/.*=C2=A3/, '').replace(/=C2.*/, '');
           } else if (thisString.startsWith("Transaction ID")) {
             // get value of next line
-            transactionId = thisString.replace("Transaction ID", "");
-          } else if (thisString.startsWith("Transaction date")) {
+            //transactionId = thisString.replace("Transaction ID", "");
+            //console.log("TRANSACTION_ID!", thisString, bodyTextArray[i+1]);
+            transactionId = bodyTextArray[i+1].trim();
+          } else if (thisString.startsWith("date")) {
             // get value of next line
-            transactionDate = new Date(thisString.replace("Transaction date", ""));
+            //transactionDate = new Date(thisString.replace("Transaction date", ""));
+            //console.log("TRANSACTION_DATE!", thisString, bodyTextArray[i+1]);
+            transactionDate = new Date(bodyTextArray[i+1].trim());
           } else if (thisString.startsWith("Amount received")) {
             // get value of next line (and replace the strange chars)
-            amount = Number(bodyTextArray[i+1].replace(/.*=C2=A3/, '').replace(/=C2.*/, ''));
+            amount = Number(thisString.replace(/.*=C2=A3/, '').replace(/ .*/, ''));
+            //console.log("MONEY!", thisString, amount);
             // this is the last message so quit loop
             i = bodyTextArray.length;
           }
@@ -249,12 +257,16 @@ app.use(express.static(path.join(__dirname, 'public')))
       console.log("Parsed paypal email:", payeeName, amount, transactionId, transactionDate);
 
       // save the details
-      var saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
-
+      var saveSuccess = false;
+      if (transactionDate) {
+        saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+      }
+      
       if (saveSuccess) {
-        res.json({'result': 'OK'})
+        res.json({'result': 'OK'});
       } else {
-        res.sendStatus(400);
+        console.log("ERROR: Failed to parse message");
+        res.sendStatus(200);
       }
     });
   } catch (err) {
