@@ -208,7 +208,7 @@ app.use(express.static(path.join(__dirname, 'public')))
       body += req.read();
     });
     req.on('end', function() {
-      /* NOT USED - was needed for the html paypal email, but the forward gives me plain text
+      /* NOT USED - was needed for the html paypal email, but the forward gives plain text
       // extract just the html from the paypal email
       var startPaypalIndex = body.indexOf("@paypal.co.uk");
       var startPaypalHtmlIndex = body.indexOf("<html", startPaypalIndex);
@@ -258,14 +258,21 @@ app.use(express.static(path.join(__dirname, 'public')))
 
       // save the details
       var saveSuccess = false;
-      if (transactionDate) {
+      if (transactionDate && transactionId && payeeName && amount) {
         saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
       }
       
       if (saveSuccess) {
         res.json({'result': 'OK'});
       } else {
-        console.log("ERROR: Failed to parse message");
+        console.log("ERROR: Failed to parse message. Storing in dead letter: INBOUND_EMAILS");
+        // store in dead letter queue
+        var parsedText = "payeeName: " + payeeName + ", amount:" + amount
+          + ", transactionId:" + transactionId + ", transactionDate:" + transactionDate;
+        var emailDetails = { "parsed_status": parsedText, "data": body}
+        const docRef = firestore.collection("INBOUND_EMAILS").doc("PAYMENT_ERROR_EMAIL_" + new Date());
+        docRef.set(emailDetails);
+
         res.sendStatus(200);
       }
     });
