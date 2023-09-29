@@ -1044,16 +1044,30 @@ async function getDefinedPlayerAliasMaps() {
 }
 
 function mondaysInMonth(m,y) {
-  var days = new Date(y,m,0).getDate();
-  var mondays =  new Date(m +'/01/'+ y).getDay();
-  if (mondays != 1){
-    mondays = 9 - mondays;
+  var lastDateOfMonth = new Date(y,m,0).getDate();
+  var firstDayNumberOfMonth =  new Date(m +'/01/'+ y).getDay(); // 0=Sun, 1=Mon...
+
+  // check what day the 1st of the month is, and then calc the date of the next Monday
+  var mondayDate;
+  if (firstDayNumberOfMonth == 1) {
+    // already a Monday (1st of the month)
+    mondayDate = 1;
+  } else if (firstDayNumberOfMonth == 0) {
+    // it's a Sunday, so Monday is 1 day away (2nd of the month)
+    mondayDate = 2;
+  } else {
+    // must be Tues-Sat so subtract from 9 (because max 7 days from )
+    var mondayDate = 7 - (firstDayNumberOfMonth - 2);
   }
-  mondays = [mondays];
-  //console.log(mondays);
-  for (var i = mondays[0] + 7; i <= days; i += 7) {
+
+  // now loop through every 7 days and form an array of Monday dates
+  var mondays = [];
+  for (var i = mondayDate; i <= lastDateOfMonth; i += 7) {
     mondays.push(i);
   }
+
+  //console.log("First Monday of month:", new Date(m +'/0' + mondays[0] + '/'+ y));
+  //console.log("Mondays in the month:", mondays);
   return mondays;
 }
 
