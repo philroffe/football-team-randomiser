@@ -13,6 +13,19 @@
     border-bottom: 1px solid #333333;
     border-left: 1px solid #D5EDF6;
   }
+
+  .collapse {
+      border: none;
+      outline: none;
+  }
+  .active,
+  .collapse:hover {
+    background-color: #438a5e;
+  }
+  .emailListText {
+    background-color: #e1ffc2;
+    display: none;
+  }
   </style>
 </head>
 
@@ -61,12 +74,29 @@
 
     <div id="sendEmailDiv">
       <input type="checkbox" id="sendTestEmailList" name="sendTestEmailList" value="Test" style="background: #eee;" onclick="updateEmailButton();"><label for="sendTestEmailList">Send Test Email?</label>
+          <div class="collapse"> >>> Show email addresses...</div>
+          <div id="emailListText" class="emailListText">(javascript will populate emails)</div>
+          <script>
+            var btn = document.getElementsByClassName("collapse");
+            btn[0].addEventListener("click", function () {
+              this.classList.toggle("active");
+              var content = this.nextElementSibling;
+              if (content.style.display === "block") {
+                content.style.display = "none";
+              } else {
+                content.style.display = "block";
+              }
+           });
+          </script>
       <p>
       <button id="sendEmail" style="background-color: #90EE90;float:left;" type="button" onclick="sendEmail();">Send Email to ALL players</button>
       <div style="float:left;margin-left:20px;padding:5px;">... Or Manual Email Creation:</div>
         <div class="linkborder" style="float:left;" id="emailLinkMobile">Not Yet Available</div>
         <div class="linkborder" style="float:left;" id="emailLinkDesktop">Not Yet Available</div>
     </div>
+
+    <br><br>
+
   </div>
 
   <script>
@@ -125,6 +155,7 @@
     // update Send Email button to show the number of people on the mailiing list
     document.getElementById("sendEmail").innerHTML = "Send Email to " + Object.keys(playerAliasMaps.activeEmailList).length + " players";
 
+
     var user = pagedata.user;
     if (user) {
       document.getElementById("authHeaderSmall").innerHTML = user.given_name + " (logout)";
@@ -133,6 +164,14 @@
       document.getElementById("authHeaderLarge").href = "/logout";
       console.log("Logged in User:", user);
       document.getElementById("sendEmailDiv").style.visibility = "visible";
+
+      // set the collapsed email
+      var activeEmailList = playerAliasMaps.activeEmailList;
+      var allEmails = "";
+      Object.keys(activeEmailList).forEach(function(key) {
+        allEmails += activeEmailList[key] + "; ";
+      });
+      document.getElementById("emailListText").textContent = allEmails;
     } else {
       document.getElementById("sendEmailDiv").style.visibility = "hidden";
     }
