@@ -8,7 +8,10 @@
     Object.keys(playerAliasMap).sort().forEach(function(key) {
       //console.log("key", playerAliasMap[key]);
       var playerName = key;
-      var playerActive = playerAliasMap[key].active;
+      var playerActive = false;
+      var subscriptionStatus = playerAliasMap[key].subscriptionStatus;
+      if (subscriptionStatus == 2) { playerActive = true; }
+
       var aliasesList = playerAliasMap[key].aliases;
       var playerEmail = playerAliasMap[key].email;
       if (!playerEmail) { playerEmail = ""; }
@@ -95,7 +98,12 @@
         var aliases = document.getElementById("playerAlias" + i + "Alias").value;
         var playerEmail = document.getElementById("playerEmail" + i + "Alias").value;
         var aliasesArray = aliases.trim().split('\n');
-        playerAliasMap[player] = { "active": isActive, "email": playerEmail, "aliases": aliasesArray };
+
+        var subscriptionStatus = 0;
+        if (isActive) {
+          subscriptionStatus = 2;
+        }
+        playerAliasMap[player] = { "subscriptionStatus": subscriptionStatus, "email": playerEmail, "aliases": aliasesArray };
       }
       console.log("SAVING ALIASES:" + JSON.stringify(playerAliasMap));
 

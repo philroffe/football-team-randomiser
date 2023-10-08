@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+
+  <style>
+  .borderdiv {
+    background-color: #D5EDF6;
+    color: #333333;
+    padding: 2px 6px 2px 6px;
+    border-top: 1px solid #D5EDF6;
+    border-right: 1px solid #333333;
+    border-bottom: 1px solid #333333;
+    border-left: 1px solid #D5EDF6;
+  }
+  </style>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+
+    <div id="mailList">
+      <br>Want to join/leave the mailing list??<p>
+      <!-- Radio buttons -->
+      <input id="subscribeChoice" type="radio" name="subscribeType" value="subscribe" onclick="changeHelpText();" checked/>
+      <label for="subscribeChoice">Subscribe</label>
+      <input id="unsubscribeChoice" type="radio" name="subscribeType" value="unsubscribe" onclick="changeHelpText();" />
+      <label for="unsubscribeChoice">Unsubscribe</label>
+
+      <!-- Radio buttons -->
+      <div class="borderdiv">
+        <p><div id="borderTitle"><H3>Subscribe</H3></div>
+        <p><div id="helperText"></div>
+        <div id="fullnameDiv">
+          <p><input type="input" id="fullname" placeholder="Full name" oninput="validateName(this);" data-lpignore=true>
+        </div>
+        <input type="email" id="email" placeholder="Email" oninput="validateEmail(this);" data-lpignore=true>
+        <br><br><button id="submit" style="background-color: #90EE90;float:left;" type="button" onclick="doSubscribe();" disabled>Submit</button><br><br>
+      </div>
+
+      <p><div id="response"></div>
+    
+
+    <script type="text/javascript">
+      function validateEmail(input) {
+        document.getElementById("response").innerHTML = "";
+        var validRegex = /^([a-zA-Z0-9._%-+]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/;
+        if (input.value.trim().match(validRegex)) {
+          //console.log("Valid email address!");
+          //input.style.border="2px solid green";
+          document.getElementById("submit").disabled = false;
+          return true;
+        } else {
+          //console.log("Invalid email address!");
+          //document.email.focus();
+          //input.style.border="5px solid red";
+          document.getElementById("submit").disabled = true;
+          return false;
+        }
+      }
+
+      function validateName(input) {
+        document.getElementById("response").innerHTML = "";
+        var isValidEmail = validateEmail(document.getElementById("email"));
+        if (isValidEmail && input.value.trim().length > 2) {
+          document.getElementById("submit").disabled = false;
+          return false;
+        } else {
+          document.getElementById("submit").disabled = true;
+          return true;
+        }
+      }
+
+      function validateAll(isValidEmail, isValidName) {
+        if (isValidEmail && isValidName) {
+          document.getElementById("submit").disabled = false;
+        } else {
+          document.getElementById("submit").disabled = true;
+        }
+      }
+
+      function changeHelpText() {
+        var subscribeType = document.getElementsByName("subscribeType")[0];
+        document.getElementById("response").innerHTML = "";
+        if (subscribeType.checked) {
+          document.getElementById("borderTitle").innerHTML = "<h3>Subscribe</h3>";
+          document.getElementById("helperText").innerHTML = "An email will be sent with a confirmation link.  <br>Make sure you confirm your email to join the list.";
+          document.getElementById("fullnameDiv").style.visibility = "visible";
+        } else {
+          document.getElementById("borderTitle").innerHTML = "<h3>Unsubscribe</h3>";
+          document.getElementById("helperText").innerHTML = "You will be unsubscribed from any future team and availability emails from the organiser.";
+          document.getElementById("fullnameDiv").style.visibility = "hidden";
+        }
+      }
+
+      function doSubscribe() {
+        var subscribeType = document.getElementsByName("subscribeType")[0];
+        var details = {};
+        details.subscribeType = subscribeType.checked;
+        
+        //details.email = "philroffe@gmail.com";
+        details.fullname = document.getElementById("fullname").value.trim();
+        details.email = document.getElementById("email").value.trim();
+
+        // now send the POST request with the data
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            console.log("Saved response", this.responseText);
+            //location.reload(true);
+            document.getElementById("response").innerHTML = "Success!";
+            document.getElementById("submit").disabled = true;
+          } else if (this.readyState == 4) {
+            document.getElementById("response").innerHTML = "Error!  Something went wrong - normally this is because someone else is on the mailing this with the same/similar name.<br>Try changing your first name to your nickname, or failing that just contact the organiser to subscribe you.";
+          }
+        };
+        xmlhttp.open("POST", "/service/modify-mailinglist");
+        xmlhttp.setRequestHeader("Content-Type", "application/json");
+        xmlhttp.send(JSON.stringify(details));
+      }
+
+      changeHelpText();
+    </script>
+  </div>
+</body>
+</html>

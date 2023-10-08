@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+
+    <div id="mailList">
+      <!-- Radio buttons -->
+      <div class="borderdiv">
+        <p><div id="borderTitle"></div>
+        <p><div id="helperText"></div>
+    
+    <script type="text/javascript">
+      const MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED = 2
+      const MAIL_SUBSCRIPTION_STATUS_CONFIRMING = 1
+      const MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED = 0
+      var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&#39;/g, "'"));
+
+      if (pagedata.playerAliasData) {
+        // player email must have been confirmed so show message
+        document.getElementById("borderTitle").innerHTML = "<H3>Email Confirmed!</H3>";
+        document.getElementById("helperText").innerHTML = "Welcome to the list! " + pagedata.playerAliasData.email+ "<p>Next step is simply to fill in the <a href=''/poll'>poll (here)</a> and start playing :)";
+      } else {
+        document.getElementById("borderTitle").innerHTML = "<H3>Error Confirming Email!</H3>";
+        document.getElementById("helperText").innerHTML = "Could not find a match to your confirmation code: " + pagedata.code + ".<p>Please resubsribe <a href=''/mailing-list'>(here)</a> if you're not getting emails";
+      }
+
+    </script>
+  </div>
+</body>
+</html>

@@ -36,6 +36,10 @@ var rawDatabaseCache = {};
 const PLAYER_UNIQUE_FILTER = "PLAYER_UNIQUE_FILTER_TYPE";
 const PLAYER_LOG_FILTER = "PLAYER_LOG_FILTER_TYPE";
 const COST_PER_GAME = 4;
+const EMAIL_TITLE_POSTFIX = " [Footie, Goodwin, 6pm Mondays]";
+const MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED = 2
+const MAIL_SUBSCRIPTION_STATUS_CONFIRMING = 1
+const MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED = 0
 
 const app = express();
 app.use(session({
@@ -194,9 +198,84 @@ app.use(express.static(path.join(__dirname, 'public')))
   var saveSuccess = saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers);
 
   if (saveSuccess) {
-    res.json({'result': 'OK'})
+    res.json({'result': 'OK'});
   } else {
     res.sendStatus(400);
+  }
+})
+.post('/service/modify-mailinglist', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT SERVCE: MODIFY MAILINGLIST GET FROM:', ip, req.body);
+
+  try {
+    var details = {};
+    details.date = new Date();
+    details.name = req.body.fullname;
+    details.email = req.body.email;
+    details.optIn = Boolean(req.body.subscribeType);
+    details.sourceIp = ip;
+
+    // store the audit record of the add/remove request
+    const docRef = await firestore.collection("MAILING_LIST_AUDIT").doc(details.date.toISOString() + "_" + details.email);
+    await docRef.set(details);
+    delete details.sourceIp;
+
+    // now actually perform the add/remove
+    var success = await addRemoveEmailSubscription(details, req.hostname);
+    if (success) {
+      res.json({'result': 'OK'});
+    } else {
+      console.error("ERROR - failed to add/Remove email subscription");
+      res.sendStatus(400);
+    }
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
+.get('/mailing-list', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT MODIFY MAILINGLIST GET FROM:', ip, req.body);
+  try {
+    // now need to check if confirming subscriptionStatus
+    var code = Number(req.query.code);
+    var playerAliasData;
+    // lookup confirmation code and update the subscriptionStatus as appropriate
+    if (code) {
+      var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+      var playerAliasMap = playerAliasDoc.data();
+      var playerConfirmedKey;
+      Object.keys(playerAliasMap).sort().forEach(function(key) {
+        if (playerAliasMap[key].code == code) {
+          playerAliasData = playerAliasMap[key];
+          if (playerAliasMap[key].subscriptionStatus != MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED) {
+            playerAliasMap[key].subscriptionStatus = MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED;
+            playerConfirmedKey = key;
+            console.log("CONFIRMED MAILING LIST CODE:", playerAliasData);
+          } else {
+            console.log("FOUND MAILING LIST CODE BUT ALREADY SUBSCRIBED :", playerAliasData);
+          }
+        }
+      });
+      if (playerConfirmedKey) {
+        // save the updated alias map
+        await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
+        var title = "[Mailing List CONFIRMED] " + playerAliasMap[playerConfirmedKey].email + " [Footie, Goodwin, 6pm Mondays]";
+        var subject = playerAliasMap[playerConfirmedKey].email + "\n" + playerAliasMap[playerConfirmedKey].subscriptionStatus;
+        sendAdminEvent(title, subject);
+      }
+      if (!playerAliasData) {
+        console.log("ERROR FINDING MAILING LIST CODE:", code);
+      }
+      var pageData = { code: code, playerAliasData: playerAliasData };
+      res.render('pages/mailing-list-confirmation', { pageData: pageData} );
+    } else {
+      var pageData = { code: code, playerAliasData: playerAliasData };
+      res.render('pages/mailing-list', { pageData: pageData} );
+    }
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
   }
 })
 .post('/_ah/mail/payment@tensile-spirit-360708.appspotmail.com', async (req, res) => {
@@ -225,27 +304,27 @@ app.use(express.static(path.join(__dirname, 'public')))
       var transactionId;
       var transactionDate;
       //var bodyTextArray = dom.window.document.querySelector("body").textContent.split('\n');
-      bodyTextArray = body.split('\n');
+      bodyTextArray = body.split('span>');
       for (i=0; i<bodyTextArray.length; i++) {
         var thisString = bodyTextArray[i].trim().replace(/\*/, '');
-        //console.log("Line:", thisString)
         if (thisString) {
           var payeeNameMatch = thisString.match(/(.*)( has sent you)(.*)/);
+          //console.log("Line:", payeeNameMatch)
           if (payeeNameMatch) {
             payeeName = payeeNameMatch[1];
             // sometimes can get the amount here too, but paypal is inconsistent so not using it
-            //amount = payeeNameMatch[3].replace(/.*=C2=A3/, '').replace(/=C2.*/, '');
-          } else if (thisString.startsWith("Transaction ID")) {
+            amount = payeeNameMatch[3].replace(/.*=C2=A3/, '').replace(/=C2.*/, '');
+          } else if (thisString.match(/Transaction ID/)) {
             // get value of next line
             //transactionId = thisString.replace("Transaction ID", "");
-            //console.log("TRANSACTION_ID!", thisString, bodyTextArray[i+1]);
-            transactionId = bodyTextArray[i+1].trim();
-          } else if (thisString.startsWith("date")) {
+            //console.log("TRANSACTION_ID!", thisString, bodyTextArray[i+2]);
+            transactionId = bodyTextArray[i+2].replace(/<\//g, '').trim();
+          } else if (thisString.match("date")) {
             // get value of next line
             //transactionDate = new Date(thisString.replace("Transaction date", ""));
-            //console.log("TRANSACTION_DATE!", thisString, bodyTextArray[i+1]);
-            transactionDate = new Date(bodyTextArray[i+1].trim());
-          } else if (thisString.startsWith("Amount received")) {
+            //console.log("TRANSACTION_DATE!", thisString, bodyTextArray[i+2]);
+            transactionDate = new Date(bodyTextArray[i+2].trim());
+          } else if (thisString.match("Amousnt received")) {
             // get value of next line (and replace the strange chars)
             amount = Number(thisString.replace(/.*=C2=A3/, '').replace(/ .*/, ''));
             //console.log("MONEY!", thisString, amount);
@@ -532,8 +611,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": ip };
 
     var eventDetails = convertAvailibilityToDates(gameMonth, gameYear, playerAvailability);
-    var headerPostfix = " [Footie, Goodwin, 6pm Mondays]";
-    sendAdminEvent("[Player Change Event] " + playerName + headerPostfix, playerName + "\n" + eventDetails);
+    sendAdminEvent("[Player Change Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
 
     console.log('Inserting DB game data:', JSON.stringify(gamedetails_new));
     try {
@@ -1016,7 +1094,10 @@ async function getDefinedPlayerAliasMaps() {
   Object.keys(playerAliasMap).sort().forEach(function(key) {
     //console.log("key", playerAliasMap[key]);
     var officialName = key.trim();
-    var playerActive = playerAliasMap[key].active;
+    var playerActive = false;
+    var subscriptionStatus = playerAliasMap[key].subscriptionStatus;
+    if (subscriptionStatus == 2) { playerActive = true; }
+
     var aliasesList = playerAliasMap[key].aliases;
     var playerEmail = playerAliasMap[key].email;
 
@@ -1329,4 +1410,121 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
     console.error(err);
     return false;
   }
+}
+
+// string name/email, int subscriptionStatus
+async function addRemoveEmailSubscription(details, hostname) {
+  var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var playerAliasMap = playerAliasDoc.data();
+  if (!playerAliasMap) {
+    playerAliasMap = {};
+  }
+  var email = details.email;
+  var name = details.name;
+  var optIn = details.optIn;
+
+  var mailinglistChanged = false;
+  var sendConfirmationEmail = false;
+  var foundExistingPlayer = false;
+  var playerKey = "";
+  Object.keys(playerAliasMap).sort().forEach(function(key) {
+    //console.log("key", playerAliasMap[key]);
+    if (playerAliasMap[key].email.toUpperCase() == email.toUpperCase()) {
+      foundExistingPlayer = true;
+      playerKey = key;
+      if (optIn) {
+        // add/edit to subscribe email
+        if (playerAliasMap[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED) {
+          // already subscribed so do nothing
+          console.log("ALREADY SUBSCRIBED:", key, email, playerAliasMap[key]);
+          mailinglistChanged = false;
+        } else if (playerAliasMap[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_CONFIRMING) {
+          // resend email
+          console.log("STILL CONFIRMING - resending confirmation email request:", key, email, playerAliasMap[key]);
+          // SEND CONFIRMATION EMAIL NOW
+          mailinglistChanged = false;
+          sendConfirmationEmail = true;
+        } else if (playerAliasMap[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED) {
+          // add new email
+          console.log("Resubscribing email to mailing list:", key, email, playerAliasMap[key]);
+          // SEND CONFIRMATION EMAIL NOW
+          playerAliasMap[key].subscriptionStatus = MAIL_SUBSCRIPTION_STATUS_CONFIRMING;
+          mailinglistChanged = true;
+          sendConfirmationEmail = true;
+        }
+      } else {
+        // remove/unsubscribe email
+        if (playerAliasMap[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED) {
+          // already unsubscribed so do nothing
+          console.log("ALREADY UNSUBSCRIBED:", key, email, playerAliasMap[key]);
+          mailinglistChanged = false;
+        } else {
+          //MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED
+          console.log("UNSUBCRIBING:", key, email, playerAliasMap[key]);
+          playerAliasMap[key].subscriptionStatus = MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED;
+          mailinglistChanged = true;
+          sendConfirmationEmail = true;
+        }
+      }
+    }
+  });
+
+  if (!foundExistingPlayer && optIn) {
+    // no existing player
+    // create alias key... the first name and first initial of surname
+    var nameAliasKey = name.substring(0, name.trim().lastIndexOf(" ") + 2);
+    if (!playerAliasMap[nameAliasKey]) {
+      playerKey = nameAliasKey;
+      mailinglistChanged = true;
+      sendConfirmationEmail = true;
+      // create a new player
+      playerAliasMap[playerKey] = {"aliases": [ name ], "subscriptionStatus": MAIL_SUBSCRIPTION_STATUS_CONFIRMING, "email": email};
+      console.log("Adding new email to mailing list:", name, email, playerAliasMap[name]);
+    } else {
+      console.error("ERROR - nameAliasKey already exists", name, email, playerAliasMap[nameAliasKey]);
+      // TODO - need to handle this better
+      return false;
+    }
+  }
+  if (sendConfirmationEmail) {
+    var urlPrefix = "";
+    if (hostname == "localhost") {
+      urlPrefix = "http://" + hostname + ":5000";
+    } else {
+      urlPrefix = "https://" + hostname;
+    }
+    var emailSubject = "";
+    var emailText = "";
+    if (optIn) {
+      // now generate the email text and send it
+      emailSubject = "Confirm your email address [Footie, Goodwin, 6pm Mondays]";
+      emailText = "Welcome to Sheffield Monday Night footie mailing list!\n\n";
+      emailText += "To subscribe please confirm it is you by clicking the confirm link...\n";
+      playerAliasMap[playerKey].date = details.date;
+      var code = playerAliasMap[playerKey].date.getTime();
+      playerAliasMap[playerKey].code = code;
+      emailText += urlPrefix + "/mailing-list?code=" + code;
+    } else {
+      emailSubject = "You have been unsubscribed [Footie, Goodwin, 6pm Mondays]";
+      emailText = "Sorry to see you go from Sheffield Monday Night footie.\n\n";
+      emailText += "Feel free to re-subscribe anytime by signing up again here...\n";
+      emailText += urlPrefix + "/mailing-list";
+    }
+    mailinglistChanged = true;
+
+    var mailOptions = {
+      from: GOOGLE_MAIL_FROM_NAME,
+      to: email,
+      subject: emailSubject,
+      text: emailText
+    };
+    //console.log(mailOptions); 
+    var emailResult = sendEmailToList(mailOptions, hostname);
+  }
+  if (mailinglistChanged) {
+    console.log("UPDATED LIST SO SAVING", playerAliasMap[playerKey]);
+    sendAdminEvent("[Mailing List Change Event] " + email + EMAIL_TITLE_POSTFIX, email + "\n" + playerAliasMap[playerKey].subscriptionStatus);
+    await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
+  }
+  return true;
 }
