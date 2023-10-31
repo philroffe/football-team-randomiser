@@ -51,6 +51,28 @@ gcloud alpha firestore backups schedules list --database="(default)"
 gcloud alpha firestore backups list --format="table(name, database, state)"
 ```
 
+## Run firebase emulator locally
+
+```
+sudo apt-get install google-cloud-cli-firestore-emulator
+gcloud beta emulators firestore start --host-port="0.0.0.0:5678"
+
+export FIRESTORE_EMULATOR_HOST=0.0.0.0:5678
+npm start
+
+```
+
+```
+# to backup production...
+unset FIRESTORE_EMULATOR_HOST
+npm run backup
+
+# to restore backup to emulator...
+export FIRESTORE_EMULATOR_HOST=0.0.0.0:5678
+npm run restore <db-backup-filename>
+
+```
+
 ## Originally Forked from node-js-getting-started as a base template
 
 From this tutorial...
