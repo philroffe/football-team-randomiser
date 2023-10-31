@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+
+  <style>
+  .borderdiv {
+    background-color: #D5EDF6;
+    color: #333333;
+    padding: 2px 6px 2px 6px;
+    border-top: 1px solid #D5EDF6;
+    border-right: 1px solid #333333;
+    border-bottom: 1px solid #333333;
+    border-left: 1px solid #D5EDF6;
+  }
+  pre {
+    padding: 0px;
+    margin: 0px;
+  }
+
+  .collapse {
+      border: none;
+      outline: none;
+  }
+  .active,
+  .collapse:hover {
+    background-color: #438a5e;
+  }
+  .paymentsListText {
+    background-color: #efe;
+    display: none;
+  }
+
+  </style>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+
+  <div id="mailList">
+    <h3>Payments Ledger</h3>
+    <p>Add a manual payment...
+
+    <br><input type="text" id="payeeName" placeholder="Payee Name" data-lpignore=true>
+    <br><input type="text" id="payeeAmount" placeholder="Amount" data-lpignore=true>
+    <br><input type="text" id="payeeTransactionId" placeholder="Transaction ID" data-lpignore=true>
+    <br><input type="text" id="payeeTransactionDate" placeholder="Transaction Date (YYYY-MM-DD)" data-lpignore=true>
+    <br><button id="submit" style="background-color: #90EE90;float:left;" type="button" onclick="addManualPayment();">Add Manual Payment</button>
+    <div id="response"></div>
+    <br>
+
+    <div style="width:100%;display:flex;">
+      <div id="emailEntryDiv" style="display:inline;width:55%">
+        <select id="paymentsSelect" onchange="updateEmailText(this.value)" >
+        <option> ---Select Failed Email--- </option>  
+        </select>
+        <button id="parseEmail" style="background-color: #90EE90;" type="button" onclick="parseEmail();">Parse Email</button><br>
+        <button id="deleteEmail" style="background-color: #90EE90;" type="button" onclick="deleteEmail();">Delete</button><br>
+        <textarea id="emailBody" rows="30" style="width:95%;font-size: 100%;margin-top:10px" >Not Yet Available</textarea></div>
+      <div id="paymentsEntryDiv" style="display:inline;width:44%;font-size: 100%;"></div>
+    </div> 
+    <br>
+  </h3> 
+
+  <script type="text/javascript">
+  /** TODO
+  * Ability to delete an email from the dead-letter-queue
+  * Display summary of transactions of all users (inc money in/money out)
+  * Ability to cross-charge from one player to another (so someone can pay for someone else)
+  */
+    var EMAIL_DOC_PREFIX = "PAYMENT_ERROR_EMAIL_";
+
+    // restringify and then parse the json to get the page
+    let pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
+    console.log(pagedata, pagedata.data.outstandingPayments);
+
+    var inboundEmails = pagedata.data.inboundEmails;
+    if (!inboundEmails) { inboundEmails = {}; }
+    var outstandingPayments = pagedata.data.outstandingPayments;
+    if (!outstandingPayments) { outstandingPayments = {}; }
+    var closedLedgers = pagedata.data.closedLedgers;
+    if (!closedLedgers) { closedLedgers = {}; }
+    var openLedgers = pagedata.data.openLedgers;
+    if (!openLedgers) { openLedgers = {}; }
+    document.getElementById("payeeTransactionDate").value = new Date().toISOString().split('T')[0];;
+
+    // change the header red if using a test environment
+    if (pagedata.environment != "PRODUCTION") {
+      console.log("Environment:", pagedata.environment);
+      // local test env so show header as red
+      var navTopElement = document.getElementById("navTop")
+      navTopElement.className = navTopElement.className.replace(" w3-black", " w3-red");
+      var navDemo = document.getElementById("navTop")
+      navDemo.className = navDemo.className.replace(" w3-black", " w3-red");
+    }
+
+
+    Object.keys(inboundEmails).sort().forEach(function(key) {
+      //console.log("Found emails...", inboundEmails);
+      if (key.startsWith(EMAIL_DOC_PREFIX)) {
+        var x = document.getElementById("paymentsSelect");
+        var option = document.createElement("option");
+        option.id = key;
+        option.text = key.replace(EMAIL_DOC_PREFIX, "");
+        x.add(option);
+      }
+    });
+
+
+    // loop through all the players
+    document.getElementById("paymentsEntryDiv").innerHTML += "<pre>PLAYER          PAID     COST   BALANCE</pre>";
+    let cloneClosedLedgers = Object.assign({}, closedLedgers)
+    Object.keys(cloneClosedLedgers).sort().forEach(function(key) {
+      var playerAccounts = "";
+      //console.log("Got payments ledger...", closedLedgers);
+      playerAccounts += "<div id='" + key.replace("'", "") + "PaymentDiv' class='collapse'>" + key + "...</div>";
+      playerAccounts += "  <div class='paymentsListText'>";
+      var payments = closedLedgers[key];
+      var totalPayments = 0;
+      var totalCost = 0;
+      var paymentError = false;
+      var chargeError = false;
+      var hasOutstandingPayments = false;
+
+      // loop through all the payments for the players
+      Object.keys(payments).sort().forEach(function(paymentsKey) {
+        if (paymentsKey.startsWith("payment_")) {
+          var paymentDate = paymentsKey.split("_")[1];
+          var transactionId = payments[paymentsKey].paypalTransactionId;
+          var paymentAmount = Number(payments[paymentsKey].amount);
+          totalPayments += Number(paymentAmount);
+          playerAccounts += "<pre>---" + paymentDate + " " + transactionId + " " + paymentAmount + "</pre>";
+          payments[paymentsKey].accountedFor = true;
+
+          // loop through all the games for the player and match the payment
+          var amountLeft = paymentAmount;
+          Object.keys(payments).sort().forEach(function(paymentsKey) {
+            if (paymentsKey.startsWith("charge_") && payments[paymentsKey].paid == transactionId) {
+              var chargeAmount = payments[paymentsKey].amount;
+              var chargeWeek = paymentsKey;
+              var paymentFor = (payments[paymentsKey].paymentFor) ? " (" + payments[paymentsKey].paymentFor + ")" : "";
+              var additionalInfo = (payments[paymentsKey].additionalInfo) ? " (" + payments[paymentsKey].additionalInfo + ")" : "";
+              playerAccounts += "<pre>------" + chargeWeek + " " + chargeAmount + paymentFor + additionalInfo + "</pre>";
+              totalCost += chargeAmount;
+              amountLeft += chargeAmount;
+              payments[paymentsKey].accountedFor = true;
+            }
+          });
+
+          if (amountLeft != 0) {
+            console.log("AMOUNT_LEFT", key, amountLeft)
+            paymentError = true;
+            playerAccounts += "^^^"
+          }
+        }
+      });
+
+      /**
+      // loop through all the outstanding payments
+      if (outstandingPayments[key]) {
+        var amountOwed = outstandingPayments[key].amountOwed;
+        var amountPaid = outstandingPayments[key].amountPaid;
+        var numberOfGames = outstandingPayments[key].numberOfGames;
+        var outstandingBalance = outstandingPayments[key].outstandingBalance;
+        playerAccounts += "<pre>$$$$$$$$$" + numberOfGames + " " + amountOwed + " " + amountPaid + " " + outstandingBalance + "</pre>";
+        hasOutstandingPayments = true;
+
+        amountLeft += amountOwed;
+        //payments[paymentsKey].accountedFor = true;
+        if (amountLeft == 0) {
+          paymentError = false;
+        }
+      }
+      */
+
+
+      // loop through all the unpaid games for the player
+      var charges = openLedgers[key];
+      if (charges) {
+        Object.keys(charges).sort().forEach(function(chargesKey) {
+          var chargeAmount = charges[chargesKey].amount;
+          var chargeWeek = chargesKey;
+          playerAccounts += "<pre>$$$$$$$$$" + chargeWeek + " " + chargeAmount + "</pre>";
+          
+          hasOutstandingPayments = true;
+          totalCost += chargeAmount;
+        });
+      }
+
+      // loop through all the games for the player and match the payment
+      Object.keys(payments).sort().forEach(function(unfoundKey) {
+        if (payments[unfoundKey].accountedFor != true) {
+          var chargeAmount = payments[unfoundKey].amount;
+          var chargeWeek = unfoundKey;
+          playerAccounts += "<pre>******" + chargeWeek + " " + chargeAmount + "</pre>";
+          chargeError = true;
+          totalCost += chargeAmount;
+        }
+      });
+
+      playerAccounts += key + " " + totalPayments + " " + totalCost + "\n\n</pre></div>";
+      document.getElementById("paymentsEntryDiv").innerHTML += playerAccounts;
+
+      var rowStyle = "background-color:white; color:black";
+      if (key != "Admin") {
+        if (paymentError && chargeError) {
+          rowStyle = "background-color:blue; color:white";
+        } else if (paymentError && hasOutstandingPayments) {
+          rowStyle = "background-color:orange; color:white";
+        } else if (paymentError) {
+          rowStyle = "background-color:red; color:white";
+        } else if (chargeError) {
+          rowStyle = "background-color:yellow; color:black";
+        }
+      }
+
+      var totalDifference = totalPayments + totalCost;
+      //console.log("PPP", key.replace("'", ""), chargeError);
+      document.getElementById(key.replace("'", "") + "PaymentDiv").innerHTML = "<pre style='" + rowStyle + "'> &#12297; " + key.padEnd(12, '.') + String("£" + totalPayments).padStart(4, ' ') + "  | " + String("£" + totalCost).padStart(5, ' ') + "  | " + String("£" + totalDifference).padStart(4, ' ');
+    });
+
+    function updateEmailText(text) {
+      var key = EMAIL_DOC_PREFIX + text;
+      //var data = inboundEmails[key].data;      
+
+      var emailBody = inboundEmails[key].data;
+
+      var array = emailBody.split('=\r\n');
+      emailBody = array.join("");
+/*
+      var start = emailBody.indexOf("<html");
+      var end = emailBody.indexOf("device");
+      emailBody = emailBody.substr(start, end);
+      var end = emailBody.indexOf("device");
+      emailBody = emailBody.substr(0, end);
+
+
+
+
+      emailBody = emailBody.replace(/=$/g, '=FOUND');
+      var bodyTextArray = emailBody.split('=FOUND');
+      var data = "";
+      for (i=0; i<bodyTextArray.length; i++) {
+        data += "span>" + bodyTextArray[i]
+        // + "\n"
+      }
+
+      document.getElementById("emailBody").value = '<pre>' + inboundEmails[key].parsed_status 
+        + '\n========\n' + data + '\n\n</pre>';
+*/
+        document.getElementById("emailBody").value = emailBody;
+    }
+    
+    function addManualPayment() {
+      var details = {};
+      details.payeeName = document.getElementById("payeeName").value.trim();
+      details.amount = document.getElementById("payeeAmount").value.trim();
+      details.transactionId = document.getElementById("payeeTransactionId").value.trim();
+      details.transactionDate = document.getElementById("payeeTransactionDate").value.trim();
+
+      // now send the POST request with the data
+      var xmlhttp = new XMLHttpRequest();
+      xmlhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          console.log("Saved response", this.responseText);
+          //location.reload(true);
+          document.getElementById("response").innerHTML = "Success!";
+          document.getElementById("submit").disabled = true;
+        } else if (this.readyState == 4) {
+          document.getElementById("response").innerHTML = "Error!  Something went wrong - normally this is because someone else is on the mailing this with the same/similar name.<br>Try changing your first name to your nickname, or failing that just contact the organiser to subscribe you.";
+        }
+      };
+      xmlhttp.open("POST", "/services/payment-manual");
+      xmlhttp.setRequestHeader("Content-Type", "application/json");
+      xmlhttp.send(JSON.stringify(details));
+    }
+
+    function parseEmail() {
+      var key = EMAIL_DOC_PREFIX + document.getElementById("paymentsSelect").value;
+      var body = inboundEmails[key].data;
+      // now loop through and extract the relevant text
+      var payeeName;
+      var amount;
+      var transactionId;
+      var transactionDate;
+      //var bodyTextArray = dom.window.document.querySelector("body").textContent.split('\n');
+      bodyTextArray = body.split('span>');
+      for (i=0; i<bodyTextArray.length; i++) {
+        var thisString = bodyTextArray[i].trim().replace(/\*/, '');
+        if (thisString) {
+          var payeeNameMatch = thisString.match(/(.*)( has sent you)(.*)/);
+          //console.log("Line:", payeeNameMatch)
+          if (payeeNameMatch) {
+            payeeName = payeeNameMatch[1];
+            // sometimes can get the amount here too, but paypal is inconsistent so not using it
+            amount = payeeNameMatch[3].replace(/.*=C2=A3/, '').replace(/=C2.*/, '');
+          } else if (thisString.match(/Transaction ID/)) {
+            // get value of next line
+            //transactionId = thisString.replace("Transaction ID", "");
+            //console.log("TRANSACTION_ID!", thisString, bodyTextArray[i+2]);
+            transactionId = bodyTextArray[i+2].replace(/<\//g, '').trim();
+          } else if (thisString.match("date")) {
+            // get value of next line
+            //transactionDate = new Date(thisString.replace("Transaction date", ""));
+            //console.log("TRANSACTION_DATE!", thisString, bodyTextArray[i+2]);
+            transactionDate = new Date(bodyTextArray[i+2].trim());
+          //} else if (thisString.match("Amount received")) {
+          //  // get value of next line (and replace the strange chars)
+          //  amount = Number(thisString.replace(/.*=C2=A3/, '').replace(/ .*/, ''));
+          //  //console.log("MONEY!", thisString, amount);
+          //  // this is the last message so quit loop
+          //  i = bodyTextArray.length;
+          }
+        }
+      }
+      console.log("Parsed paypal email:", payeeName, amount, transactionId, transactionDate);
+      document.getElementById("payeeName").value = payeeName;
+      document.getElementById("payeeAmount").value = amount;
+      document.getElementById("payeeTransactionId").value = transactionId;
+      document.getElementById("payeeTransactionDate").value = transactionDate;
+    }
+    
+
+    function deleteEmail() {
+      var selectElement = document.getElementById("paymentsSelect");
+      if (!confirm('This will permanently delete the email from' + selectElement.value + '.\nAre you sure?')) return;
+
+      var details = {};
+      details.key = EMAIL_DOC_PREFIX + selectElement.value;
+      details.type = "INBOUND_EMAIL";
+      details.action = "DELETE";
+
+      // now send the POST request with the data
+      var xmlhttp = new XMLHttpRequest();
+      xmlhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          console.log("Saved response", this.responseText);
+          //location.reload(true);
+          document.getElementById("response").innerHTML = "Success!";
+          document.getElementById("submit").disabled = true;
+          // now remove the element from the dropdown
+          selectElement.remove(selectElement.selectedIndex);
+        } else if (this.readyState == 4) {
+          document.getElementById("response").innerHTML = "Error!  Something went wrong.";
+        }
+      };
+      xmlhttp.open("POST", "/services/payment-email-admin");
+      xmlhttp.setRequestHeader("Content-Type", "application/json");
+      xmlhttp.send(JSON.stringify(details));
+    }
+  </script>
+
+  <script>
+    var btn = document.getElementsByClassName("collapse");
+
+    for (i=0; i<btn.length; i++) {
+      btn[i].addEventListener("click", function () {
+        this.classList.toggle("active");
+        var content = this.nextElementSibling;
+        if (content.style.display === "block") {
+          content.style.display = "none";
+        } else {
+          content.style.display = "block";
+        }
+     });
+  }
+  </script>
+  </div>
+</body>
+</html>

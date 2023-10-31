@@ -288,3 +288,16 @@ table td {
   padding:5px;
   text-decoration: none;
 }
+
+.expandable {
+  background: url(/expand.png) no-repeat;
+  background-size: 10px;
+  background-position-y: center;
+  padding:0px 4px 0px 20px;
+}
+.contractable {
+  background: url(/contract.png) no-repeat;
+  background-size: 14px;
+  background-position-y: 5px;
+  padding:0px 4px 0px 20px;
+}

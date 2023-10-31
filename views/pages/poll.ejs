@@ -133,11 +133,21 @@
     var todayDate = new Date();
     var playerElements = {};
     var saving = true;
-    // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
-    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&#39;/g, "'"));
-    //console.log('Data=' + JSON.stringify(pagedata));
- 
+    // restringify and then parse the json to get the page
+    var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
+    //console.log('Data=', pagedata);
+
     //var isAdmin = pagedata.isAdmin;
+
+    // change the header red if using a test environment
+    if (pagedata.environment != "PRODUCTION") {
+      console.log("Environment:", pagedata.environment);
+      // local test env so show header as red
+      var navTopElement = document.getElementById("navTop")
+      navTopElement.className = navTopElement.className.replace(" w3-black", " w3-red");
+      var navDemo = document.getElementById("navTop")
+      navDemo.className = navDemo.className.replace(" w3-black", " w3-red");
+    }
 
     var tabName = pagedata.selectTab;
     if (document.getElementById(tabName)) {

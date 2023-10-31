@@ -7,8 +7,6 @@ const request = require('request');
 const session = require('express-session');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
-const jsdom = require('jsdom');
-
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -21,8 +19,13 @@ const firestore = new Firestore({
   keyFilename: './keyfile.json',
 });
 
+var environment = "PRODUCTION";
 // this happens automatically, but add a message in the log as a reminder
-(process.env.FIRESTORE_EMULATOR_HOST) ? console.log("RUNNING LOCALLY WITH FIREBASE EMULATOR") : true;
+if (process.env.FIRESTORE_EMULATOR_HOST) {
+  console.log("RUNNING LOCALLY WITH FIREBASE EMULATOR");
+  environment = "DEV";
+}
+  
 
 // store a cache of the data for X seconds
 // useful to allow a quick refresh of the screen to randomise players
@@ -98,6 +101,7 @@ app.get('/auth/google/callback',
     res.redirect('/poll');
 });
 
+
 app.use(express.static(path.join(__dirname, 'public')))
 .use(express.urlencoded({ extended: true }))
 .use(express.json())
@@ -163,6 +167,89 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.send({'result': err});
   }
 })
+.get('/admin-payments-ledger', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT FOOTIE-ADMIN GET FROM:', ip, req.body);
+  
+  try {
+    //console.log('Generating TEAMS page with data for date: ', req.query.date);
+    //var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
+    var rowdata = {};
+
+    const inboundEmailsCollection = firestore.collection("INBOUND_EMAILS");
+    const allInboundEmailsDocs = await inboundEmailsCollection.get();
+    var inboundEmails = {};
+    allInboundEmailsDocs.forEach(doc => {
+      var key = doc.id;
+      var data = doc.data();
+      inboundEmails[key] = data;
+    })
+    rowdata.inboundEmails = inboundEmails;
+    
+    // read the list of players and aliases
+    /**
+    var playerAliasMaps = {};
+    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    rowdata.playerAliasMaps = playerAliasMaps;
+
+    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date, 12);
+    rowdata.allAttendanceData = allAttendanceData;
+    */
+
+    /**
+    // read the open outstanding payments
+    var nextMonday = getDateNextMonday();
+    var calcPaymentsFromDate = nextMonday;
+    if (req.query.date) {
+      calcPaymentsFromDate = req.query.date;
+    }
+    var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments(calcPaymentsFromDate);
+    rowdata.outstandingPayments = outstandingPayments;
+    console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
+    */
+    if (environment != "PRODUCTION") {
+      // NOTE - THIS IS TEMP AND MOSTLY USEFUL FOR DEBUGGING LOCAL FIRESTORE EMPULATOR
+      rowdata.allCollectionDocs = await getAllDataFromDB();
+      //console.log(rowdata.allCollectionDocs);
+    }
+
+    // read the completed payments ledger
+    const closedLedgerCollection = firestore.collection("CLOSED_LEDGER");
+    const allClosedLedgerDocs = await closedLedgerCollection.get();
+    var closedLedgers = {};
+    allClosedLedgerDocs.forEach(doc => {
+      var key = doc.id;
+      var data = doc.data();
+      closedLedgers[key] = data;
+    })
+    rowdata.closedLedgers = closedLedgers;
+
+    // read the open payments ledger
+    const openLedgerCollection = firestore.collection("OPEN_LEDGER");
+    const allOpenLedgerDocs = await openLedgerCollection.get();
+    var openLedgers = {};
+    allOpenLedgerDocs.forEach(doc => {
+      var key = doc.id;
+      var data = doc.data();
+      openLedgers[key] = data;
+    })
+    rowdata.openLedgers = openLedgers;
+    
+    // combine database data with supplimentary game data and render the page
+    var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString() };
+    if (userProfile) {
+      //console.log(userProfile["_json"]);
+      pageData.user = userProfile["_json"];
+    }
+
+    // render the page and pass some json with stringified value
+    pageData.environment = environment;
+    res.render('pages/admin-payments-ledger', { pageData: JSON.stringify(pageData) });
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
 .post('/services/payment', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT PAYMENT POST FROM EMAIL:', ip, req.body);
@@ -179,6 +266,33 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.json({'result': 'OK'})
   } else {
     res.sendStatus(400);
+  }
+})
+.post('/services/payment-manual', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT PAYMENT-MANUAL POST:', ip, req.body);
+  try {
+    // validate the details
+    var payeeName = req.body.payeeName;
+    var amount = Number(req.body.amount);
+    var transactionId = req.body.transactionId;
+    var transactionDate = new Date(req.body.transactionDate);
+    // save the details
+    var saveSuccess = false;
+    if (transactionDate && transactionId && payeeName && amount) {
+      saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+    }
+
+    if (saveSuccess) {
+      res.json({'result': 'OK'})
+    } else {
+      console.error("ERROR: Failed to save manual payment - discarding", payeeName, amount, transactionId, transactionDate);
+      res.sendStatus(400);
+    }
+    
+  } catch (err) {
+    console.error(err);
+    res.json({'result': err})
   }
 })
 .post('/services/teams', async (req, res) => {
@@ -203,7 +317,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.sendStatus(400);
   }
 })
-.post('/service/modify-mailinglist', async (req, res) => {
+.post('/services/modify-mailinglist', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT SERVCE: MODIFY MAILINGLIST GET FROM:', ip, req.body);
 
@@ -287,17 +401,6 @@ app.use(express.static(path.join(__dirname, 'public')))
       body += req.read();
     });
     req.on('end', function() {
-      /* NOT USED - was needed for the html paypal email, but the forward gives plain text
-      // extract just the html from the paypal email
-      var startPaypalIndex = body.indexOf("@paypal.co.uk");
-      var startPaypalHtmlIndex = body.indexOf("<html", startPaypalIndex);
-      var endPaypalHtmlIndex = body.indexOf("</html>", startPaypalIndex);
-      var html = body.substring(startPaypalHtmlIndex, endPaypalHtmlIndex + 7);
-      // join back to one line and use JSDOM to allow parsing
-      html = html.replace(/(=\n)/g, '');
-      const dom = new jsdom.JSDOM(html);
-      */
-
       // now loop through and extract the relevant text
       var payeeName;
       var amount;
@@ -324,12 +427,12 @@ app.use(express.static(path.join(__dirname, 'public')))
             //transactionDate = new Date(thisString.replace("Transaction date", ""));
             //console.log("TRANSACTION_DATE!", thisString, bodyTextArray[i+2]);
             transactionDate = new Date(bodyTextArray[i+2].trim());
-          } else if (thisString.match("Amousnt received")) {
-            // get value of next line (and replace the strange chars)
-            amount = Number(thisString.replace(/.*=C2=A3/, '').replace(/ .*/, ''));
-            //console.log("MONEY!", thisString, amount);
-            // this is the last message so quit loop
-            i = bodyTextArray.length;
+          //} else if (thisString.match("Amount received")) {
+          //  // get value of next line (and replace the strange chars)
+          //  amount = Number(thisString.replace(/.*=C2=A3/, '').replace(/ .*/, ''));
+          //  //console.log("MONEY!", thisString, amount);
+          //  // this is the last message so quit loop
+          //  i = bodyTextArray.length;
           }
         }
       }
@@ -349,7 +452,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         var parsedText = "payeeName: " + payeeName + ", amount:" + amount
           + ", transactionId:" + transactionId + ", transactionDate:" + transactionDate;
         var emailDetails = { "parsed_status": parsedText, "data": body}
-        const docRef = firestore.collection("INBOUND_EMAILS").doc("PAYMENT_ERROR_EMAIL_" + new Date());
+        const docRef = firestore.collection("INBOUND_EMAILS").doc("PAYMENT_ERROR_EMAIL_" + new Date().toISOString());
         docRef.set(emailDetails);
 
         res.sendStatus(200);
@@ -574,7 +677,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     }
     pageData.playerAliasData = playerAliasData;
 
-    res.render('pages/poll', { pageData: pageData } );
+    res.render('pages/poll', { pageData: JSON.stringify(pageData) });
   } catch (err) {
     console.error(err);
     res.send("Error " + err);
@@ -671,12 +774,6 @@ app.use(express.static(path.join(__dirname, 'public')))
         await docRef.set(attendanceDetails);
       } else {
         console.log('UPDATING:', JSON.stringify(attendanceDetails));
-        // copy the existing doc to preserve a history
-        var existingDocData = existingDoc.data();
-        existingDocData.saveType = "ATTENDANCE_BACKUP"
-        const backupDocRef = firestore.collection(gamesCollectionId).doc("_attendance_" + existingDocData.timestamp);
-        backupDocRef.set(existingDocData)
-        // now update with the new data
         await docRef.update(attendanceDetails);
       }
 
@@ -710,6 +807,34 @@ app.use(express.static(path.join(__dirname, 'public')))
     var savedata = { "paydetails": paydetails };
     await docRef.set(savedata, { merge: true });
     res.json({'result': 'OK'})
+  } catch (err) {
+    console.error(err);
+    res.send({'result': err});
+  }
+ })
+.post('/services/payment-email-admin', async function (req, res) {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+  console.log('Got /payment-email-admin POST:', ip, JSON.stringify(req.body));
+
+  if (!userProfile) {
+    console.warn('WARNING: attempting to save PAYMENT but user not logged in.  Denied.');
+    res.status(401).send({'result': 'Denied. User not logged in...'});
+    return;
+  }
+
+  var key = req.body.key;
+  var type = req.body.type;
+  var action = req.body.action;
+
+  try {
+    if (type == "INBOUND_EMAIL" && action == "DELETE") {
+      console.log('Deleting:', type, key);
+      await firestore.collection("INBOUND_EMAILS").doc(key).delete();
+      res.json({'result': 'OK'})
+    } else {
+      console.error('Deleting:', type, key);
+      res.send({'result': "Error. Incorrect type or action"}); 
+    }
   } catch (err) {
     console.error(err);
     res.send({'result': err});
@@ -905,14 +1030,18 @@ async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3)
       var playerPaymentData = doc.data();
       var totalCharges = 0;
       var totalPayments = 0;
+      var charges = [];
+      var payments = [];
       Object.keys(playerPaymentData).sort().forEach(function(transaction) {
       //console.log('GOT transaction:', playerName, transaction, playerPaymentData[transaction]);
         if (transaction.startsWith("charge_")) {
           // TODO: Consider whether noOfMonths is still needed and if a filter is needed
           totalCharges += playerPaymentData[transaction].amount;
+          charges.push(transaction.replace('charge_', ''));
         }
         if (transaction.startsWith("payment_")) {
           totalPayments += playerPaymentData[transaction].amount;
+          payments.push(transaction);
         }
       })
       //console.log('GOT player payment data:', playerName, totalCharges, totalPayments);
@@ -921,7 +1050,8 @@ async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3)
         totalAmountOwed = (totalCharges * -1);
         totalNoGames = (totalAmountOwed / COST_PER_GAME) - (totalPayments / COST_PER_GAME);
         totalOutstandingBalance = (outstandingBalance * -1);
-        playersUnPaid[playerName] = { "numberOfGames": totalNoGames, "amountOwed": (outstandingBalance * -1), "amountPaid": 0, "outstandingBalance": totalOutstandingBalance}
+        playersUnPaid[playerName] = { "numberOfGames": totalNoGames, "amountOwed": (outstandingBalance * -1), 
+          "amountPaid": 0, "outstandingBalance": totalOutstandingBalance, "charges": charges, "payments": payments};
       }
     });
 
@@ -1202,16 +1332,20 @@ function sendAdminEvent(title, details) {
   };
   console.log(mailOptions);
 
-  transporter.sendMail(mailOptions, function(error, info){
-    console.log('Trying to send admin email: ', mailOptions);
-    if (error) {
-      console.log(error);
-      return false;
-    } else {
-      console.log('Admin email sent: ' + info.response);
-      return true;
-    }
-  });
+  if (environment == "PRODUCTION") {
+    transporter.sendMail(mailOptions, function(error, info){
+      console.log('Trying to send admin email: ', mailOptions);
+      if (error) {
+        console.log(error);
+        return false;
+      } else {
+        console.log('Admin email sent: ' + info.response);
+        return true;
+      }
+    });
+  } else {
+    console.log('DUMMY - test env so not sending admin email: ', mailOptions);
+  }
 }
 
 // send an email to the admins to notify of certain events (such as a player availability change)
@@ -1527,4 +1661,35 @@ async function addRemoveEmailSubscription(details, hostname) {
     await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
   }
   return true;
+}
+
+// get all data from DB
+async function getAllDataFromDB() {
+  // get a list of all collections
+  var allCollections = [];
+  await firestore.listCollections().then(snapshot=>{
+    snapshot.forEach(snaps => {
+      allCollections.push(snaps["_queryOptions"].collectionId);
+    })
+  })
+  .catch(error => console.error(error));
+  // loop through each collection and get the docs
+  var allCollectionDocs = {};
+  //allCollections.length
+  for (var i=0; i<allCollections.length; i++) {
+    var collectionId = allCollections[i];
+    console.log("Collecting docs from:", collectionId);
+    const collection = await firestore.collection(collectionId)
+    var allDocs = {};
+    await collection.get().then((querySnapshot) => {
+      const tempDoc = querySnapshot.docs.map((doc) => {
+        var obj = { "id": doc.id, "data": doc.data() }
+        return obj;
+      })
+      allDocs[tempDoc.id] = tempDoc;
+      //console.log("ALL DOCS", tempDoc);
+      allCollectionDocs[collectionId] = tempDoc;
+    })
+  }
+  return allCollectionDocs;
 }

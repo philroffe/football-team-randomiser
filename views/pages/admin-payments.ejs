@@ -99,6 +99,9 @@
       };
 
 
+      if (!mondaysDates) {
+        mondaysDates = mondaysInMonth(pollDate.getMonth()+1, pollDate.getFullYear());  //=> [ 7,14,21,28 ]
+      }
 
       var outstandingPaymentsThisMonthMap = {};
       // count the number of games that they actively played
@@ -107,19 +110,24 @@
         var amountOwed = 0;
         var amountPaid = 0;
         var outstandingBalance = 0;
+        var charges = [];
+        var payments = [];
         if (attendanceMap[playerName]) {
           Object.keys(attendanceMap[playerName]).sort().forEach(function(games) {
-            if (attendanceMap[playerName][games]) { numberOfGames++; }
+            if (attendanceMap[playerName][games]) { 
+              numberOfGames++;
+              charges.push(pollDate.getFullYear() + "-" + (pollDate.getMonth()+1) + "-" + mondaysDates[games]);
+            }
           })
           if (paydetailsMap[playerName]) { amountPaid = Number(paydetailsMap[playerName]); }
           amountOwed = Number(playersOrdered[playerName]);
           outstandingBalance = (numberOfGames*4) - amountPaid;
-          //console.log(playerName, (numberOfGames), amountOwed, amountPaid, outstandingBalance)
+          //console.log(playerName, (numberOfGames), amountOwed, amountPaid, outstandingBalance, charges, payments);
         } else {
           numberOfGames = 0;
         }
         // add to the map
-        outstandingPaymentsThisMonthMap[playerName] = { "numberOfGames": numberOfGames, "amountOwed": amountOwed, "amountPaid": amountPaid, "outstandingBalance": outstandingBalance}
+        outstandingPaymentsThisMonthMap[playerName] = { "numberOfGames": numberOfGames, "amountOwed": amountOwed, "amountPaid": amountPaid, "outstandingBalance": outstandingBalance, "charges": charges, "payments": payments}
       });
 
       var panelcontentouter = document.getElementById("paymentsEntryDiv");
@@ -132,6 +140,22 @@
       addPaymentsTableRows(outstandingPaymentsThisMonthMap, true);
 
 }
+
+function togglePaymentVisbility(e) {
+  //console.log("Cell clicked...", e.srcElement.id, e.srcElement.innerText);
+  var tableCellId = e.srcElement.id;
+  tableCellId = tableCellId.replace(/List/, '');
+  var paymentsListElement = document.getElementById(tableCellId + "List");
+
+  if (paymentsListElement.hidden) {
+    paymentsListElement.hidden = false;
+    e.srcElement.className = "contractable";
+  } else {
+    paymentsListElement.hidden = true;
+    e.srcElement.className = "expandable";
+  }
+}
+
 function addPaymentsTableRows(paymentsMap, showEditTotals = true) {
       var overallGamesTotal = 0;
       var overallOwesTotal = 0;
@@ -173,7 +197,20 @@ function addPaymentsTableRows(paymentsMap, showEditTotals = true) {
           // add table cell
           const tdName = tr.insertCell();
           tdName.appendChild(document.createTextNode(playerName));
-          tdName.setAttribute("id", "player" + playerName + "NamePayment");
+          tdName.setAttribute("id", "player" + showEditTotals + playerName + "NamePayment");
+          /////////////////
+          var paymentDiv = document.createElement("div");
+          paymentDiv.setAttribute("id", "player" + showEditTotals + playerName + "NamePaymentList");
+          var charges = paymentsMap[playerName]["charges"];
+          for (let i = 0; i < charges.length; i++) {
+            paymentDiv.appendChild(document.createTextNode(charges[i]));
+            paymentDiv.appendChild(document.createElement("br"));
+          }
+          paymentDiv.hidden = true;
+          tdName.appendChild(paymentDiv);
+          tdName.addEventListener("click", togglePaymentVisbility);
+          tdName.className = "expandable";
+          /////////////////
 
           // add table cell
           const tdGames = tr.insertCell();

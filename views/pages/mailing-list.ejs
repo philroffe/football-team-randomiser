@@ -116,7 +116,7 @@
             document.getElementById("response").innerHTML = "Error!  Something went wrong - normally this is because someone else is on the mailing this with the same/similar name.<br>Try changing your first name to your nickname, or failing that just contact the organiser to subscribe you.";
           }
         };
-        xmlhttp.open("POST", "/service/modify-mailinglist");
+        xmlhttp.open("POST", "/services/modify-mailinglist");
         xmlhttp.setRequestHeader("Content-Type", "application/json");
         xmlhttp.send(JSON.stringify(details));
       }
