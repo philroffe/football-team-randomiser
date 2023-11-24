@@ -108,6 +108,9 @@ async function backupDatabase() {
     fs.writeFileSync(filename, JSON.stringify(allCollectionDocs));
     console.log("Saving complete:", filename);
     // file written successfully, so create/update symlink to latest file
+    if (fs.existsSync('DB-Backup-date-latest.json')) {
+      fs.unlinkSync("DB-Backup-date-latest.json"); 
+    }
     fs.symlinkSync(filename, "DB-Backup-date-latest.json");
   } catch (err) {
     console.error(err);

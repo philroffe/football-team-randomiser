@@ -18,7 +18,10 @@
     "ejs": "^3.1.8",
     "express": "^4.15.2",
     "express-session": "^1.17.3",
+    "html-to-text": "^9.0.5",
     "jsdom": "^22.1.0",
+    "mailparser": "^3.6.5",
+    "mimelib": "^0.3.1",
     "node-ical": "^0.13.0",
     "nodemailer": "^6.9.4",
     "passport": "^0.6.0",
@@ -27,6 +30,7 @@
     "request": "^2.88.2"
   },
   "devDependencies": {
+    "depcheck": "^1.4.7",
     "got": "^11.8.5",
     "tape": "^4.7.0"
   },
