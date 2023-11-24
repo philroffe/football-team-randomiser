@@ -101,7 +101,12 @@
 
   <script>
   <%- include ("./generate-teams-utils.js") %>
-  var nextMondayText = "<%= pageData.nextMonday %>";
+
+  // restringify and then parse the json to get the page
+  var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
+  console.log('Data=', pagedata);
+
+  var nextMondayText = pagedata.nextMonday;
   var nextMondayDate = new Date(nextMondayText);
   //var todayDate = new Date();
   var todayDate = nextMondayDate;
@@ -122,10 +127,6 @@
                          "algorithm3": "Average generated score per game\n(5 for win, 3 for draw, 1 for loss,\n 0 for not-played)", 
                          "algorithm4": "Total generated score per game\n(5 for win, 3 for draw, 1 for loss,\n 0 for not-played)",
                          "algorithm5": "Most Played (W|D|L)"}
-
-    // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
-    var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&#39;/g, '\'').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
-    //console.log('Data=', pagedata);
 
     var players = pagedata.data.players;
     if (!players) { players = {}; }

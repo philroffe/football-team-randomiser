@@ -391,4 +391,41 @@ function generateTeamsEmailText(generatedTeams, nextMondayDate) {
   return emailDetails;
 }
 
+//parse inbound paypal email and extract the relevant data
+function parsePaypalEmail(bodyText) {
+  console.log("bodyText email:", bodyText);
+  // now loop through and extract the relevant text
+  var payeeName;
+  var amountFromPayee;
+  var transactionId;
+  var transactionDate;
+  var amount;
+  // replace any tabs with newlines and loop through each line
+  bodyTextArray = bodyText.replace(/\t/g,'\n').split('\n');
+  for (i=0; i<bodyTextArray.length; i++) {
+    var thisString = bodyTextArray[i].trim();
+    if (thisString) {
+      var payeeNameMatch = thisString.match(/(.*)( has sent you)(.*)/);
+      //console.log("Line:", payeeNameMatch)
+      if (payeeNameMatch) {
+        payeeName = payeeNameMatch[1];
+        // sometimes can get the amount here too, but paypal is inconsistent so storing it but not using it
+        amountFromPayee = Number(payeeNameMatch[3].replace(/[^0-9.]/g, ''));
+      } else if (thisString.match(/Transaction ID/)) {
+        // get value of next line
+        transactionId = bodyTextArray[i+1].trim();
+      } else if (thisString.match("date")) {
+        // get value of next line
+        transactionDate = new Date(bodyTextArray[i+1].trim());
+      } else if (thisString.match("GBP")) {
+        // get only the numbers in the string
+        amount = Number(thisString.replace(/[^0-9.]/g, ''));
+      }
+    }
+  }
+  var parsedData = { "payeeName": payeeName, "amountFromPayee": amountFromPayee, "transactionId": transactionId, "transactionDate": transactionDate, "amount": amount};
+  console.log("Parsed paypal email:", parsedData);
+  return parsedData;
+}
+
 //module.exports = { getNextMondayIndex, datesAreOnSameDay, changeAlgorithmForPlayers, generateStandbyPlayers, generateRedBlueTeams, shuffle, generateTeamsEmailText};

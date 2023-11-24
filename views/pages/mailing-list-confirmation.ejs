@@ -19,8 +19,10 @@
       const MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED = 2
       const MAIL_SUBSCRIPTION_STATUS_CONFIRMING = 1
       const MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED = 0
-      var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&#39;/g, "'"));
 
+      // restringify and then parse the json to get the page
+      var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
+    
       if (pagedata.playerAliasData) {
         // player email must have been confirmed so show message
         document.getElementById("borderTitle").innerHTML = "<H3>Email Confirmed!</H3>";

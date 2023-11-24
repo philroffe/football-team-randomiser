@@ -7,6 +7,9 @@ const request = require('request');
 const session = require('express-session');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
+const mimelib = require("mimelib");
+const { convert } = require('html-to-text');
+const simpleParser = require('mailparser').simpleParser;
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -19,11 +22,10 @@ const firestore = new Firestore({
   keyFilename: './keyfile.json',
 });
 
-var environment = "PRODUCTION";
 // this happens automatically, but add a message in the log as a reminder
+var environment = process.env.ENVIRONMENT;
 if (process.env.FIRESTORE_EMULATOR_HOST) {
-  console.log("RUNNING LOCALLY WITH FIREBASE EMULATOR");
-  environment = "DEV";
+  console.log("RUNNING LOCALLY WITH FIREBASE EMULATOR:", process.env.FIRESTORE_EMULATOR_HOST, "Environment:", environment);
 }
   
 
@@ -107,9 +109,9 @@ app.use(express.static(path.join(__dirname, 'public')))
 .use(express.json())
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
-.get('/', (req, res) => res.render('pages/index'))
-.get('/login', (req, res) => res.render('pages/auth'))
-.get('/error', (req, res) => res.send("error logging in - invalid account for this site"))
+.get('/', (req, res) => res.render('pages/index', { pageData: JSON.stringify({"environment": environment})} ))
+.get('/login', (req, res) => res.render('pages/auth', { pageData: JSON.stringify({"environment": environment})} ))
+.get('/error', (req, res) => res.send("error logging in - invalid account for this site", { pageData: JSON.stringify({"environment": environment})} ))
 .get('/logout', function(req, res, next){
   req.logout(function(err) {
     if (err) { return next(err); }
@@ -236,14 +238,13 @@ app.use(express.static(path.join(__dirname, 'public')))
     rowdata.openLedgers = openLedgers;
     
     // combine database data with supplimentary game data and render the page
-    var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString() };
+    var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString(), "environment": environment };
     if (userProfile) {
       //console.log(userProfile["_json"]);
       pageData.user = userProfile["_json"];
     }
 
     // render the page and pass some json with stringified value
-    pageData.environment = environment;
     res.render('pages/admin-payments-ledger', { pageData: JSON.stringify(pageData) });
   } catch (err) {
     console.error(err);
@@ -273,20 +274,34 @@ app.use(express.static(path.join(__dirname, 'public')))
   console.log('GOT PAYMENT-MANUAL POST:', ip, req.body);
   try {
     // validate the details
+    var action = req.body.action;
     var payeeName = req.body.payeeName;
     var amount = Number(req.body.amount);
+    var transactionType = req.body.transactionType;
     var transactionId = req.body.transactionId;
     var transactionDate = new Date(req.body.transactionDate);
+
     // save the details
     var saveSuccess = false;
-    if (transactionDate && transactionId && payeeName && amount) {
-      saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+    if (transactionType == "payment") {
+      if (action == "ADD") {
+        if (transactionDate && transactionId && payeeName && amount) {
+          saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+        }
+      } else if (action == "REFUND") {
+        if (transactionId) {
+          console.log('REFUNDING...:', transactionId);
+          saveSuccess = await refundPayment(transactionId);
+        }
+      }
+    } else if (transactionType == "charge") {
+        console.log('Charge...:', payeeName, transactionDate);
     }
 
     if (saveSuccess) {
       res.json({'result': 'OK'})
     } else {
-      console.error("ERROR: Failed to save manual payment - discarding", payeeName, amount, transactionId, transactionDate);
+      console.error("ERROR: Failed to save manual payment - discarding", action, payeeName, amount, transactionId, transactionDate);
       res.sendStatus(400);
     }
     
@@ -381,11 +396,11 @@ app.use(express.static(path.join(__dirname, 'public')))
       if (!playerAliasData) {
         console.log("ERROR FINDING MAILING LIST CODE:", code);
       }
-      var pageData = { code: code, playerAliasData: playerAliasData };
-      res.render('pages/mailing-list-confirmation', { pageData: pageData} );
+      var pageData = { code: code, playerAliasData: playerAliasData, "environment": environment };
+      res.render('pages/mailing-list-confirmation', { pageData: JSON.stringify(pageData)} );
     } else {
-      var pageData = { code: code, playerAliasData: playerAliasData };
-      res.render('pages/mailing-list', { pageData: pageData} );
+      var pageData = { code: code, playerAliasData: playerAliasData, "environment": environment };
+      res.render('pages/mailing-list', { pageData: JSON.stringify(pageData)} );
     }
   } catch (err) {
     console.error(err);
@@ -396,68 +411,54 @@ app.use(express.static(path.join(__dirname, 'public')))
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT /_ah/mail/payment@... PAYMENT POST FROM EMAIL:', ip, req.body);
   try {
-    var body = "";
+    var body;
+    var streamData = "";
     await req.on('readable', function() {
-      body += req.read();
+      streamData += req.read();
     });
     req.on('end', function() {
-      // now loop through and extract the relevant text
-      var payeeName;
-      var amount;
-      var transactionId;
-      var transactionDate;
-      //var bodyTextArray = dom.window.document.querySelector("body").textContent.split('\n');
-      bodyTextArray = body.split('span>');
-      for (i=0; i<bodyTextArray.length; i++) {
-        var thisString = bodyTextArray[i].trim().replace(/\*/, '');
-        if (thisString) {
-          var payeeNameMatch = thisString.match(/(.*)( has sent you)(.*)/);
-          //console.log("Line:", payeeNameMatch)
-          if (payeeNameMatch) {
-            payeeName = payeeNameMatch[1];
-            // sometimes can get the amount here too, but paypal is inconsistent so not using it
-            amount = payeeNameMatch[3].replace(/.*=C2=A3/, '').replace(/=C2.*/, '');
-          } else if (thisString.match(/Transaction ID/)) {
-            // get value of next line
-            //transactionId = thisString.replace("Transaction ID", "");
-            //console.log("TRANSACTION_ID!", thisString, bodyTextArray[i+2]);
-            transactionId = bodyTextArray[i+2].replace(/<\//g, '').trim();
-          } else if (thisString.match("date")) {
-            // get value of next line
-            //transactionDate = new Date(thisString.replace("Transaction date", ""));
-            //console.log("TRANSACTION_DATE!", thisString, bodyTextArray[i+2]);
-            transactionDate = new Date(bodyTextArray[i+2].trim());
-          //} else if (thisString.match("Amount received")) {
-          //  // get value of next line (and replace the strange chars)
-          //  amount = Number(thisString.replace(/.*=C2=A3/, '').replace(/ .*/, ''));
-          //  //console.log("MONEY!", thisString, amount);
-          //  // this is the last message so quit loop
-          //  i = bodyTextArray.length;
-          }
-        }
-      }
-      console.log("Parsed paypal email:", payeeName, amount, transactionId, transactionDate);
-
-      // save the details
-      var saveSuccess = false;
-      if (transactionDate && transactionId && payeeName && amount) {
-        saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
-      }
-      
-      if (saveSuccess) {
-        res.json({'result': 'OK'});
-      } else {
-        console.log("ERROR: Failed to parse message. Storing in dead letter: INBOUND_EMAILS");
-        // store in dead letter queue
-        var parsedText = "payeeName: " + payeeName + ", amount:" + amount
-          + ", transactionId:" + transactionId + ", transactionDate:" + transactionDate;
-        var emailDetails = { "parsed_status": parsedText, "data": body}
-        const docRef = firestore.collection("INBOUND_EMAILS").doc("PAYMENT_ERROR_EMAIL_" + new Date().toISOString());
-        docRef.set(emailDetails);
-
-        res.sendStatus(200);
-      }
+      // done so convert from quoted-printable mime type
+      body = mimelib.decodeQuotedPrintable(streamData);
+      // store the data for future processing
+      var emailDetails = { "parsed_status": "NEW", "data": body}
+      const docRef = firestore.collection("INBOUND_EMAILS").doc("PAYMENT_ERROR_EMAIL_" + new Date().toISOString());
+      docRef.set(emailDetails);
     });
+
+    // take just the html part of the email body and decode it from quoted-printable mime time
+    var htmlCode = body.substring(body.indexOf("<html"));
+    var htmlText = convert(htmlCode, { wordwrap: 130 });
+
+    // TODO find a better way to import the library as a module rather than as a file
+    eval(fs.readFileSync('./views/pages/generate-teams-utils.js')+'');
+
+    // now parse the text and get store the relevent payment fields
+    var parsedData = parsePaypalEmail(htmlText);
+
+    //document.getElementById("payeeName").value = parsedData.payeeName;
+    //document.getElementById("payeeAmount").value = parsedData.amount;
+    //document.getElementById("payeeFromAmount").value = parsedData.amountFromPayee;
+    //document.getElementById("payeeTransactionId").value = parsedData.transactionId;
+    //document.getElementById("payeeTransactionDate").value = parsedData.transactionDate;
+
+    // save the details
+    var saveSuccess = false;
+    if (transactionDate && transactionId && payeeName && amount) {
+      saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+    }
+    if (saveSuccess) {
+      res.json({'result': 'OK'});
+    } else {
+      console.log("ERROR: Failed to parse message. Storing in dead letter: INBOUND_EMAILS");
+      // store in dead letter queue
+      var parsedText = "payeeName: " + payeeName + ", amount:" + amount
+        + ", transactionId:" + transactionId + ", transactionDate:" + transactionDate;
+      var emailDetails = { "parsed_status": parsedText, "data": body}
+      const docRef = firestore.collection("INBOUND_EMAILS").doc("PAYMENT_ERROR_EMAIL_" + new Date().toISOString());
+      docRef.set(emailDetails);
+
+      res.sendStatus(200);
+    }
   } catch (err) {
     console.error(err);
     res.json({'result': err})
@@ -466,58 +467,99 @@ app.use(express.static(path.join(__dirname, 'public')))
 .post('/_ah/mail/teams@tensile-spirit-360708.appspotmail.com', async (req, res) => {
   console.log('Got /_ah/mail/teams@... with Content-Type:', req.get('Content-Type'));
   try {
-
-    var body = "";
+    var body;
+    var streamData = "";
     await req.on('readable', function() {
-      body += req.read();
+      streamData += req.read();
     });
-    req.on('end', function() {
-      var bodyArray = body.split('\n');
+    await req.on('end', function() {
+      // done so convert from quoted-printable mime type
+      body = mimelib.decodeQuotedPrintable(streamData);
+      // store the data for future processing
+      var emailDetails = { "parsed_status": "NEW", "data": body}
+      const docRef = firestore.collection("INBOUND_EMAILS").doc("TEAMS_ERROR_EMAIL_" + new Date().toISOString());
+      docRef.set(emailDetails);
+    });
 
-      // loop through the email, line-by-line, and extract the payers for each team
-      // assumes REDS first, BLUES second!
-      var cleanRedTeamPlayers = [];
-      var cleanBlueTeamPlayers = [];
-      var gameDate;
-      for (i=0; i<bodyArray.length; i++) {
-        //console.log("Testing", i, bodyArray[i]);
-        var currentUpperCaseText = bodyArray[i].trim().toUpperCase();
-        if (currentUpperCaseText.startsWith("REDS")) {
-          // found the reds team, now parse it
-          var redsIndex = i;
-          if (cleanRedTeamPlayers.length == 0) {
-            cleanRedTeamPlayers = parsePlayerTeamNames(bodyArray, i);
+    // used for debugging only, uncomment as required
+    //var emailDoc = await firestore.collection("INBOUND_EMAILS").doc("TEAMS_ERROR_EMAIL_2023-11-21T07:59:22.194Z").get();
+    //body = emailDoc.data().data;
+    //console.log(body);
+    
+    // get SCORES if defined (loop through lines, ignoring empty lines, to get the first text and try to parse score)
+    var scores;
+    let parsed = await simpleParser(body);
+    var emailLines = parsed.text.split('\n');
+    for (i=0; i<emailLines.length; i++) {
+      var currentLine = emailLines[i].trim();
+      if (currentLine != "") {
+        // non-empty line
+        i = emailLines.length;
+        var scoreValues = currentLine.split('-');
+        var goals1 = Number(scoreValues[0]);
+        var goals2 = Number(scoreValues[1]);
+        if (isNaN(goals1) || isNaN(goals2)) {
+          console.log("NO SCORES FOUND IN BODY, SKIPPING...");
+        } else {
+          var calcWinner = -1;
+          if (goals1 == goals2) {
+            calcWinner = 0; // draw
+          } else if (goals1 > goals2) {
+            calcWinner = 1; // team1 won
+          } else if (goals1 < goals2) {
+            calcWinner = 2; // team2 won
           }
-        } else if (currentUpperCaseText.startsWith("BLUE")) {
-          var blueIndex = i;
-          if (cleanBlueTeamPlayers.length == 0) {
-            cleanBlueTeamPlayers = parsePlayerTeamNames(bodyArray, i);
-          }
-        } else if (currentUpperCaseText.startsWith("DATE:")) {
-          // update the date until the REDS players are found
-          if (cleanRedTeamPlayers.length == 0) {
-            // clean the date ready for parsing
-            var dateText = currentUpperCaseText.split(" AT")[0];
-            var emailDate = new Date(dateText.split("DATE: ")[1]);
-            //calc date - use the next Monday after the email date
-            gameDate = getDateNextMonday(emailDate);
-            //console.log('WORKING DATE:', dateText, emailDate, gameDate);
-          }
+          scores = {"winner": calcWinner, "team1goals": goals1, "team2goals": goals2}
+          //console.log(scores);
         }
       }
-      console.log("REDS", redsIndex, cleanRedTeamPlayers);
-      console.log("BLUES", blueIndex, cleanBlueTeamPlayers);
-      console.log("DATE", dateText, emailDate);
+    }
 
-      // save the details
-      var saveSuccess = saveTeamsAttendance(gameDate, cleanRedTeamPlayers, cleanBlueTeamPlayers);
-
-      if (saveSuccess) {
-        res.json({'result': 'OK'})
-      } else {
-        res.sendStatus(400);
+    // get TEAMS, loop through the email, line-by-line, and extract the payers for each team
+    var bodyArray = body.split('\n');
+    // assumes REDS first, BLUES second!
+    var cleanRedTeamPlayers = [];
+    var cleanBlueTeamPlayers = [];
+    var gameDate;
+    for (i=0; i<bodyArray.length; i++) {
+      //console.log("Testing", i, bodyArray[i]);
+      var currentUpperCaseText = bodyArray[i].trim().toUpperCase();
+      if (currentUpperCaseText.startsWith("REDS")) {
+        // found the reds team, now parse it
+        var redsIndex = i;
+        if (cleanRedTeamPlayers.length == 0) {
+          cleanRedTeamPlayers = parsePlayerTeamNames(bodyArray, i);
+        }
+      } else if (currentUpperCaseText.startsWith("BLUE")) {
+        var blueIndex = i;
+        if (cleanBlueTeamPlayers.length == 0) {
+          cleanBlueTeamPlayers = parsePlayerTeamNames(bodyArray, i);
+        }
+      } else if (currentUpperCaseText.startsWith("DATE:")) {
+        // update the date until the REDS players are found
+        if (cleanRedTeamPlayers.length == 0) {
+          // clean the date ready for parsing
+          var dateText = currentUpperCaseText.split(" AT")[0];
+          var emailDate = new Date(dateText.split("DATE: ")[1]);
+          //calc date - use the next Monday after the email date
+          gameDate = getDateNextMonday(emailDate);
+          //console.log('WORKING DATE:', dateText, emailDate, gameDate);
+        }
       }
-    });
+    }
+    console.log("REDS", redsIndex, cleanRedTeamPlayers);
+    console.log("BLUES", blueIndex, cleanBlueTeamPlayers);
+    console.log("DATE", dateText, emailDate);
+    console.log("SCORES", scores);
+
+    // save the details
+    var saveSuccess = saveTeamsAttendance(gameDate, cleanRedTeamPlayers, cleanBlueTeamPlayers, scores);
+
+    if (saveSuccess) {
+      res.json({'result': 'OK'})
+    } else {
+      res.sendStatus(400);
+    }
   } catch (err) {
     console.error(err);
     res.json({'result': err})
@@ -552,12 +594,12 @@ app.use(express.static(path.join(__dirname, 'public')))
         console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
         
         // combine database data with supplimentary game data and render the page
-        var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString() };
+        var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString(), "environment": environment };
         if (userProfile) {
           //console.log(userProfile["_json"]);
           pageData.user = userProfile["_json"];
         }
-        res.render('pages/poll-generate-teams', { pageData: pageData} );
+        res.render('pages/poll-generate-teams', { pageData: JSON.stringify(pageData) });
       } catch (err) {
         console.error(err);
         res.send("Error " + err);
@@ -608,7 +650,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     console.log('rowdata', JSON.stringify(rowdata));
 
     // combine database data with any additional page data
-    var pageData = { data: rowdata, };
+    var pageData = { data: rowdata, "environment": environment };
 
     res.render('pages/stats', { pageData: pageData } );
   } catch (err) {
@@ -660,7 +702,7 @@ app.use(express.static(path.join(__dirname, 'public')))
       console.log("Using CACHED bank holidays: " + Object.keys(bankHolidaysCache).length)
     }
     // combine database data with any additional page data
-    var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, selectTab: tabName };
+    var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, selectTab: tabName, "environment": environment  };
     if (userProfile) {
       //console.log(userProfile["_json"]);
       pageData.user = userProfile["_json"];
@@ -689,7 +731,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date, PLAYER_LOG_FILTER);
         var nextMonday = getDateNextMonday();
         // combine database data with supplimentary game data and render the page
-        var pageData = { data: rowdata, nextMonday: nextMonday.toISOString() };
+        var pageData = { data: rowdata, nextMonday: nextMonday.toISOString(), "environment": environment };
         res.render('pages/poll-log', { pageData: pageData} );
       } catch (err) {
         console.error(err);
@@ -1369,7 +1411,7 @@ function sendEmailToList(mailOptions, hostname) {
 }
 
 // save players that played for each team
-async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, rawSourceData = undefined) {
+async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, scores = undefined) {
  try {
    var gameDateString = gameDate.toISOString().split('T')[0]; //2023-11-27
    var gameMonth = gameDateString.slice(0, -3); //2023-11
@@ -1412,6 +1454,9 @@ async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, ra
      allPlayers[playerName] = 2;
    }
    attendanceDetails[weekNumber] = allPlayers;
+   if (scores) {
+     attendanceDetails[weekNumber].scores = scores;
+   }
 
    console.log('Inserting DB data:', gamesCollectionId, JSON.stringify(attendanceDetails));
    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
@@ -1449,13 +1494,18 @@ async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, ra
 // parse a list (array) of text containing the teams and extracts the player names
 function parsePlayerTeamNames(playerArray, startIndex) {
   var nameArray = [];
+  var blankLines = 0;
   for (j=0; j<11; j++) {
     var cleanName = playerArray[startIndex+j+1].trim().replace(/^\d/, '').replace(/^\./g, '').replace(/^/g, '').replace(/\*+/i, '').trim();
     //.replace(/(red.*|BLUE.*|\*+)/i, '').trim();
+    if (cleanName.toUpperCase() == "") {
+      // count the number of blank lines
+      blankLines++;
+    }
     if (cleanName.toUpperCase().startsWith("BLUE") 
       || cleanName.toUpperCase().startsWith("RED") 
       || cleanName.toUpperCase().startsWith("STAND")
-      || cleanName.toUpperCase() == "") {
+      || blankLines > 1) {
       // found the header/blank so exit from the loop
       //console.log("Exiting loop here:", j, cleanName);
       break;
@@ -1544,6 +1594,52 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
     console.error(err);
     return false;
   }
+}
+
+// record a payment transaction
+async function refundPayment(paypalTransactionId) {
+  // loop through all players in CLOSED_LEDGER
+  const closedLedgerCollection = firestore.collection("CLOSED_LEDGER");
+  const allClosedLedgerDocs = await closedLedgerCollection.get();
+  var closedLedgers = {};
+  // loop through all players
+  var foundTransaction = false;
+  allClosedLedgerDocs.forEach(doc => {
+    var key = doc.id;
+    var data = doc.data();
+    //console.log(doc.id);
+    closedLedgers[key] = data;
+    var updateDoc = false;
+    // loop through all transactions
+    for (var transaction in data) {
+      if (transaction.startsWith("charge_") && data[transaction].paid == paypalTransactionId) {
+        console.log("FOUND MATCHING CHARGE", paypalTransactionId, transaction);
+        // remove the paid flag and move the charge to the open ledger
+        delete data[transaction].paid;
+        var openLedgerData = {};
+        openLedgerData[transaction] = data[transaction];
+        firestore.collection("OPEN_LEDGER").doc(key).set(openLedgerData, { merge: true });
+        // delete the charge from closed ledger
+        delete data[transaction];
+        foundTransaction = true;
+        updateDoc = true;
+      }
+      if (transaction.startsWith("payment_") && data[transaction].paypalTransactionId == paypalTransactionId) {
+        console.log("FOUND MATCHING PAYMENT", paypalTransactionId, transaction);
+        // delete the payment
+        delete data[transaction];
+        foundTransaction = true;
+        updateDoc = true;
+      }
+    }
+    if (updateDoc) {
+      // store the updated data
+      console.log("Updating CLOSED_LEDGER with removed transaction(s) for", doc.id);
+      doc._ref.set(data);
+    }
+  })
+  //console.log("FOUND?", paypalTransactionId, foundTransaction);
+  return foundTransaction;
 }
 
 // string name/email, int subscriptionStatus

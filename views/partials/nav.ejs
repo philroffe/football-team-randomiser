@@ -39,4 +39,19 @@ window.onclick = function(event) {
     modal.style.display = "none";
   }
 }
+
+
+// restringify and then parse the json to get the page
+var headerPageData = JSON.parse(JSON.stringify(<%- pageData %>));
+//console.log('HeaderPageData=', headerPageData);
+
+// change the header red if using a test environment
+if (headerPageData.environment != "PRODUCTION") {
+  console.log("Environment:", headerPageData.environment);
+  // local test env so show header as red
+  var navTopElement = document.getElementById("navTop")
+  navTopElement.className = navTopElement.className.replace(" w3-black", " w3-red");
+  var navDemo = document.getElementById("navTop")
+  navDemo.className = navDemo.className.replace(" w3-black", " w3-red");
+}
 </script>

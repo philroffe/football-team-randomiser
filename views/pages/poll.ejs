@@ -139,16 +139,6 @@
 
     //var isAdmin = pagedata.isAdmin;
 
-    // change the header red if using a test environment
-    if (pagedata.environment != "PRODUCTION") {
-      console.log("Environment:", pagedata.environment);
-      // local test env so show header as red
-      var navTopElement = document.getElementById("navTop")
-      navTopElement.className = navTopElement.className.replace(" w3-black", " w3-red");
-      var navDemo = document.getElementById("navTop")
-      navDemo.className = navDemo.className.replace(" w3-black", " w3-red");
-    }
-
     var tabName = pagedata.selectTab;
     if (document.getElementById(tabName)) {
       document.getElementById(tabName).checked = true;
