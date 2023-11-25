@@ -466,50 +466,53 @@ app.use(express.static(path.join(__dirname, 'public')))
 })
 .post('/_ah/mail/teams@tensile-spirit-360708.appspotmail.com', async (req, res) => {
   console.log('Got /_ah/mail/teams@... with Content-Type:', req.get('Content-Type'));
+
   var emailDocname = "TEAMS_EMAIL_" + new Date().toISOString();
   var body;
-  try {
-    // read the data from the request
-    const bodyArray = [];
-    let length = 0;
-    const contentLength = +req.headers["content-length"];
-    var receivedBody = await new Promise((resolve, reject) => {
-      let ended = false;
-      function onEnd() {
-        if (!ended) {
-          resolve(Buffer.concat(bodyArray).toString());
-          ended = true;
-        }
-      }
-      req.on("data", chunk => {
-        bodyArray.push(chunk);
-        length += chunk.length;
-        if (length >= contentLength) onEnd();
-      })
-      .on("end", onEnd)
-      .on("error", (err) => {
-          reject(err);
-      });
-    });
-    // done so convert from quoted-printable mime type
-    body = mimelib.decodeQuotedPrintable(receivedBody);
-    //console.log(body);
-    // store the data for future processing
-    var emailDetails = { "parsed_status": "NEW", "data": body}
-    const docRef = firestore.collection("INBOUND_EMAILS").doc(emailDocname);
-    docRef.set(emailDetails);
-  } catch (err) {
-    console.error(err);
-    res.json({'result': err})
-  }
 
-  /*
-  // used for debugging only, uncomment as required
-  emailDocname = "TEAMS_EMAIL_2023-11-25T07:11:07.659Z";
-  var emailDoc = await firestore.collection("INBOUND_EMAILS").doc(emailDocname).get();
-  body = emailDoc.data().data;
-  console.log(body);
-  */
+  var debug = false;
+  if (debug) {
+    // used for debugging only, uncomment as required
+    emailDocname = "TEAMS_EMAIL_2023-11-25T07:11:07.659Z";
+    var emailDoc = await firestore.collection("INBOUND_EMAILS").doc(emailDocname).get();
+    body = emailDoc.data().data;
+    console.log(body);
+  } else {
+    try {
+      // read the data from the request
+      const bodyArray = [];
+      let length = 0;
+      const contentLength = +req.headers["content-length"];
+      var receivedBody = await new Promise((resolve, reject) => {
+        let ended = false;
+        function onEnd() {
+          if (!ended) {
+            resolve(Buffer.concat(bodyArray).toString());
+            ended = true;
+          }
+        }
+        req.on("data", chunk => {
+          bodyArray.push(chunk);
+          length += chunk.length;
+          if (length >= contentLength) onEnd();
+        })
+        .on("end", onEnd)
+        .on("error", (err) => {
+            reject(err);
+        });
+      });
+      // done so convert from quoted-printable mime type
+      body = mimelib.decodeQuotedPrintable(receivedBody);
+      //console.log(body);
+      // store the data for future processing
+      var emailDetails = { "parsed_status": "NEW", "data": body}
+      const docRef = firestore.collection("INBOUND_EMAILS").doc(emailDocname);
+      docRef.set(emailDetails);
+    } catch (err) {
+      console.error(err);
+      res.json({'result': err})
+    }
+  }
 
   try {
     // get SCORES if defined (loop through lines, ignoring empty lines, to get the first text and try to parse score)
@@ -546,25 +549,23 @@ app.use(express.static(path.join(__dirname, 'public')))
     playerAliasMaps = await getDefinedPlayerAliasMaps();
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
 
-    // get TEAMS, loop through the email, line-by-line, and extract the payers for each team
-    var bodyArray = body.split('\n');
     // assumes REDS first, BLUES second!
     var cleanRedTeamPlayers = [];
     var cleanBlueTeamPlayers = [];
     var gameDate;
-    for (i=0; i<bodyArray.length; i++) {
-      //console.log("Testing", i, bodyArray[i]);
-      var currentUpperCaseText = bodyArray[i].trim().toUpperCase();
+    for (i=0; i<emailLines.length; i++) {
+      //console.log("Testing", i, emailLines[i]);
+      var currentUpperCaseText = emailLines[i].replace(/^>+/g, '').trim().toUpperCase();
       if (currentUpperCaseText.startsWith("REDS")) {
         // found the reds team, now parse it
         var redsIndex = i;
         if (cleanRedTeamPlayers.length == 0) {
-          cleanRedTeamPlayers = parsePlayerTeamNames(bodyArray, i, aliasToPlayerMap);
+          cleanRedTeamPlayers = parsePlayerTeamNames(emailLines, i, aliasToPlayerMap);
         }
       } else if (currentUpperCaseText.startsWith("BLUE")) {
         var blueIndex = i;
         if (cleanBlueTeamPlayers.length == 0) {
-          cleanBlueTeamPlayers = parsePlayerTeamNames(bodyArray, i, aliasToPlayerMap);
+          cleanBlueTeamPlayers = parsePlayerTeamNames(emailLines, i, aliasToPlayerMap);
         }
       } else if (currentUpperCaseText.startsWith("DATE:")) {
         // update the date until the REDS players are found
@@ -1526,10 +1527,11 @@ async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, sc
 function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
   var nameArray = [];
   var blankLines = 0;
-  for (j=0; j<11; j++) {
-    var cleanName = playerArray[startIndex+j+1].trim().replace(/<br>/g, '').replace(/^\d/, '').replace(/^\./g, '')
-        .replace(/^/g, '').replace(/\*+/i, '').trim();
-    //.replace(/(red.*|BLUE.*|\*+)/i, '').trim();
+  var currentLineCount = 0;
+  // parse max 100 rows (some may be blank)
+  for (j=0; j<100; j++) {
+    var cleanName = playerArray[startIndex+j+1].replace(/^>+/g, '').replace(/<br>/g, '').trim().replace(/^\d/, '')
+        .replace(/^\./g, '').replace(/^/g, '').replace(/\*+/i, '').trim();
     if (cleanName.toUpperCase() == "") {
       // count the number of blank lines
       blankLines++;
@@ -1537,7 +1539,7 @@ function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
     if (cleanName.toUpperCase().startsWith("BLUE") 
       || cleanName.toUpperCase().startsWith("RED") 
       || cleanName.toUpperCase().startsWith("STAND")
-      || blankLines > 1) {
+      || blankLines > 3) {
       // found the header/blank so exit from the loop
       //console.log("Exiting loop here:", j, cleanName);
       break;
@@ -1546,6 +1548,7 @@ function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
       var officialPlayerName = getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
       if (officialPlayerName) {
         nameArray.push(officialPlayerName);
+        blankLines = 0;
       } else {
         console.error("ERROR. Skipping adding player to attendance list - error parsing player name:", cleanName);
       }
