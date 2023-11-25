@@ -466,26 +466,52 @@ app.use(express.static(path.join(__dirname, 'public')))
 })
 .post('/_ah/mail/teams@tensile-spirit-360708.appspotmail.com', async (req, res) => {
   console.log('Got /_ah/mail/teams@... with Content-Type:', req.get('Content-Type'));
+  var emailDocname = "TEAMS_EMAIL_" + new Date().toISOString();
+  var body;
   try {
-    var body;
-    var streamData = "";
-    await req.on('readable', function() {
-      streamData += req.read();
+    // read the data from the request
+    const bodyArray = [];
+    let length = 0;
+    const contentLength = +req.headers["content-length"];
+    var receivedBody = await new Promise((resolve, reject) => {
+      let ended = false;
+      function onEnd() {
+        if (!ended) {
+          resolve(Buffer.concat(bodyArray).toString());
+          ended = true;
+        }
+      }
+      req.on("data", chunk => {
+        bodyArray.push(chunk);
+        length += chunk.length;
+        if (length >= contentLength) onEnd();
+      })
+      .on("end", onEnd)
+      .on("error", (err) => {
+          reject(err);
+      });
     });
-    await req.on('end', function() {
-      // done so convert from quoted-printable mime type
-      body = mimelib.decodeQuotedPrintable(streamData);
-      // store the data for future processing
-      var emailDetails = { "parsed_status": "NEW", "data": body}
-      const docRef = firestore.collection("INBOUND_EMAILS").doc("TEAMS_ERROR_EMAIL_" + new Date().toISOString());
-      docRef.set(emailDetails);
-    });
-
-    // used for debugging only, uncomment as required
-    //var emailDoc = await firestore.collection("INBOUND_EMAILS").doc("TEAMS_ERROR_EMAIL_2023-11-21T07:59:22.194Z").get();
-    //body = emailDoc.data().data;
+    // done so convert from quoted-printable mime type
+    body = mimelib.decodeQuotedPrintable(receivedBody);
     //console.log(body);
-    
+    // store the data for future processing
+    var emailDetails = { "parsed_status": "NEW", "data": body}
+    const docRef = firestore.collection("INBOUND_EMAILS").doc(emailDocname);
+    docRef.set(emailDetails);
+  } catch (err) {
+    console.error(err);
+    res.json({'result': err})
+  }
+
+  /*
+  // used for debugging only, uncomment as required
+  emailDocname = "TEAMS_ERROR_EMAIL_2023-11-24T21:48:16.777Z";
+  var emailDoc = await firestore.collection("INBOUND_EMAILS").doc(emailDocname).get();
+  body = emailDoc.data().data;
+  console.log(body);
+  */
+
+  try {
     // get SCORES if defined (loop through lines, ignoring empty lines, to get the first text and try to parse score)
     var scores;
     let parsed = await simpleParser(body);
@@ -554,16 +580,16 @@ app.use(express.static(path.join(__dirname, 'public')))
 
     // save the details
     var saveSuccess = saveTeamsAttendance(gameDate, cleanRedTeamPlayers, cleanBlueTeamPlayers, scores);
-
     if (saveSuccess) {
-      res.json({'result': 'OK'})
+      console.log("SUCCESS: Saved teams from email:", emailDocname);
     } else {
-      res.sendStatus(400);
+      console.error("ERROR: FAILED TO SAVE TEAMS FROM EMAIL:", emailDocname);
     }
   } catch (err) {
     console.error(err);
-    res.json({'result': err})
   }
+  // got here so always send 200 OK messsage (otherwise emails will be retried by google cloud)
+  res.json({'result': 'OK'})
 })
 .post('/logging', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
