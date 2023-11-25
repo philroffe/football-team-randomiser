@@ -9,7 +9,7 @@ npm-debug.log
 keyfile.json
 iam-policy.json
 .app-prod.yaml
-.env-local
+.env*
 DB-Backup*.json
 
 # Docker
