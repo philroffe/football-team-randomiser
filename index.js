@@ -505,7 +505,7 @@ app.use(express.static(path.join(__dirname, 'public')))
 
   /*
   // used for debugging only, uncomment as required
-  emailDocname = "TEAMS_ERROR_EMAIL_2023-11-24T21:48:16.777Z";
+  emailDocname = "TEAMS_EMAIL_2023-11-25T07:11:07.659Z";
   var emailDoc = await firestore.collection("INBOUND_EMAILS").doc(emailDocname).get();
   body = emailDoc.data().data;
   console.log(body);
@@ -541,6 +541,11 @@ app.use(express.static(path.join(__dirname, 'public')))
       }
     }
 
+    // read the list of players and aliases
+    var playerAliasMaps = {};
+    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+
     // get TEAMS, loop through the email, line-by-line, and extract the payers for each team
     var bodyArray = body.split('\n');
     // assumes REDS first, BLUES second!
@@ -554,12 +559,12 @@ app.use(express.static(path.join(__dirname, 'public')))
         // found the reds team, now parse it
         var redsIndex = i;
         if (cleanRedTeamPlayers.length == 0) {
-          cleanRedTeamPlayers = parsePlayerTeamNames(bodyArray, i);
+          cleanRedTeamPlayers = parsePlayerTeamNames(bodyArray, i, aliasToPlayerMap);
         }
       } else if (currentUpperCaseText.startsWith("BLUE")) {
         var blueIndex = i;
         if (cleanBlueTeamPlayers.length == 0) {
-          cleanBlueTeamPlayers = parsePlayerTeamNames(bodyArray, i);
+          cleanBlueTeamPlayers = parsePlayerTeamNames(bodyArray, i, aliasToPlayerMap);
         }
       } else if (currentUpperCaseText.startsWith("DATE:")) {
         // update the date until the REDS players are found
@@ -1518,11 +1523,12 @@ async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, sc
 }
 
 // parse a list (array) of text containing the teams and extracts the player names
-function parsePlayerTeamNames(playerArray, startIndex) {
+function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
   var nameArray = [];
   var blankLines = 0;
   for (j=0; j<11; j++) {
-    var cleanName = playerArray[startIndex+j+1].trim().replace(/^\d/, '').replace(/^\./g, '').replace(/^/g, '').replace(/\*+/i, '').trim();
+    var cleanName = playerArray[startIndex+j+1].trim().replace(/<br>/g, '').replace(/^\d/, '').replace(/^\./g, '')
+        .replace(/^/g, '').replace(/\*+/i, '').trim();
     //.replace(/(red.*|BLUE.*|\*+)/i, '').trim();
     if (cleanName.toUpperCase() == "") {
       // count the number of blank lines
@@ -1537,7 +1543,12 @@ function parsePlayerTeamNames(playerArray, startIndex) {
       break;
     } else if (cleanName) {
       //console.log("Adding player to team", j, cleanName);
-      nameArray.push(cleanName);
+      var officialPlayerName = getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
+      if (officialPlayerName) {
+        nameArray.push(officialPlayerName);
+      } else {
+        console.error("ERROR. Skipping adding player to attendance list - error parsing player name:", cleanName);
+      }
     }
   }
   return nameArray;
