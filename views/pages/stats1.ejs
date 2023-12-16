@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+  <script src="/echarts.min.js"></script>
+</head>
+
+<body style="height: 100%; margin: 0">
+  <%- include ("../partials/nav.ejs") %>
+    <br><br>
+    <!-- Prepare a DOM with a defined width and height for ECharts -->
+    <div id="chart1" style="width: 400px;height:300px;"></div>
+    <div id="chart2" style="width: 400px;height:300px;"></div>
+    <h3 id="alltimegames">Games Played (since Jan 2023) </div>
+    <div id="chart3" style="height: 800px; max-width: 100&"></div>
+
+    <script type="text/javascript">
+      // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
+      var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+      //console.log('Data=', pagedata);
+
+      allAttendanceData = pagedata.allAttendanceData;
+      if (!allAttendanceData) { allAttendanceData = {}; }
+      console.log('allAttendanceData=', allAttendanceData);
+
+      var allPlayers = getListOfAllPlayers();
+      var stats = getAttendanceStats();
+
+      const teamColors = {
+        "Red": 'red',
+        "Blue": 'blue',
+        "Draw": 'grey'
+      };
+
+      function getAttendanceStats() {
+        var stats = {};
+        stats.totalAttendance = {'totalGames':0, 'won_red':0, 'won_blue':0, 'drawn':0, 'goals_red':0, 'goals_blue':0};
+        stats.playerAttendance = {};
+        stats.weeklyAttendance = [];
+
+        // player independant stats - loop through all of the attendance data, get weekly and total stats
+        Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
+          var weekAttendanceData = allAttendanceData[gamesCollectionId];
+          //console.log("Calculating month data...", gamesCollectionId, weekAttendanceData);
+          for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
+            var weekId = gamesCollectionId + "-" + weekNumber;
+            if (weekAttendanceData[weekNumber]) {
+              // game played
+              var weekScores = weekAttendanceData[weekNumber]['scores'];
+              if (weekScores) {
+                stats.totalAttendance.totalGames += 1;
+                stats.totalAttendance.goals_red += weekScores['team1goals'];
+                stats.totalAttendance.goals_blue += weekScores['team2goals'];
+                if (weekScores['winner'] == 1) {
+                  stats.totalAttendance.won_red += 1;
+                } else if (weekScores['winner'] == 2) {
+                  stats.totalAttendance.won_blue += 1;
+                } else if (weekScores['winner'] == 0) {
+                  stats.totalAttendance.drawn += 1;
+                }
+              }
+            }
+          }
+        });
+
+        // player specifics stats - loop through all of the attendance data, get player won/lost/gran/goals
+        Object.values(allPlayers).forEach(function(currentPlayer) {
+          //console.log("XXX", currentPlayer)
+          stats.playerAttendance[currentPlayer] = {'won':0, 'lost':0, 'drawn':0, 'didnotplay':0, 'red':0, 'blue':0};
+
+          // loop through all of the attendance data, lookup current player
+          Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
+            var weekAttendanceData = allAttendanceData[gamesCollectionId];
+            //console.log("Calculating month data...", gamesCollectionId, weekAttendanceData);
+            
+            // get all players for the month
+            for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
+              var weekId = gamesCollectionId + "-" + weekNumber;
+              if (weekAttendanceData[weekNumber]) {
+                // game played
+                var weekScores = weekAttendanceData[weekNumber]['scores'];
+                if (weekScores) {
+                  // attendance data includes the scores so check if the currentPlayer played
+                  var playerWeekTeamNumber = weekAttendanceData[weekNumber][currentPlayer];
+                  //console.log("using player week data...", currentPlayer, playerWeekTeamNumber);
+                  if (playerWeekTeamNumber) {
+                    // player stats
+                    //var goalsFor = weekScores['team' + playerWeekTeamNumber + 'goals'];
+                    //var oppositeTeamNumber = (playerWeekTeamNumber == 1) ? 2 : 1;
+                    //var goalsAgainst = weekScores['team' + oppositeTeamNumber + 'goals'];
+
+                    // calc won/drawn/lost
+                    if (weekScores['winner'] == playerWeekTeamNumber) {
+                      stats.playerAttendance[currentPlayer].won += 1;
+                    } else if (weekScores['winner'] == 0) {
+                      stats.playerAttendance[currentPlayer].drawn += 1;
+                    } else {
+                      stats.playerAttendance[currentPlayer].lost += 1;
+                    }
+                    // calc red/blue
+                    if (playerWeekTeamNumber == 1) {
+                      stats.playerAttendance[currentPlayer].red += 1;
+                    } else if (playerWeekTeamNumber == 2) {
+                      stats.playerAttendance[currentPlayer].blue += 1;
+                    } else if (playerWeekTeamNumber == 0) {
+                      stats.playerAttendance[currentPlayer].blue += 1;
+                    }
+                  } else {
+                    // calc didnotplay
+                    stats.playerAttendance[currentPlayer].didnotplay += 1;
+                  }
+                }
+              }
+
+              //data.push([playerCumulativeGames, Math.random(), Math.random(), playerName, " " + monthShortDateFormat.format(date) + "-" + year + " Week:" + games]);
+
+              //[1, 0.9486829492112061, 0.6295135298337233, 'Adam B', ' Aug-2019 Week:0']
+              var cumulativePlayerStats = [
+                stats.playerAttendance[currentPlayer].won,
+                stats.playerAttendance[currentPlayer].lost,
+                stats.playerAttendance[currentPlayer].drawn,
+                currentPlayer,
+                weekId
+              ];
+              stats.weeklyAttendance.push(cumulativePlayerStats);
+              //cumulativePlayerStats = {'won':0, 'lost':0, 'drawn':0, 'didnotplay':0, 'red':0, 'blue':0};
+              //[1, 0.00, 0.00, 'Adam B', ' Aug-2019 Week:0']
+
+            }
+          });
+        });
+        //stats.weeklyAttendance.sort();
+        console.log("STATS:", stats)
+        return stats;
+      }
+
+      function getListOfAllPlayers() {
+        // create list of all players from allAttendanceData
+        var allPlayers = [];
+        Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
+          var weekAttendanceData = allAttendanceData[gamesCollectionId];
+          Object.keys(weekAttendanceData).forEach(function(weekNumber) {
+            if (weekNumber >= '0' && weekNumber <= '52') {
+              var playerList = weekAttendanceData[weekNumber];
+              Object.keys(playerList).forEach(function(playerName) {
+                if (playerName != "scores") {
+                  //console.log("FOUND:", playerName, weekNumber, gamesCollectionId);
+                  if (!allPlayers.includes(playerName)) {
+                    allPlayers.push(playerName);
+                  }
+                }
+              });
+            }
+          });
+        });
+        return allPlayers;
+      }
+
+      function getTotalNoGames() {
+        // get total number of games possible
+        var totalPossibleGames = 0;
+        Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
+          for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
+            if (allAttendanceData[gamesCollectionId][weekNumber] && allAttendanceData[gamesCollectionId][weekNumber]['scores']) {
+              totalPossibleGames++;
+            }
+          }
+        });
+      }
+
+
+      function generateRedBlueWinData(stats) {
+        var redBlueWinData = [ 
+          {value: stats.totalAttendance.won_red, name: 'Red' }, 
+          {value: stats.totalAttendance.won_blue, name: 'Blue' }, 
+          {value: stats.totalAttendance.drawn, name: 'Draw' }
+          ];
+        return redBlueWinData;
+      }
+
+      function generateRedBlueGoalsData(stats) {
+        var redBlueWinData = [ 
+          {value: stats.totalAttendance.goals_red, name: 'Red' }, 
+          {value: stats.totalAttendance.goals_blue, name: 'Blue' }
+          ];
+        return redBlueWinData;
+      }
+
+      function generateWeeklyAttendance(stats) {
+        return stats.weeklyAttendance;
+      }
+
+      // Initialize the echarts instance based on the prepared dom
+      var myChart = echarts.init(document.getElementById('chart1'));
+      var generatedOptions1 = generatePieChart("redBlueWin", generateRedBlueWinData(stats), "Wins");
+      myChart.setOption(generatedOptions1);
+
+      var myChart = echarts.init(document.getElementById('chart2'));
+      var generatedOptions2 = generatePieChart("redBlueGoals", generateRedBlueGoalsData(stats), "Goals");
+      myChart.setOption(generatedOptions2);
+
+      plotChart3(generateWeeklyAttendance(stats));
+
+      /*
+      var option = {};
+      if (generatedOptions['title']) { option['title'] = generatedOptions['title']; }
+      if (generatedOptions['tooltip']) { option['tooltip'] = generatedOptions['tooltip']; }
+      if (generatedOptions['legend']) { option['xAxis'] = generatedOptions['legend']; }
+      if (generatedOptions['xAxis']) { option['xAxis'] = generatedOptions['xAxis']; }
+      if (generatedOptions['yAxis']) { option['xAxis'] = generatedOptions['yAxis']; }
+      if (generatedOptions['series']) { option['series'] = generatedOptions['series']; }
+      */
+
+      // Display the chart using the configuration items and data just specified.
+      //myChart.setOption(generatedOptions);
+
+      function generatePieChart(type, data, title) {
+        var chartOptions = {};
+
+        chartOptions = {
+          title: { text: title },
+          tooltip: {},
+          series: [
+            {
+              type: 'pie',
+              data: data,
+              itemStyle: { color: function (param) { return teamColors[param.name] || 'yellow'; } }
+            },
+          ]
+        };
+
+        switch(type) {
+          case "redBlueWin":
+            chartOptions = {
+              title: { text: title },
+              tooltip: {},
+              series: [
+                {
+                  type: 'pie',
+                  data: data,
+                  itemStyle: { color: function (param) { return teamColors[param.name] || 'yellow'; } }
+                },
+              ]
+            };
+            break;
+          case "winratio":
+            // code block
+            break;
+          default:
+            // code block
+        }
+        return chartOptions;
+      }
+
+
+
+
+
+
+
+
+
+
+
+      // param = weeklyAttendance
+      function plotChart3(data) {
+        var myChart = echarts.init(document.getElementById('chart3'), null, {
+          renderer: 'canvas',
+          useDirtyRect: false
+        });
+
+        const updateFrequency = 400;
+        const dimension = 0;
+        const playerColors = {
+          "Phil R": 'darkgreen',
+          "Dan A": 'lightgreen',
+          "Rich M": 'orange',
+          "Liam O": 'blue',
+        };
+
+        const years = [];
+        for (let i = 0; i < data.length; ++i) {
+          if (years.length === 0 || years[years.length - 1] !== data[i][4]) {
+            years.push(data[i][4]);
+          }
+        }
+        let startIndex = -1;
+        let startYear = years[startIndex];
+
+        var option = {
+          grid: {
+            top: 50,
+            bottom: 10,
+            left: 100,
+            right: 50
+          },
+          xAxis: {
+            max: 'dataMax',
+            axisLabel: {
+              formatter: function (n) {
+                return Math.round(n) + '';
+              }
+            }
+          },
+          dataset: {
+            source: data.slice(1).filter(function (d) {
+              return d[4] === startYear;
+            })
+          },
+          yAxis: {
+            type: 'category',
+            inverse: true,
+            max: 30,
+            axisLabel: {
+              show: true,
+              fontSize: 14,
+              formatter: function (value) {
+                return value;
+              },
+              rich: {
+                flag: {
+                  fontSize: 25,
+                  padding: 5
+                }
+              }
+            },
+            animationDuration: 300,
+            animationDurationUpdate: 300
+          },
+          series: [
+            {
+              realtimeSort: true,
+              seriesLayoutBy: 'column',
+              type: 'bar',
+              itemStyle: {
+                color: function (param) {
+                  return playerColors[param.value[3]] || 'lightblue';
+                }
+              },
+              encode: {
+                x: dimension,
+                y: 3
+              },
+              label: {
+                show: true,
+                precision: 0,
+                position: 'right',
+                valueAnimation: true,
+                fontFamily: 'monospace'
+              }
+            }
+          ],
+          // Disable init animation.
+          animationDuration: 0,
+          animationDurationUpdate: updateFrequency,
+          animationEasing: 'linear',
+          animationEasingUpdate: 'linear',
+          graphic: {
+            elements: [
+              {
+                type: 'text',
+                right: 100,
+                top: 20,
+                style: {
+                  text: startYear,
+                  font: 'bolder 20px monospace',
+                  fill: 'rgba(100, 100, 100, 0.25)'
+                },
+                z: 100
+              }
+            ]
+          }
+        };
+        // console.log(option);
+        myChart.setOption(option);
+
+        for (let i = startIndex; i < years.length - 1; ++i) {
+          (function (i) {
+            setTimeout(function () {
+              updateYear(years[i + 1]);
+            }, (i - startIndex) * updateFrequency);
+          })(i);
+        }
+        function updateYear(year) {
+          let source = data.slice(1).filter(function (d) {
+            return d[4] === year;
+          });
+          option.series[0].data = source;
+          option.graphic.elements[0].style.text = year;
+          myChart.setOption(option);
+        }
+
+
+      }
+
+    </script>
+  </body>
