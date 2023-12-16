@@ -104,7 +104,13 @@
     if (!openLedgers) { openLedgers = {}; }
     var allCollectionDocs = pagedata.data.allCollectionDocs;
     if (!allCollectionDocs) { allCollectionDocs = {}; }
-    document.getElementById("payeeTransactionDate").value = new Date().toISOString().split('T')[0];;
+    document.getElementById("payeeTransactionDate").value = new Date().toISOString().split('T')[0];
+
+    // collate the aliases
+    var playerAliasMaps = pagedata.data.playerAliasMaps;
+    var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
+    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+    playerNameSuggestions = Array.from(Object.keys(playerToAliasMap));
 
     // change the header red if using a test environment
     if (pagedata.environment != "PRODUCTION") {
@@ -117,7 +123,7 @@
     }
 
 
-    Object.keys(inboundEmails).sort().forEach(function(key) {
+    Object.keys(inboundEmails).reverse().forEach(function(key) {
       //console.log("Found emails...", inboundEmails);
       if (key.startsWith(EMAIL_DOC_PREFIX)) {
         var x = document.getElementById("paymentsSelect");
@@ -125,8 +131,31 @@
         option.id = key;
         option.text = key.replace(EMAIL_DOC_PREFIX, "");
         x.add(option);
+
+        // identify NEW emails - parse the email and check if the payment is already added
+        updateEmailText(option.text);
+        var parsedData = parsePaypalEmail(document.getElementById('htmlEmail').innerText);
+        if (parsedData.payeeName) {
+          var dateTime = key.replace(EMAIL_DOC_PREFIX, "").replace(/T(\d\d:\d\d).*/, " $1");
+          option.text = dateTime + " " + parsedData.payeeName.padEnd(20) + " £" + parsedData.amount;
+
+          var officialPlayerName = getOfficialNameFromAlias(parsedData.payeeName, aliasToPlayerMap);
+          var playerName = (officialPlayerName) ? officialPlayerName : parsedData.payeeName;
+          var paymentAlreadyRegistered = false;
+          for (const paymentId in closedLedgers[playerName]) {
+            if (paymentId.startsWith("payment_") && paymentId.includes(parsedData.transactionId)) {
+              paymentAlreadyRegistered = true;
+            }
+          }
+          if (!paymentAlreadyRegistered) {
+            option.text += " (NEW)";
+          }
+        }
+        //console.log(playerName, parsedData, paymentAlreadyRegistered);
       }
     });
+    // clear the htmlEmail element
+    document.getElementById('htmlEmail').innerHTML = "";
 
     // loop through all of the costs and payments for this year
     var totalGamesPlayed = 0;
@@ -137,9 +166,11 @@
       // loop through all docs
       for (const docId in allCollectionDocs[collectionId]) {
         var docName = allCollectionDocs[collectionId][docId].id;
+        /*
         if (docName.startsWith("Phil R")) {
           console.log("  ++", collectionId, docName);
         }
+        */
         if (docName == "_attendance") {
           var docData = allCollectionDocs[collectionId][docId].data;
           for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
@@ -150,7 +181,7 @@
               } else {
                 totalGamesMissed++;
               }
-              console.log("--", collectionId, weekNumber, playerList.scores);
+              //console.log("--", collectionId, weekNumber, playerList.scores);
             }
           }
         }
@@ -321,10 +352,10 @@
       var fourthTable = emailBody.indexOf("<table cell", thirdTable + 1);
       var interestingData = emailBody.substring(thirdTable);
 
-      console.log(startOfHTML, firstTable, secondTable, thirdTable)
+      //console.log(startOfHTML, firstTable, secondTable, thirdTable)
 
       var htmlCode = emailBody.substring(emailBody.indexOf("<table"), emailBody.indexOf("Can't see the money"));
-      document.getElementById("htmlEmail").innerHTML = htmlCode;
+      document.getElementById('htmlEmail').innerHTML = htmlCode;
     }
 
     function updateTextFields(data) {
@@ -427,10 +458,10 @@
       xmlhttp.send(JSON.stringify(details));
     }
 
+    <%- include ("./generate-teams-utils.js") %>
     function parseEmail() {
       //var key = EMAIL_DOC_PREFIX + document.getElementById("paymentsSelect").value;
       //var body = inboundEmails[key].data;
-      <%- include ("./generate-teams-utils.js") %>
 
       // get the text only version of the details 
       var bodyTextOnly = document.getElementById("htmlEmail").innerText;

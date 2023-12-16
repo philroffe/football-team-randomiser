@@ -393,7 +393,7 @@ function generateTeamsEmailText(generatedTeams, nextMondayDate) {
 
 //parse inbound paypal email and extract the relevant data
 function parsePaypalEmail(bodyText) {
-  console.log("bodyText email:", bodyText);
+  //console.log("bodyText email:", bodyText);
   // now loop through and extract the relevant text
   var payeeName;
   var amountFromPayee;
@@ -424,8 +424,24 @@ function parsePaypalEmail(bodyText) {
     }
   }
   var parsedData = { "payeeName": payeeName, "amountFromPayee": amountFromPayee, "transactionId": transactionId, "transactionDate": transactionDate, "amount": amount};
-  console.log("Parsed paypal email:", parsedData);
+  //console.log("Parsed paypal email:", parsedData);
   return parsedData;
 }
 
+
+// get the official name from a map of aliases (using case insensitive search)
+function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {
+  nameToCheck = nameToCheck.trim();
+  var officialName = undefined;
+  var fullAliasList = Object.keys(aliasToPlayerMap);
+  for (var i = 0; i < fullAliasList.length; i++) { 
+    if (nameToCheck.toUpperCase() == fullAliasList[i].toUpperCase()) {
+      officialName = aliasToPlayerMap[nameToCheck.toUpperCase()]
+    }
+  }
+  /*if (!officialName) {
+    console.log("WARNING: Failed to find official name for:", nameToCheck);
+  }*/
+  return officialName;
+}
 //module.exports = { getNextMondayIndex, datesAreOnSameDay, changeAlgorithmForPlayers, generateStandbyPlayers, generateRedBlueTeams, shuffle, generateTeamsEmailText};

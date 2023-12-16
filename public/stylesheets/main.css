@@ -230,13 +230,19 @@ input[type=checkbox].checkmark_blank:checked:before {
 #one:checked ~ .panels #one-panel,
 #two:checked ~ .panels #two-panel,
 #three:checked ~ .panels #three-panel,
-#four:checked ~ .panels #four-panel{
+#four:checked ~ .panels #four-panel,
+#five:checked ~ .panels #five-panel,
+#six:checked ~ .panels #six-panel,
+#seven:checked ~ .panels #seven-panel{
   display:block
 }
 #one:checked ~ .tabs #one-tab,
 #two:checked ~ .tabs #two-tab,
 #three:checked ~ .tabs #three-tab,
-#four:checked ~ .tabs #four-panel{
+#four:checked ~ .tabs #four-tab,
+#five:checked ~ .tabs #five-tab,
+#six:checked ~ .tabs #six-tab,
+#seven:checked ~ .tabs #seven-tab{
   background:#fffffff6;
   color:#000;
   border-top: 3px solid #000;

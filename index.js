@@ -181,6 +181,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     const inboundEmailsCollection = firestore.collection("INBOUND_EMAILS");
     const allInboundEmailsDocs = await inboundEmailsCollection.get();
     var inboundEmails = {};
+    var delDoc = [];
     allInboundEmailsDocs.forEach(doc => {
       var key = doc.id;
       var data = doc.data();
@@ -189,31 +190,13 @@ app.use(express.static(path.join(__dirname, 'public')))
     rowdata.inboundEmails = inboundEmails;
     
     // read the list of players and aliases
-    /**
     var playerAliasMaps = {};
     playerAliasMaps = await getDefinedPlayerAliasMaps();
     rowdata.playerAliasMaps = playerAliasMaps;
 
-    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date, 12);
-    rowdata.allAttendanceData = allAttendanceData;
-    */
-
-    /**
-    // read the open outstanding payments
-    var nextMonday = getDateNextMonday();
-    var calcPaymentsFromDate = nextMonday;
-    if (req.query.date) {
-      calcPaymentsFromDate = req.query.date;
-    }
-    var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments(calcPaymentsFromDate);
-    rowdata.outstandingPayments = outstandingPayments;
-    console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
-    */
-    if (environment != "PRODUCTION") {
-      // NOTE - THIS IS TEMP AND MOSTLY USEFUL FOR DEBUGGING LOCAL FIRESTORE EMPULATOR
-      rowdata.allCollectionDocs = await getAllDataFromDB();
-      //console.log(rowdata.allCollectionDocs);
-    }
+    // get all daata - used to generate the costs and kitty
+    rowdata.allCollectionDocs = await getAllDataFromDB();
+    //console.log(rowdata.allCollectionDocs);
 
     // read the completed payments ledger
     const closedLedgerCollection = firestore.collection("CLOSED_LEDGER");
@@ -424,41 +407,7 @@ app.use(express.static(path.join(__dirname, 'public')))
       const docRef = firestore.collection("INBOUND_EMAILS").doc("PAYMENT_ERROR_EMAIL_" + new Date().toISOString());
       docRef.set(emailDetails);
     });
-
-    // take just the html part of the email body and decode it from quoted-printable mime time
-    var htmlCode = body.substring(body.indexOf("<html"));
-    var htmlText = convert(htmlCode, { wordwrap: 130 });
-
-    // TODO find a better way to import the library as a module rather than as a file
-    eval(fs.readFileSync('./views/pages/generate-teams-utils.js')+'');
-
-    // now parse the text and get store the relevent payment fields
-    var parsedData = parsePaypalEmail(htmlText);
-
-    //document.getElementById("payeeName").value = parsedData.payeeName;
-    //document.getElementById("payeeAmount").value = parsedData.amount;
-    //document.getElementById("payeeFromAmount").value = parsedData.amountFromPayee;
-    //document.getElementById("payeeTransactionId").value = parsedData.transactionId;
-    //document.getElementById("payeeTransactionDate").value = parsedData.transactionDate;
-
-    // save the details
-    var saveSuccess = false;
-    if (transactionDate && transactionId && payeeName && amount) {
-      saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
-    }
-    if (saveSuccess) {
-      res.json({'result': 'OK'});
-    } else {
-      console.log("ERROR: Failed to parse message. Storing in dead letter: INBOUND_EMAILS");
-      // store in dead letter queue
-      var parsedText = "payeeName: " + payeeName + ", amount:" + amount
-        + ", transactionId:" + transactionId + ", transactionDate:" + transactionDate;
-      var emailDetails = { "parsed_status": parsedText, "data": body}
-      const docRef = firestore.collection("INBOUND_EMAILS").doc("PAYMENT_ERROR_EMAIL_" + new Date().toISOString());
-      docRef.set(emailDetails);
-
-      res.sendStatus(200);
-    }
+    res.json({'result': 'OK'});
   } catch (err) {
     console.error(err);
     res.json({'result': err})
@@ -637,9 +586,9 @@ app.use(express.static(path.join(__dirname, 'public')))
         res.send("Error " + err);
       }
     })
-.get('/stats', async (req, res) => {
+.get('/stats-ticker', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
-  console.log('Stats access from IP:' + ip + " with user-agent:" + req.get('User-Agent'));
+  console.log('Stats-ticker access from IP:' + ip + " with user-agent:" + req.get('User-Agent'));
   // Check if cache needs clearing
   /*var diffSeconds = (new Date().getTime() - bankHolidaysCacheLastRefresh.getTime()) / 1000;
   if (diffSeconds > maxCacheSecs) {
@@ -685,6 +634,31 @@ app.use(express.static(path.join(__dirname, 'public')))
     var pageData = { data: rowdata, "environment": environment };
 
     res.render('pages/stats', { pageData: pageData } );
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
+.get('/stats', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('Stats access from IP:' + ip + " with user-agent:" + req.get('User-Agent'));
+
+  try {
+    var rowdata = {};
+    rowdata.playerAliasMaps = await getDefinedPlayerAliasMaps();
+    rowdata.allCollectionDocs = await getAllDataFromDB();
+    //console.log('rowdata', JSON.stringify(rowdata));
+
+    var tabName = "";
+    if (req.query.tab) {
+      tabName = req.query.tab;
+    }
+
+    //var allCollectionDocs = JSON.parse(allCollectionDocsJson);
+
+    // combine database data with any additional page data
+    var pageData = { data: rowdata, selectTab: tabName, "environment": environment };
+    res.render('pages/stats-all', { pageData: JSON.stringify(pageData) });
   } catch (err) {
     console.error(err);
     res.send("Error " + err);
@@ -1814,7 +1788,7 @@ async function getAllDataFromDB() {
   //allCollections.length
   for (var i=0; i<allCollections.length; i++) {
     var collectionId = allCollections[i];
-    console.log("Collecting docs from:", collectionId);
+    //console.log("Collecting docs from:", collectionId);
     const collection = await firestore.collection(collectionId)
     var allDocs = {};
     await collection.get().then((querySnapshot) => {

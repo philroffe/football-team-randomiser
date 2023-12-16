@@ -10,6 +10,7 @@ keyfile.json
 iam-policy.json
 .app-prod.yaml
 .env*
+backups
 DB-Backup*.json
 
 # Docker
