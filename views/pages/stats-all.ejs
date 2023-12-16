@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+  <script src="/echarts.min.js"></script>
+</head>
+
+<body style="height: 100%; margin: 0">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:0px;margin-left: 10px;">
+
+<!-- <div id="year">
+  <h3>Month: 
+  <input type="month" class="gameMonthInput" id="gameMonthInput" name="start" min="2022-03" value="2022-04">
+  </h3>
+</div> -->
+    
+
+  <div id="padding" style="height: 40px"></div>
+  <h3 id="alltimegames">Stats since Jan 2023 </div>
+
+  <input class="radio" id="one" name="group" type="radio" onclick="changeTab('one');" checked>
+  <input class="radio" id="two" name="group" type="radio" onclick="changeTab('two');">
+  <input class="radio" id="three" name="group" type="radio" onclick="changeTab('three');">
+  <input class="radio" id="four" name="group" type="radio" onclick="changeTab('four');">
+  <input class="radio" id="five" name="group" type="radio" onclick="changeTab('five');">
+  <input class="radio" id="six" name="group" type="radio" onclick="changeTab('six');">
+  <input class="radio" id="seven" name="group" type="radio" onclick="changeTab('seven');">
+  <div class="tabs">
+  <label class="tab" id="one-tab" for="one">Week-by-Week</label>
+  <label class="tab" id="two-tab" for="two">Total Red/Blue</label>
+  <label class="tab" id="three-tab" for="three">Head2Head</label>
+  <label class="tab" id="four-tab" for="four">Player Stack</label>
+  <label class="tab" id="five-tab" for="five">Player Colour</label>
+  <label class="tab" id="six-tab" for="six">Player Win</label>
+  <label class="tab" id="seven-tab" for="seven">All Player Charts</label>
+  </div>
+
+  <div id="panels" class="panels">
+    <div class="panel" id="one-panel">
+      <div class="content">
+        <div id="blank" style="height: 40px"></div>
+        <select id="statChartSelect" onchange="updateStatChartxAxis(this.value)" >
+          <option id="statChartSelect1">Won</option>
+          <option id="statChartSelect3">Lost</option>
+          <option id="statChartSelect2">Drawn</option>
+          <option id="statChartSelect4">Total Games</option>
+          <option id="statChartSelect5">Total Red</option>
+          <option id="statChartSelect6">Total Blue</option>
+        </select>
+        <div id="statsChartsDiv" style="height: 600px; max-width: 100%"></div>
+      </div>
+    </div>
+    <div class="panel" id="two-panel">
+      <div class="content">
+        <div id="blank" style="height: 40px"></div>
+        <div id="totalRedBlueWinsContainer" style="height: 800px; max-width: 100%"></div>
+      </div>
+    </div>
+    <div class="panel" id="three-panel">
+      <div class="content">
+        <div id="choosePlayer" style="height: 40px">
+          <h3>Choose two players to compare:</h3>
+          Player 1:
+          <select id="player1HeadToHeadSelect" onchange="createHeadToHead(this.value, document.getElementById('player2HeadToHeadSelect').value, 'playerHeadToHeadDiv')" ></select><br>
+          Player 2:
+          <select id="player2HeadToHeadSelect" onchange="createHeadToHead(document.getElementById('player1HeadToHeadSelect').value, this.value, 'playerHeadToHeadDiv')" ></select>
+        </div>
+        <div id="blank" style="height: 80px"></div>
+        <div id="playerHeadToHeadDiv" style="height: 1000px; max-width: 100%"></div>
+      </div>
+    </div>
+    <div class="panel" id="four-panel">
+      <div class="content">
+        <div id="blank" style="height: 40px"></div>
+        <div id="playerStackChartDiv" style="height: 800px; max-width: 100%"></div>
+      </div>
+    </div>
+    <div class="panel" id="five-panel">
+      <div class="content">
+        <div id="blank" style="height: 40px"></div>
+        <div id="playerColourBarChartDiv" style="height: 800px; max-width: 100%"></div>
+      </div>
+    </div>
+    <div class="panel" id="six-panel">
+      <div class="content">
+        <div id="blank" style="height: 40px"></div>
+        <div id="playerWinBarChartDiv" style="height: 800px; max-width: 100%"></div>
+      </div>
+    </div>
+    <div class="panel" id="seven-panel">
+      <div class="content">
+        <div id="blank" style="height: 40px"></div>
+        <div id="choosePlayer" style="height: 40px">
+          Choose Player(s):
+          <select id="playerSelect" multiple onchange="updatePlayerChoice(this)" >
+            <option id="playerSelectAll">---All---</option>
+          </select>
+        </div>
+        <div id="blank" style="height: 40px"></div>
+        <div id="playerChartsDiv"  style="height: 800px; max-width: 100%"></div>
+      </div>
+    </div>
+    <div class="panel" id="eight-panel">
+      <div class="content">
+        <div id="blank" style="height: 40px"></div>
+        <div id="playerTickerDiv" style="height: 800px; max-width: 100%"></div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <script type="text/javascript">
+    // restringify and then parse the json to get the page
+    var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
+    //console.log('Data=', pagedata);
+    
+    var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });
+    var monthShortDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
+    var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
+    var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
+
+    var players = pagedata.data.players;
+    if (!players) { players = {}; }
+    var allCollectionDocs = pagedata.data.allCollectionDocs;
+    if (!allCollectionDocs) { allCollectionDocs = {}; }
+    //var attendanceByYearMap = pagedata.data.attendanceByYear;
+    //if (!attendanceByYearMap) { attendanceByYearMap = {}; }
+    //var paydetailsMap = pagedata.data.paydetails;
+    //if (!paydetailsMap) { paydetailsMap = {}; }
+
+    var playerAliasMaps = pagedata.data.playerAliasMaps;
+    var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
+    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+    var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap).sort());
+    //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
+
+    function changeTab(tabName) {
+      // calculate updated URL
+      var newURL = window.location.href;
+      if (window.location.href.includes("tab=")) {
+        newURL = window.location.href.replace(/(tab=)\w+/g, 'tab=' + tabName)
+      } else {
+        (window.location.href.includes("?")) ? newURL += "&" : newURL += "?";
+        newURL += "tab=" + tabName;
+      }
+      // update the URL (without refreshing) to reflect tab change
+      window.history.pushState({}, 'unused', newURL);
+
+      switch(tabName) {
+        case 'one':
+          createPlayerWinsLineRace("statsChartsDiv");
+          break;
+        case 'two':
+        calcRedBlueWinnersOptionData("totalRedBlueWinsContainer")
+          break;
+        case 'three':
+          createHeadToHead("Sam B", "Will C", "playerHeadToHeadDiv");
+          break;
+        case 'four':
+          calcPlayerStackChart('playerStackChartDiv')
+          break;
+        case 'five':
+          calcTeamColourBarChart('playerColourBarChartDiv')
+          break;
+        case 'six':
+          calcWinLoseBarChart('playerWinBarChartDiv');
+          break;
+        case 'seven':
+          
+          break;
+        default:
+          // code block
+      }
+    }
+
+    var _rawData;
+
+    // Generate win/lose/draw/team data for all players
+    var allPlayerData = [];
+    for (var i = 0; i < playerNameSuggestions.length; i++) {
+      var playerName = playerNameSuggestions[i];
+      var playerData = calcPlayerWinsOptionData(playerName);
+      if (playerData.games > 5) {
+        allPlayerData.push([playerName, playerData]);
+      }
+    }
+    //console.log('allPlayerData:', allPlayerData);
+
+    /////////////
+    // PIE CHARTS - PLAYER WIN/LOSE/DRAW STATS
+    /////////////
+    //add player names to options, generate each players graph
+    var playerListCount = 0;
+    var currentOddPlayerChartDiv;
+    for (var i = 0; i < playerNameSuggestions.length; i++) {
+      var playerName = playerNameSuggestions[i];
+      //console.log(playerName)
+
+      var option = document.createElement("option");
+      option.id = "playerSelect" + playerName;
+      option.text = playerName;
+      
+      // create new div on odd numbers
+      if (playerListCount%2 == 0) {
+        var newOddPlayerChartDiv = document.createElement("div"); 
+        newOddPlayerChartDiv.setAttribute("id", "playerChartDiv" + playerListCount);
+        document.getElementById("playerChartsDiv").appendChild(newOddPlayerChartDiv);
+        currentOddPlayerChartDiv = newOddPlayerChartDiv;
+      }
+
+      var newPlayerChartDiv = document.createElement("div");
+      newPlayerChartDiv.setAttribute("id", "playerChartDiv" + playerName); 
+      newPlayerChartDiv.style.float = "left"
+      currentOddPlayerChartDiv.appendChild(newPlayerChartDiv);
+
+      var totals = calcPlayerWinsOptionData(playerName, "playerChartDiv" + playerName);
+      if (totals.games > 0) {
+        document.getElementById("playerSelect").add(option);
+
+        var optionPlayer1H2H = document.createElement("option");
+        optionPlayer1H2H.id = "player1SelectH2H" + playerName;
+        optionPlayer1H2H.text = playerName;
+        document.getElementById("player1HeadToHeadSelect").add(optionPlayer1H2H);
+
+        var optionPlayer2H2H = document.createElement("option");
+        optionPlayer2H2H.id = "player2SelectH2H" + playerName;
+        optionPlayer2H2H.text = playerName;
+        document.getElementById("player2HeadToHeadSelect").add(optionPlayer2H2H);
+
+        newPlayerChartDiv.hidden = false;
+        playerListCount++;
+      } else {
+        //document.getElementById("playerChartsDiv").removeChild(newPlayerChartDiv);
+        newPlayerChartDiv.hidden = true;
+      }
+    }
+    ///////////////////
+
+
+    /////////////
+    // STACK CHART - PLAYER WIN/LOSE/DRAW STATS
+    /////////////
+    //add player names to options, generate each players graph
+    var playerNamesData = [];
+    var winData = [];
+    var loseData = [];
+    var drawData = [];
+    allPlayerData.sort(function(a, b) { return b[1].win - a[1].win; });
+    for (var i = 0; i < allPlayerData.length; i++) {
+      var playerName = allPlayerData[i][0];
+      var playerData = allPlayerData[i][1];
+      //console.log("i", playerName, playerData)
+      if (playerData.games > 5) {
+        // add data to the start (unshift) of each array to keep it in alphabetical order
+        playerNamesData.unshift(playerName);
+        winData.unshift(playerData.win);
+        loseData.unshift(playerData.lose);
+        drawData.unshift(playerData.draws);
+      }
+    }
+    //console.log(playerNamesData, winData, loseData, drawData)
+
+    
+    function calcPlayerStackChart(elementId) {
+      var stackChartDom = document.getElementById(elementId);
+      var stackChart = echarts.init(stackChartDom);
+      var stackOption;
+      stackOption = {
+        color: ['green', 'purple', 'grey' ],
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: {},
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: playerNamesData },
+        series: [
+          {
+            name: 'Won', type: 'bar', stack: 'total', label: { show: true }, emphasis: { focus: 'series' },
+            data: winData
+          },
+          {
+            name: 'Drawn', type: 'bar', stack: 'total', label: { show: true }, emphasis: { focus: 'series' },
+            data: drawData
+          },
+          {
+            name: 'Lost', type: 'bar', stack: 'total', label: { show: true }, emphasis: { focus: 'series' },
+            data: loseData
+          }
+        ]
+      };
+      stackOption && stackChart.setOption(stackOption);
+    }
+
+    ///////////////////
+
+    
+
+    /////////////
+    // COLOUR BAR CHART - TEAM COLOUR PLAYED FOR
+    /////////////
+    function calcTeamColourBarChart(elementId) {
+      //add player names to options, generate each players graph
+      var playerNamesData = [];
+      var redTeamGames = [];
+      var blueTeamGames = [];
+      allPlayerData.sort(function(a, b) { 
+        // sort by red games percentage
+        var aRed = a[1].redTeam.games/(a[1].redTeam.games + a[1].blueTeam.games)*100;
+        var bRed = b[1].redTeam.games/(b[1].redTeam.games + b[1].blueTeam.games)*100;
+        return bRed - aRed; 
+      });
+      for (var i = 0; i < allPlayerData.length; i++) {
+        var playerName = allPlayerData[i][0];
+        var playerData = allPlayerData[i][1];
+        //console.log("i", playerName, playerData)
+        if (playerData.games > 5) {
+          // add data to the start (unshift) of each array to keep it in alphabetical order
+          playerNamesData.unshift(playerName);
+          redTeamGames.unshift((playerData.redTeam.games/(playerData.redTeam.games + playerData.blueTeam.games)*100).toFixed(0));
+          blueTeamGames.unshift((playerData.blueTeam.games/(playerData.redTeam.games + playerData.blueTeam.games)*100).toFixed(0));
+        }
+      }
+      //console.log(playerNamesData, winData, loseData, drawData)
+      
+      var barChartDom = document.getElementById('playerColourBarChartDiv');
+      var barChart = echarts.init(barChartDom);
+      var barOption;
+      barOption = {
+        title: { text: 'Most played colour' },
+        color: ['red', 'blue' ],
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: {
+          top: '4%',
+          left: 'center',
+          // doesn't perfectly work with our tricks, disable it
+          selectedMode: false
+        },
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        xAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value} %' }},
+        yAxis: { type: 'category', data: playerNamesData },
+        series: [
+          {
+            name: 'Red Team', type: 'bar', stack: 'total', emphasis: { focus: 'series' },
+            label: { show: true, formatter: function(d) { return d.data + '%'; } },
+            data: redTeamGames
+          },
+          {
+            name: 'Blue Team', type: 'bar', stack: 'total', emphasis: { focus: 'series' },
+            label: { show: true, formatter: function(d) { return d.data + '%'; } },
+            data: blueTeamGames
+          }
+        ]
+      };
+      barOption && barChart.setOption(barOption);
+    }
+    ///////////////////
+
+
+    /////////////
+    // WIN BAR CHART - PLAYER WIN/LOSE/DRAW STATS
+    /////////////
+    function calcWinLoseBarChart(elementId) {
+      //add player names to options, generate each players graph
+      var playerNamesData = [];
+      var redTeamGames = [];
+      var blueTeamGames = [];
+      var redTeamWins = [];
+      var blueTeamWins = [];
+      var teamDraws = [];
+      var teamLoses = [];
+      allPlayerData.sort(function(a, b) { 
+        // sort by red games percentage
+        var aRed = a[1].redTeam.win/(a[1].redTeam.games + a[1].blueTeam.games)*100;
+        var bRed = b[1].redTeam.win/(b[1].redTeam.games + b[1].blueTeam.games)*100;
+        return bRed - aRed; 
+      });
+      for (var i = 0; i < allPlayerData.length; i++) {
+        var playerName = allPlayerData[i][0];
+        var playerData = allPlayerData[i][1];
+        //console.log("i", playerName, playerData)
+        if (playerData.games > 5) {
+          // add data to the start (unshift) of each array to keep it in alphabetical order
+          playerNamesData.unshift(playerName);
+          redTeamGames.unshift((playerData.redTeam.games/(playerData.redTeam.games + playerData.blueTeam.games)*100).toFixed(0));
+          blueTeamGames.unshift((playerData.blueTeam.games/(playerData.redTeam.games + playerData.blueTeam.games)*100).toFixed(0));
+          var totalGames = playerData.redTeam.games + playerData.blueTeam.games;
+          redTeamWins.unshift((playerData.redTeam.win/totalGames*100).toFixed(0));
+          blueTeamWins.unshift((playerData.blueTeam.win/totalGames*100).toFixed(0));
+          teamDraws.unshift(((playerData.redTeam.draws + playerData.blueTeam.draws)/totalGames*100).toFixed(0));
+          //teamLoses.unshift(((playerData.redTeam.lose + playerData.blueTeam.lose)/totalGames*100).toFixed(0));
+          teamLoses.unshift(100 - redTeamWins[0] - blueTeamWins[0] - teamDraws[0]);
+        }
+      }
+      //console.log(playerNamesData, winData, loseData, drawData)
+      
+      var barChartDom = document.getElementById('playerWinBarChartDiv');
+      var barChart = echarts.init(barChartDom);
+      var barOption;
+      barOption = {
+        title: { text: 'Percentage of Red/Blue wins' },
+        color: ['red', 'blue', 'grey', 'grey' ],
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: {
+          top: '4%',
+          left: 'center',
+          // doesn't perfectly work with our tricks, disable it
+          selectedMode: false
+        },
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        xAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value} %' }},
+        yAxis: { type: 'category', data: playerNamesData },
+        series: [
+          {
+            name: 'Red Team', type: 'bar', stack: 'total', emphasis: { focus: 'series' },
+            label: { show: true, formatter: function(d) { return d.data + '%'; } },
+            data: redTeamWins
+          },
+          {
+            name: 'Blue Team', type: 'bar', stack: 'total', emphasis: { focus: 'series' },
+            label: { show: true, formatter: function(d) { return d.data + '%'; } },
+            data: blueTeamWins
+          },
+          {
+            name: 'Draw', type: 'bar', stack: 'total', emphasis: { focus: 'series' },
+            label: { show: true, formatter: function(d) { return d.data + '%'; } },
+            data: teamDraws
+          },
+          {
+            name: 'Loss', type: 'bar', stack: 'total', emphasis: { focus: 'series' },
+            label: { show: true, formatter: function(d) { return d.data + '%'; } },
+            data: teamLoses
+          }
+        ]
+      };
+      barOption && barChart.setOption(barOption);
+    }
+    ///////////////////
+    function updatePlayerChoice(sel) {
+      var opts = [];
+      var len = sel.options.length;
+      for (var i = 0; i < len; i++) {
+        var opt = sel.options[i];
+        if (opt.selected) {
+          opts.push(opt.value);
+        }
+      }
+      
+      //console.log(opts);
+      for (var i = 0; i < playerNameSuggestions.length; i++) {
+        var currentPlayerName = playerNameSuggestions[i];
+        var isHidden = true;
+        if (opts.includes("---All---") || opts.includes(currentPlayerName)) {
+          isHidden = false;
+        }
+        document.getElementById("playerChartDiv" + currentPlayerName).hidden = isHidden;
+      }
+    }
+
+    function updateStatChartxAxis(selectedStat) {
+      //console.log(selectedStat);
+      //run(_rawData, selectedStat);
+      createPlayerWinsLineRace("statsChartsDiv");
+    }
+
+    // get the official name from a map of aliases (using case insensitive search)
+    function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {
+      nameToCheck = nameToCheck.trim();
+      var officialName = undefined;
+      var fullAliasList = Object.keys(aliasToPlayerMap);
+      for (var i = 0; i < fullAliasList.length; i++) { 
+        if (nameToCheck.toUpperCase() == fullAliasList[i].toUpperCase()) {
+          officialName = aliasToPlayerMap[nameToCheck.toUpperCase()]
+        }
+      }
+      if (!officialName) {
+        console.log("WARNING: Failed to find official name for:", nameToCheck);
+      }
+      return officialName;
+    }
+
+    function calcRedBlueWinnersOptionData(elementId) {
+      // loop through all of the costs and payments for this year
+      var totalRedWins = 0;
+      var totalBlueWins = 0;
+      var totalDraws = 0;
+      var totalRedGoals = 0;
+      var totalBlueGoals = 0;
+      for (const collectionId in allCollectionDocs) {
+        if (collectionId.startsWith("games_2023")) {
+          var currentAttendance = allCollectionDocs[collectionId];
+          //console.log("--", collectionId, currentAttendance);
+          // loop through all docs
+          for (const docId in allCollectionDocs[collectionId]) {
+            var docName = allCollectionDocs[collectionId][docId].id;
+            if (docName == "_attendance") {
+              var docData = allCollectionDocs[collectionId][docId].data;
+              // loop through scores of each week
+              for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
+                var playerList = docData[weekNumber];
+                if (playerList && playerList.scores) {
+                  totalRedGoals += playerList.scores.team1goals;
+                  totalBlueGoals += playerList.scores.team2goals;
+                  if (playerList.scores.winner == 2) {
+                    totalBlueWins++;
+                  } else if (playerList.scores.winner == 1) {
+                    totalRedWins++;
+                  } else if (playerList.scores.winner == 0) {
+                    totalDraws++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      var totalGames = totalRedWins + totalBlueWins + totalDraws;
+
+      // now generate the optionData for the WINS chart
+      var optionWinData = {
+        // Global palette:
+        color: ['#f00', '#00f', '#eee' ],
+        title: { text: 'Total # of wins' },
+        tooltip: { data: '' },
+        legend: { data: 'Number of wins'},
+        series: [{
+          type: 'pie', 
+          label: { position: 'inner', },
+          data: [ { 'name': "Reds " + (totalRedWins/totalGames*100).toFixed(2) + "%", 'value': totalRedWins },
+                  { 'name': "Blues " + (totalBlueWins/totalGames*100).toFixed(2) + "%", 'value': totalBlueWins },
+                  { 'name': "Draw \n" + (totalDraws/totalGames*100).toFixed(2) + "%", 'value': totalDraws } 
+                ]
+        }]
+      };
+      //console.log("OPTION DATA", elementId, optionData);
+      // Initialize the echarts instance based on the prepared dom
+      var winPieChartDiv = document.createElement("div");
+      winPieChartDiv.setAttribute("id", "winPieChartDiv" + playerName);
+      document.getElementById(elementId).appendChild(winPieChartDiv);
+      var myWinChart = echarts.init(winPieChartDiv, 'light', {
+        width: 400,
+        height: 400
+      });
+      myWinChart.setOption(optionWinData);
+
+
+      ///////////////
+      // now generate the optionData for the GOALS chart
+      var optionWinData = {
+        // Global palette:
+        color: ['#f00', '#00f' ],
+        title: { text: 'Total # of Goals' },
+        tooltip: { data: '' },
+        legend: { data: 'Number of goals'},
+        series: [{
+          type: 'pie', 
+          label: { position: 'inner', },
+          data: [ { 'name': "Reds " + totalRedGoals, 'value': totalRedGoals },
+                  { 'name': "Blues " + totalBlueGoals, 'value': totalBlueGoals },
+                ]
+        }]
+      };
+      //console.log("OPTION DATA", elementId, optionData);
+      // Initialize the echarts instance based on the prepared dom
+      var goalsPieChartDiv = document.createElement("div");
+      goalsPieChartDiv.setAttribute("id", "goalsPieChartDiv" + playerName);
+      document.getElementById(elementId).appendChild(goalsPieChartDiv);
+      var myGoalsChart = echarts.init(goalsPieChartDiv, 'light', {
+        width: 400,
+        height: 400
+      });
+      myGoalsChart.setOption(optionWinData);
+
+      return totalGames;
+    }
+
+    function calcPlayerWinsOptionData(playerName, elementId) {
+      // loop through all of the costs and payments for this year
+      var totals = {};
+      totals.win = 0;
+      totals.lose = 0;
+      totals.draws = 0;
+      totals.redTeam = {};
+      totals.redTeam.win = 0;
+      totals.redTeam.lose = 0;
+      totals.redTeam.draws = 0;
+      totals.redTeam.games = 0;
+      totals.blueTeam = {};
+      totals.blueTeam.win = 0;
+      totals.blueTeam.lose = 0;
+      totals.blueTeam.draws = 0;
+      totals.blueTeam.games = 0;
+      for (const collectionId in allCollectionDocs) {
+        if (collectionId.startsWith("games_2023")) {
+          var currentAttendance = allCollectionDocs[collectionId];
+          //console.log("--", collectionId, currentAttendance);
+          // loop through all docs
+          for (const docId in allCollectionDocs[collectionId]) {
+            var docName = allCollectionDocs[collectionId][docId].id;
+            if (docName == "_attendance") {
+              var docData = allCollectionDocs[collectionId][docId].data;
+              // loop through scores of each week
+              for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
+                var playerList = docData[weekNumber];
+                if (playerList && playerList.scores) {
+                  for (const weekPlayerName in playerList) {
+                    if (weekPlayerName == playerName) {
+                      var playerTeamNumber = playerList[weekPlayerName];
+                      if (playerTeamNumber > 0) {
+                        // this player played so record totals of win/lose/draw
+                        if (playerList.scores.winner == playerTeamNumber) {
+                          totals.win++;
+                          if (playerTeamNumber == 1) {
+                            totals.redTeam.win++;
+                          } else {
+                            totals.blueTeam.win++;
+                          }
+                        } else if (playerList.scores.winner == 0) {
+                          totals.draws++;
+                          if (playerTeamNumber == 1) {
+                            totals.redTeam.draws++;
+                          } else {
+                            totals.blueTeam.draws++;
+                          }
+                        } else {
+                          totals.lose++;
+                          if (playerTeamNumber == 1) {
+                            totals.redTeam.lose++;
+                          } else {
+                            totals.blueTeam.lose++;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      totals.redTeam.games = totals.redTeam.win + totals.redTeam.lose + totals.redTeam.draws;
+      totals.blueTeam.games = totals.blueTeam.win + totals.blueTeam.lose + totals.blueTeam.draws;
+      totals.games = totals.redTeam.games + totals.blueTeam.games;
+      
+
+      if (elementId) {
+        // now generate the optionData for the chart
+        var optionData = {
+          // Global palette:
+          color: ['green', 'purple', 'grey' ],
+          title: {
+            text: playerName
+          },
+          tooltip: {
+            data: ''
+          },
+          legend: {
+            data: 'Number of wins'
+          },
+          series: [{
+            type: 'pie', 
+            label: {
+              position: 'inner',
+              fontSize: 14
+            },
+            data: [ { 'name': "Won " + (totals.win/totals.games*100).toFixed(2) + "%", 'value': totals.win },
+                    { 'name': "Lost " + (totals.lose/totals.games*100).toFixed(2) + "%", 'value': totals.lose },
+                    { 'name': "Drawn " + (totals.draws/totals.games*100).toFixed(2) + "%", 'value': totals.draws } 
+                  ]
+          }]
+        };
+
+        /*
+        // alternative pie
+        var optionData = {
+          color: ['grey', 'blue', 'red', 'black' ],
+          title: [ { text: playerName } ],
+          polar: { radius: [30, '80%'] },
+          angleAxis: { max: 40, startAngle: 75 },
+          radiusAxis: { type: 'category', data: ['Drawn', 'Blue', 'Red', 'Games'] },
+          tooltip: {},
+          series: {
+            type: 'bar',
+            data: [0, totals.blueTeam.games, totals.redTeam.games, totals.games],
+            coordinateSystem: 'polar',
+            label: {
+              show: true,
+              position: 'middle',
+              formatter: '{b}: {c}'
+            }
+          }
+        };
+        */
+
+        // Initialize the echarts instance based on the prepared dom
+        var myChart = echarts.init(document.getElementById(elementId), 'light', {
+          width: 400,
+          height: 400
+        });
+        myChart.setOption(optionData);
+      }
+
+      return totals;
+    }
+
+    ///////////////////////
+    ///////////////////////
+    ///////////////////////
+
+    // Display the chart using the configuration items and data just specified.
+    //var optionData = calcRedBlueWinnersOptionData("totalRedBlueWinsContainer");
+    //
+    
+    var lineRaceHeader = ["Won", "Lost", "Drawn", "Total Games", "Total Red", "Total Blue", "Player Name", "Week No"];
+    //createPlayerWinsLineRace("statsChartsDiv");
+    function createPlayerWinsLineRace(elementId) {
+      var jsonData = [lineRaceHeader];
+      jsonData.push();
+      var weekCount = 0;
+      var playerCountMap = {};
+      // loop through all of the costs and payments for this year
+      for (const collectionId in allCollectionDocs) {
+        if (collectionId.startsWith("games_2023")) {
+          var currentAttendance = allCollectionDocs[collectionId];
+          //console.log("--", collectionId, currentAttendance);
+          // loop through all docs
+          for (const docId in allCollectionDocs[collectionId]) {
+            var docName = allCollectionDocs[collectionId][docId].id;
+            if (docName == "_attendance") {
+              var docData = allCollectionDocs[collectionId][docId].data;
+              // loop through scores of each week
+              for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
+                var playerList = docData[weekNumber];
+                if (playerList && playerList.scores) {
+                  weekCount++;
+                  for (const weekPlayerName in playerList) {
+                    if (weekPlayerName != "scores") {
+                      var officialName = getOfficialNameFromAlias(weekPlayerName.replace(/<br>/g,''), aliasToPlayerMap);
+                      if (officialName) {
+                        var playerMap = playerCountMap[officialName];
+                        if (!playerMap) {
+                          playerMap = {};
+                          playerMap.won = 0;
+                          playerMap.drawn = 0;
+                          playerMap.lost = 0;
+                          playerMap.totalGames = 0;
+                          playerMap.totalRed = 0;
+                          playerMap.totalBlue = 0;
+                          playerMap.playerName = officialName;
+                          playerMap.weekNo = 0;
+                        }
+                        var playerTeamNumber = playerList[weekPlayerName];
+                        if (playerTeamNumber > 0) {
+                          // this player played so co
+                          if (playerList.scores.winner == playerTeamNumber) {
+                            playerMap.won = playerMap.won + 1;
+                          } else if (playerList.scores.winner == 0) {
+                            playerMap.drawn = playerMap.drawn + 1;
+                          } else {
+                            playerMap.lost = playerMap.lost + 1;
+                          }
+                          if (playerTeamNumber == 1) {
+                            playerMap.totalRed = playerMap.totalRed + 1;
+                          } else {
+                            playerMap.totalBlue = playerMap.totalBlue + 1;
+                          }
+                          playerMap.totalGames = playerMap.totalGames + 1;
+
+                          playerMap.weekNo = weekCount;
+                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo];
+                          playerCountMap[officialName] = playerMap;
+                          
+                          jsonData.push(data);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      var chartDom = document.getElementById(elementId);
+      var myChart = echarts.init(chartDom);
+      var option;
+
+      //tmp workaround to get the dummy jason data (need to replace this with own data)
+      //_rawData = pagedata.data.tmpJson;
+      _rawData = jsonData;
+      //console.log("Raw Data", _rawData);
+      run(_rawData, document.getElementById("statChartSelect").value);
+
+      function run(_rawData, yAxis) {
+        //console.log(lineRaceHeader)
+        var labelyAxisIndex = lineRaceHeader.indexOf(yAxis);
+        const datasetWithFilters = [];
+        const seriesList = [];
+
+        //filter to get players with 5 games or more
+        //var filteredPlayers = playerNameSuggestions;
+        var filteredPlayers = [];
+        for (const playerName in playerCountMap) {
+          if (playerCountMap[playerName].totalGames >= 5) {
+            filteredPlayers.push(playerName);
+          }
+        }
+        echarts.util.each(filteredPlayers, function (playerName) {
+          var datasetId = 'dataset_' + playerName;
+          datasetWithFilters.push({
+            id: datasetId,
+            fromDatasetId: 'dataset_raw',
+            transform: {
+              type: 'filter',
+              config: {
+                and: [
+                  { dimension: 'Week No', gte: 0 },
+                  { dimension: 'Player Name', '=': playerName },
+                ]
+              }
+            }
+          });
+          seriesList.push({
+            type: 'line',
+            datasetId: datasetId,
+            showSymbol: false,
+            name: playerName,
+            endLabel: {
+              show: true,
+              formatter: function (params) {
+                return params.value[6] + ': ' + params.value[labelyAxisIndex];
+              }
+            },
+            labelLayout: {
+              moveOverlap: 'shiftY'
+            },
+            emphasis: {
+              focus: 'series'
+            },
+            encode: {
+              x: 'Week No',
+              y: yAxis,
+              label: ['Player Name', yAxis],
+              itemName: 'Week No',
+              tooltip: [yAxis]
+            }
+          });
+        });
+
+        option = {
+          animationDuration: 10000,
+          dataset: [
+            {
+              id: 'dataset_raw',
+              source: _rawData
+            },
+            ...datasetWithFilters
+          ],
+          title: {
+            text: 'Player Stats'
+          },
+          tooltip: {
+            order: 'valueDesc',
+            trigger: 'axis'
+          },
+          xAxis: {
+            type: 'value',
+            nameLocation: 'middle',
+            grid: 2,
+            max: weekCount
+          },
+          yAxis: {
+            name: yAxis
+          },
+          grid: {
+            right: 140
+          },
+          series: seriesList
+        };
+        myChart.setOption(option);
+      }
+
+      option && myChart.setOption(option);
+
+
+
+      return option;
+    }
+    
+
+
+    ///////////////////////////////////////////////
+
+    ///////////////////////
+    ///////////////////////
+    ///////////////////////
+
+    
+    //createHeadToHead("Phil R", "Will C", "playerHeadToHeadDiv")
+    var head2HeadInitialised = false;
+    function createHeadToHead(player1, player2, elementId) {
+      //console.log(elementId, document.getElementById(elementId).hidden);
+      document.getElementById("player1HeadToHeadSelect").value = player1;
+      document.getElementById("player2HeadToHeadSelect").value = player2;
+      // loop through all of the costs and payments for this year
+      var totals = {};
+      totals.games = 0;
+      totals.oppositeTeam = {};
+      totals.oppositeTeam.player1wins = 0;
+      totals.oppositeTeam.player2wins = 0;
+      totals.oppositeTeam.draws = 0;
+      totals.sameTeam = {};
+      totals.sameTeam.wins = 0;
+      totals.sameTeam.loses = 0;
+      totals.sameTeam.draws = 0;
+      for (const collectionId in allCollectionDocs) {
+        if (collectionId.startsWith("games_2023")) {
+          var currentAttendance = allCollectionDocs[collectionId];
+          //console.log("--", collectionId, currentAttendance);
+          // loop through all docs
+          for (const docId in allCollectionDocs[collectionId]) {
+            var docName = allCollectionDocs[collectionId][docId].id;
+            if (docName == "_attendance") {
+              var docData = allCollectionDocs[collectionId][docId].data;
+              // loop through scores of each week
+              for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
+                var playerList = docData[weekNumber];
+                if (playerList && playerList.scores) {
+                  var player1TeamNumber = 0;
+                  var player2TeamNumber = 0;
+                  for (const weekPlayerName in playerList) {
+                    if (weekPlayerName == player1) {
+                      player1TeamNumber = playerList[weekPlayerName];
+                    } else if (weekPlayerName == player2) {
+                      player2TeamNumber = playerList[weekPlayerName];
+                    }
+                  }
+                  if (player1TeamNumber && player2TeamNumber) {
+                    // both teams played
+                    totals.games++;
+                    if (player1TeamNumber == player2TeamNumber) {
+                      if (playerList.scores.winner == player1TeamNumber) {
+                        totals.sameTeam.wins++;
+                      } else if (playerList.scores.winner == 0) {
+                        totals.sameTeam.draws++;
+                      } else {
+                        totals.sameTeam.loses++;
+                      }
+                    } else if (playerList.scores.winner == player1TeamNumber) {
+                      totals.oppositeTeam.player1wins++;
+                    } else if (playerList.scores.winner == player2TeamNumber) {
+                      totals.oppositeTeam.player2wins++;
+                    } else if (playerList.scores.winner == 0) {
+                      totals.oppositeTeam.draws++;
+                    }
+                  }
+                  
+                }
+              }
+            }
+          }
+        }
+      }
+      //console.log(totals);
+
+      // clear any existing graphs
+      if (document.getElementById("myH2HChartDiv-OppositeTeam")) {
+        document.getElementById("myH2HChartDiv-OppositeTeam").remove();
+        document.getElementById("myH2HChartDiv-SameTeam").remove();
+      }
+
+      var optionH2HOppositeTeam = {
+        color: ['darkblue', 'lightblue', 'grey', 'green' , 'purple' , 'grey'],
+        title: { text: 'Opposite Teams' },
+        tooltip: {
+            trigger: 'item'
+          },
+          legend: {
+            top: '15%',
+            left: 'center',
+            // doesn't perfectly work with our tricks, disable it
+            selectedMode: false
+          },
+          series: [
+            {
+              name: 'Opposite Teams',
+              type: 'pie',
+              radius: ['40%', '70%'],
+              center: ['50%', '70%'],
+              // adjust the start angle
+              startAngle: 180,
+              label: {
+                show: true,
+                position: 'inner',
+                formatter(param) {
+                  // correct the percentage
+                  return param.name + ' (' + param.percent * 2 + '%)';
+                }
+              },
+              data: [
+                { value: totals.oppositeTeam.player1wins, name: player1 + ' Wins', selected: (totals.oppositeTeam.player1wins > totals.oppositeTeam.player2wins) },
+                { value: totals.oppositeTeam.player2wins, name: player2 + ' Wins', selected: (totals.oppositeTeam.player1wins < totals.oppositeTeam.player2wins) },
+                { value: totals.oppositeTeam.draws, name: 'Draws', selected: false },
+                {
+                  // make an record to fill the bottom 50%
+                  value: totals.oppositeTeam.player1wins + totals.oppositeTeam.player2wins + totals.oppositeTeam.draws,
+                  itemStyle: {
+                    // stop the chart from rendering this piece
+                    color: 'none',
+                    decal: { symbol: 'none' }
+                  },
+                  label: { show: false }
+                }
+              ]
+            }
+          ]
+        };
+        // Initialize the echarts instance based on the prepared dom
+      var myH2HChartDiv = document.createElement("div");
+      myH2HChartDiv.setAttribute("id", "myH2HChartDiv-OppositeTeam");
+      document.getElementById(elementId).appendChild(myH2HChartDiv);
+      var myH2HChart = echarts.init(myH2HChartDiv, 'light', {
+        width: 400,
+        height: 400
+      });
+      myH2HChart.setOption(optionH2HOppositeTeam, { replaceMerge: ['series'] })
+
+      var optionH2HSameTeam = {
+        color: ['darkblue', 'lightblue', 'grey', 'green' , 'purple' , 'grey'],
+        title: { text: 'Same Teams' },
+        tooltip: {
+            trigger: 'item'
+          },
+          legend: {
+            top: '15%',
+            left: 'center',
+            // doesn't perfectly work with our tricks, disable it
+            selectedMode: false
+          },
+          series: [
+            {
+              name: 'Same Teams',
+              type: 'pie',
+              radius: ['40%', '70%'],
+              center: ['50%', '70%'],
+              // adjust the start angle
+              startAngle: 180,
+              label: {
+                show: true,
+                position: 'inner',
+                formatter(param) {
+                  // correct the percentage
+                  return param.name + ' (' + param.percent * 2 + '%)';
+                }
+              },
+              data: [
+                { value: totals.sameTeam.wins, name: 'Wins' },
+                { value: totals.sameTeam.loses, name: 'Loses' },
+                { value: totals.sameTeam.draws, name: 'Draws' },
+                {
+                  // make an record to fill the bottom 50%
+                  value: totals.sameTeam.wins + totals.sameTeam.loses + totals.sameTeam.draws,
+                  itemStyle: {
+                    // stop the chart from rendering this piece
+                    color: 'none',
+                    decal: { symbol: 'none' }
+                  },
+                  label: { show: false }
+                }
+              ]
+            }
+          ]
+        };
+      // Initialize the echarts instance based on the prepared dom
+      var myH2HChartDiv2 = document.createElement("div");
+      myH2HChartDiv2.setAttribute("id", "myH2HChartDiv-SameTeam");
+      document.getElementById(elementId).appendChild(myH2HChartDiv2);
+      var myH2HChart = echarts.init(myH2HChartDiv2, 'light', {
+        width: 400,
+        height: 400
+      });
+      myH2HChart.setOption(optionH2HSameTeam, { replaceMerge: ['series'] });
+
+      //optionH2H && myH2HChart.setOption(optionH2H);
+      //myH2HChart.setOption(optionH2H, { replaceMerge: ['series'] })
+
+      return totals;
+    }
+    ///////////////////////////////////////////////
+
+    var tabName = pagedata.selectTab;
+    if (!tabName) { tabName = "one" };
+    if (document.getElementById(tabName)) {
+      document.getElementById(tabName).checked = true;
+      changeTab(tabName);
+    }
+
+
+
+    </script>
+
+
+  </div>
+</body>
+</html>
