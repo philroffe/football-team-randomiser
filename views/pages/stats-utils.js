@@ -153,7 +153,7 @@
         elements: [
           {
             type: 'text',
-            right: 100,
+            right: 50,
             top: 20,
             style: {
               text: startYear,

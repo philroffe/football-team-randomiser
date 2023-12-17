@@ -43,14 +43,21 @@
     <div class="panel" id="one-panel">
       <div class="content">
         <div id="blank" style="height: 40px"></div>
-        <select id="statChartSelect" onchange="updateStatChartxAxis(this.value)" >
-          <option id="statChartSelect1">Won</option>
-          <option id="statChartSelect3">Lost</option>
-          <option id="statChartSelect2">Drawn</option>
-          <option id="statChartSelect4">Total Games</option>
-          <option id="statChartSelect5">Total Red</option>
-          <option id="statChartSelect6">Total Blue</option>
-        </select>
+        <div class="panelcontentinnerleft" style="width: 50%; text-align:right">
+          <label for="statChartSelect" style="width: 100%; margin-rightr: 10px"><b>Choose Statistic: </b></label>
+        </div>
+        <div class="panelcontentinnerright" style="width: 50%">
+          <select id="statChartSelect" onchange="updateStatChartxAxis(this.value)" >
+            <option id="statChartSelect1">Won</option>
+            <option id="statChartSelect3">Lost</option>
+            <option id="statChartSelect2">Drawn</option>
+            <option id="statChartSelect4">Total Games</option>
+            <option id="statChartSelect5">Total Red</option>
+            <option id="statChartSelect6">Total Blue</option>
+            <option id="statChartSelect6">Win Ratio</option>
+          </select>
+        </div>
+        <div style="clear:both;"></div>
         <div id="statsChartsDiv" style="height: 600px; max-width: 100%"></div>
       </div>
     </div>
@@ -94,11 +101,16 @@
     <div class="panel" id="seven-panel">
       <div class="content">
         <div id="blank" style="height: 40px"></div>
-        <div id="choosePlayer" style="height: 40px">
-          Choose Player(s):
-          <select id="playerSelect" multiple onchange="updatePlayerChoice(this)" >
+        <div class="panelcontentouter">
+          <div class="panelcontentinnerleft" style="width: 50%">
+          <label for="playerSelect" style="width: 100%">Choose Player(s):</label>
+          </div>
+          <div class="panelcontentinnerright" style="width: 50%">
+          <select id="playerSelect" multiple onchange="updatePlayerChoice(this)" style="width: 100%" >
             <option id="playerSelectAll">---All---</option>
           </select>
+          </div>
+          <div style="clear:both;"></div>
         </div>
         <div id="blank" style="height: 40px"></div>
         <div id="playerChartsDiv"  style="height: 800px; max-width: 100%"></div>
@@ -175,14 +187,12 @@
         case 'seven':
           break;
         case 'eight':
-          createPlayerTicker();
+          createPlayerTicker("playerTickerDiv");
           break;
         default:
           // code block
       }
     }
-
-    var _rawData;
 
     // Generate win/lose/draw/team data for all players
     var allPlayerData = [];
@@ -465,8 +475,6 @@
     }
 
     function updateStatChartxAxis(selectedStat) {
-      //console.log(selectedStat);
-      //run(_rawData, selectedStat);
       createPlayerWinsLineRace("statsChartsDiv");
     }
 
@@ -719,7 +727,7 @@
     //var optionData = calcRedBlueWinnersOptionData("totalRedBlueWinsContainer");
     //
     
-    var lineRaceHeader = ["Won", "Lost", "Drawn", "Total Games", "Total Red", "Total Blue", "Player Name", "Week No"];
+    var lineRaceHeader = ["Won", "Lost", "Drawn", "Total Games", "Total Red", "Total Blue", "Player Name", "Week No", "Win Ratio"];
     //createPlayerWinsLineRace("statsChartsDiv");
     function createPlayerWinsLineRace(elementId) {
       var jsonData = [lineRaceHeader];
@@ -741,8 +749,8 @@
                 var playerList = docData[weekNumber];
                 if (playerList && playerList.scores) {
                   weekCount++;
-                  for (const weekPlayerName in playerList) {
-                    if (weekPlayerName != "scores") {
+                    for (var i = 0; i < playerNameSuggestions.length; i++) {
+                      weekPlayerName = playerNameSuggestions[i];
                       var officialName = getOfficialNameFromAlias(weekPlayerName.replace(/<br>/g,''), aliasToPlayerMap);
                       if (officialName) {
                         var playerMap = playerCountMap[officialName];
@@ -756,6 +764,7 @@
                           playerMap.totalBlue = 0;
                           playerMap.playerName = officialName;
                           playerMap.weekNo = 0;
+                          playerMap.winRatio = 0.5;
                         }
                         var playerTeamNumber = playerList[weekPlayerName];
                         if (playerTeamNumber > 0) {
@@ -773,15 +782,21 @@
                             playerMap.totalBlue = playerMap.totalBlue + 1;
                           }
                           playerMap.totalGames = playerMap.totalGames + 1;
+                          //playerMap.winRatio = Number((playerMap.won/(playerMap.won + playerMap.lost)).toFixed(2));
+                          playerMap.winRatio = Number(((playerMap.won + (playerMap.drawn/2)) / (playerMap.won + playerMap.lost + playerMap.drawn)).toFixed(2));
 
                           playerMap.weekNo = weekCount;
-                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo];
+                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo, playerMap.winRatio];
                           playerCountMap[officialName] = playerMap;
                           
                           jsonData.push(data);
+                        } else {
+                          // didn't play so just add the data for the player unchanged
+                          playerMap.weekNo = weekCount;
+                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo, playerMap.winRatio];
+                          jsonData.push(data);
                         }
                       }
-                    }
                   }
                 }
               }
@@ -792,11 +807,12 @@
 
       var chartDom = document.getElementById(elementId);
       var myChart = echarts.init(chartDom);
+      window.addEventListener('resize', function() {
+        myChart.resize();
+      });
       var option;
 
-      //tmp workaround to get the dummy jason data (need to replace this with own data)
-      //_rawData = pagedata.data.tmpJson;
-      _rawData = jsonData;
+      var _rawData = jsonData;
       //console.log("Raw Data", _rawData);
       run(_rawData, document.getElementById("statChartSelect").value);
 
@@ -857,7 +873,7 @@
         });
 
         option = {
-          animationDuration: 10000,
+          animationDuration: 5000,
           dataset: [
             {
               id: 'dataset_raw',
@@ -882,7 +898,7 @@
             name: yAxis
           },
           grid: {
-            right: 140
+            right: 85
           },
           series: seriesList
         };
