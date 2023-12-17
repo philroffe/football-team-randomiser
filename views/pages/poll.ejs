@@ -27,11 +27,13 @@
   <input class="radio" id="two" name="group" type="radio" onclick="changeTab('two');">
   <input class="radio" id="three" name="group" type="radio" onclick="changeTab('three');">
   <input class="radio" id="four" name="group" type="radio" onclick="changeTab('four');">
+  <input class="radio" id="five" name="group" type="radio" onclick="changeTab('five');">
   <div class="tabs">
   <label class="tab" id="one-tab" for="one">Availability</label>
   <label class="tab" id="two-tab" for="two">Attendance</label>
   <label class="tab" id="three-tab" for="three">Payments</label>
   <label class="tab" id="four-tab" for="four">Aliases</label>
+  <label class="tab" id="five-tab" for="five">Stats</label>
     </div>
   <div id="panels" class="panels">
   <div class="panel" id="one-panel">
@@ -53,7 +55,6 @@
       <p><p>Finished? <a href="/teams">Generate teams and email</a>, or view the <a href="/poll-log">log of poll entries.</a>.
     </div>
   </div>
-
 
   <div class="panel" id="two-panel">
     <div class="content">
@@ -109,6 +110,10 @@
       <p><div id="inactivePlayersHeader"></div>
       <br><div id="unusedPlayers"></div><br>
     </div>
+  </div>
+  <div class="panel" id="five-panel">
+    <div class="panel-title">Stats</div>
+    You should be redirected automatically.  If not, <a href="/stats">click here to see stats</a>
   </div>
 
   </div>
@@ -266,19 +271,22 @@
     }
 
     function changeTab(tabName) {
-      // calculate updated URL
-      var newURL = window.location.href;
-      if (window.location.href.includes("tab=")) {
-        newURL = window.location.href.replace(/(tab=)\w+/g, 'tab=' + tabName)
+      if (tabName == "five") {
+        window.location.href = "/stats";
       } else {
-        (window.location.href.includes("?")) ? newURL += "&" : newURL += "?";
-        newURL += "tab=" + tabName;
+        // calculate updated URL
+        var newURL = window.location.href;
+        if (window.location.href.includes("tab=")) {
+          newURL = window.location.href.replace(/(tab=)\w+/g, 'tab=' + tabName)
+        } else {
+          (window.location.href.includes("?")) ? newURL += "&" : newURL += "?";
+          newURL += "tab=" + tabName;
+        }
+        // update the URL (without refreshing) to reflect tab change
+        window.history.pushState({}, 'unused', newURL);
       }
-      // update the URL (without refreshing) to reflect tab change
-      window.history.pushState({}, 'unused', newURL);
     }
 
-    
     function mondaysInMonth(m,y) {
       var lastDateOfMonth = new Date(y,m,0).getDate();
       var firstDayNumberOfMonth =  new Date(m +'/01/'+ y).getDay(); // 0=Sun, 1=Mon...

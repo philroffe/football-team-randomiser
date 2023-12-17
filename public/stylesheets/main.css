@@ -233,7 +233,8 @@ input[type=checkbox].checkmark_blank:checked:before {
 #four:checked ~ .panels #four-panel,
 #five:checked ~ .panels #five-panel,
 #six:checked ~ .panels #six-panel,
-#seven:checked ~ .panels #seven-panel{
+#seven:checked ~ .panels #seven-panel,
+#eight:checked ~ .panels #eight-panel{
   display:block
 }
 #one:checked ~ .tabs #one-tab,
@@ -242,7 +243,8 @@ input[type=checkbox].checkmark_blank:checked:before {
 #four:checked ~ .tabs #four-tab,
 #five:checked ~ .tabs #five-tab,
 #six:checked ~ .tabs #six-tab,
-#seven:checked ~ .tabs #seven-tab{
+#seven:checked ~ .tabs #seven-tab,
+#eight:checked ~ .tabs #eight-tab{
   background:#fffffff6;
   color:#000;
   border-top: 3px solid #000;

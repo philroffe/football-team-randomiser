@@ -27,6 +27,7 @@
   <input class="radio" id="five" name="group" type="radio" onclick="changeTab('five');">
   <input class="radio" id="six" name="group" type="radio" onclick="changeTab('six');">
   <input class="radio" id="seven" name="group" type="radio" onclick="changeTab('seven');">
+  <input class="radio" id="eight" name="group" type="radio" onclick="changeTab('eight');">
   <div class="tabs">
   <label class="tab" id="one-tab" for="one">Week-by-Week</label>
   <label class="tab" id="two-tab" for="two">Total Red/Blue</label>
@@ -35,6 +36,7 @@
   <label class="tab" id="five-tab" for="five">Player Colour</label>
   <label class="tab" id="six-tab" for="six">Player Win</label>
   <label class="tab" id="seven-tab" for="seven">All Player Charts</label>
+  <label class="tab" id="eight-tab" for="eight">Since 2019!</label>
   </div>
 
   <div id="panels" class="panels">
@@ -105,6 +107,7 @@
     <div class="panel" id="eight-panel">
       <div class="content">
         <div id="blank" style="height: 40px"></div>
+        <h3>Total Games Played Since 2019</h3>
         <div id="playerTickerDiv" style="height: 800px; max-width: 100%"></div>
       </div>
     </div>
@@ -168,6 +171,9 @@
           calcWinLoseBarChart('playerWinBarChartDiv');
           break;
         case 'seven':
+          
+          break;
+        case 'eight':
           
           break;
         default:
@@ -1101,6 +1107,7 @@
 
     </script>
 
+    <%- include ("./stats-utils.js") %>
 
   </div>
 </body>
