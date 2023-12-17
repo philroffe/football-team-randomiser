@@ -114,6 +114,8 @@
   </div>
   </div>
 
+  <%- include ("./stats-utils.js") %>
+
   <script type="text/javascript">
     // restringify and then parse the json to get the page
     var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
@@ -171,10 +173,9 @@
           calcWinLoseBarChart('playerWinBarChartDiv');
           break;
         case 'seven':
-          
           break;
         case 'eight':
-          
+          createPlayerTicker();
           break;
         default:
           // code block
@@ -1103,11 +1104,7 @@
       changeTab(tabName);
     }
 
-
-
     </script>
-
-    <%- include ("./stats-utils.js") %>
 
   </div>
 </body>

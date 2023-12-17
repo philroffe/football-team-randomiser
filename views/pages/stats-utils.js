@@ -1,8 +1,6 @@
 <script type="text/javascript">
-  var playerCountMap = {};
-  var data = [];
-  data = createPlayerTicker();
   function createPlayerTicker() {
+    var playerCountMap = {};
     var dataTicker = [];
     var weekCount = 0;
     // loop through all of the costs and payments for this year
@@ -57,134 +55,133 @@
         }
       }
     }
-    //console.log("DATA", data);
+    //console.log("DATA", dataTicker);
     console.log("Total # games:", weekCount)
-    return dataTicker;
-  }
 
-  var myTickerChart = echarts.init(document.getElementById('playerTickerDiv'), null, {
-    renderer: 'canvas',
-    useDirtyRect: false
-  });
+    var myTickerChart = echarts.init(document.getElementById('playerTickerDiv'), null, {
+      renderer: 'canvas',
+      useDirtyRect: false
+    });
 
-  const updateFrequency = 200;
-  const dimension = 0;
-  const playerColors = {};
-  // generate some random colour for each player
-  for (const playerName in playerCountMap) {
-    var randomColor = Math.floor(Math.random()*16777215).toString(16);
-    playerColors[playerName] = "#" + randomColor;
-  }
-
-  const years = [];
-  for (let i = 0; i < data.length; ++i) {
-    if (years.length === 0 || years[years.length - 1] !== data[i][4]) {
-      years.push(data[i][4]);
+    const updateFrequency = 200;
+    const dimension = 0;
+    const playerColors = {};
+    // generate some random colour for each player
+    for (const playerName in playerCountMap) {
+      var randomColor = Math.floor(Math.random()*16777215).toString(16);
+      playerColors[playerName] = "#" + randomColor;
     }
-  }
-  let startIndex = -1;
-  let startYear = years[startIndex];
-  var option;
-  option = {
-    grid: {
-      top: 50,
-      bottom: 10,
-      left: 100,
-      right: 50
-    },
-    xAxis: {
-      max: 'dataMax',
-      axisLabel: {
-        formatter: function (n) {
-          return Math.round(n) + '';
-        }
+
+    const years = [];
+    for (let i = 0; i < dataTicker.length; ++i) {
+      if (years.length === 0 || years[years.length - 1] !== dataTicker[i][4]) {
+        years.push(dataTicker[i][4]);
       }
-    },
-    dataset: {
-      source: data.slice(1).filter(function (d) {
-        return d[4] === startYear;
-      })
-    },
-    yAxis: {
-      type: 'category',
-      inverse: true,
-      max: 30,
-      axisLabel: {
-        show: true,
-        fontSize: 14,
-        formatter: function (value) {
-          return value;
-        },
-        rich: {
-          flag: {
-            fontSize: 25,
-            padding: 5
+    }
+    let startIndex = -1;
+    let startYear = years[startIndex];
+    var option;
+    option = {
+      grid: {
+        top: 50,
+        bottom: 10,
+        left: 100,
+        right: 50
+      },
+      xAxis: {
+        max: 'dataMax',
+        axisLabel: {
+          formatter: function (n) {
+            return Math.round(n) + '';
           }
         }
       },
-      animationDuration: 300,
-      animationDurationUpdate: 300
-    },
-    series: [
-      {
-        realtimeSort: true,
-        seriesLayoutBy: 'column',
-        type: 'bar',
-        itemStyle: {
-          color: function (param) {
-            return playerColors[param.value[3]] || 'lightblue';
+      dataset: {
+        source: dataTicker.slice(1).filter(function (d) {
+          return d[4] === startYear;
+        })
+      },
+      yAxis: {
+        type: 'category',
+        inverse: true,
+        max: 30,
+        axisLabel: {
+          show: true,
+          fontSize: 14,
+          formatter: function (value) {
+            return value;
+          },
+          rich: {
+            flag: {
+              fontSize: 25,
+              padding: 5
+            }
           }
         },
-        encode: {
-          x: dimension,
-          y: 3
-        },
-        label: {
-          show: true,
-          precision: 0,
-          position: 'right',
-          valueAnimation: true,
-          fontFamily: 'monospace'
-        }
-      }
-    ],
-    // Disable init animation.
-    animationDuration: 0,
-    animationDurationUpdate: updateFrequency,
-    animationEasing: 'linear',
-    animationEasingUpdate: 'linear',
-    graphic: {
-      elements: [
+        animationDuration: 300,
+        animationDurationUpdate: 300
+      },
+      series: [
         {
-          type: 'text',
-          right: 100,
-          top: 20,
-          style: {
-            text: startYear,
-            font: 'bolder 20px monospace',
-            fill: 'rgba(100, 100, 100, 0.25)'
+          realtimeSort: true,
+          seriesLayoutBy: 'column',
+          type: 'bar',
+          itemStyle: {
+            color: function (param) {
+              return playerColors[param.value[3]] || 'lightblue';
+            }
           },
-          z: 100
+          encode: {
+            x: dimension,
+            y: 3
+          },
+          label: {
+            show: true,
+            precision: 0,
+            position: 'right',
+            valueAnimation: true,
+            fontFamily: 'monospace'
+          }
         }
-      ]
-    }
-  };
-  // console.log(option);
-  myTickerChart.setOption(option);
-  for (let i = startIndex; i < years.length - 1; ++i) {
-    (function (i) {
-      setTimeout(function () {
-        updateYear(years[i + 1]);
-      }, (i - startIndex) * updateFrequency);
-    })(i);
-  }
-  function updateYear(year) {
-    let source = data.slice(1).filter(function (d) {
-      return d[4] === year;
-    });
-    option.series[0].data = source;
-    option.graphic.elements[0].style.text = year;
+      ],
+      // Disable init animation.
+      animationDuration: 0,
+      animationDurationUpdate: updateFrequency,
+      animationEasing: 'linear',
+      animationEasingUpdate: 'linear',
+      graphic: {
+        elements: [
+          {
+            type: 'text',
+            right: 100,
+            top: 20,
+            style: {
+              text: startYear,
+              font: 'bolder 20px monospace',
+              fill: 'rgba(100, 100, 100, 0.25)'
+            },
+            z: 100
+          }
+        ]
+      }
+    };
+    // console.log(option);
     myTickerChart.setOption(option);
+    for (let i = startIndex; i < years.length - 1; ++i) {
+      (function (i) {
+        setTimeout(function () {
+          updateYear(years[i + 1]);
+        }, (i - startIndex) * updateFrequency);
+      })(i);
+    }
+    function updateYear(year) {
+      let source = dataTicker.slice(1).filter(function (d) {
+        return d[4] === year;
+      });
+      option.series[0].data = source;
+      option.graphic.elements[0].style.text = year;
+      myTickerChart.setOption(option);
+    }
   }
 
   function mondaysInMonth(m,y) {
