@@ -953,6 +953,17 @@ app.use(express.static(path.join(__dirname, 'public')))
   //could also restrict by IP (ip == '0.1.0.2' || ip.endsWith('127.0.0.1'))
   if ((req.get('X-Appengine-Cron') === 'true') 
     && (ip.startsWith('0.1.0.2') || ip.endsWith('127.0.0.1'))) {
+
+    // allow cron to be disabled by setting app preferences
+    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+    var preferences = preferencesDoc.data();
+    if (!preferences) { preferences = {}; }
+    if (!preferences.enableCronEmail) {
+      console.log("SKIPPING SCHEDULED EMAIL - DISABLED IN PREFERENCES");
+      res.json({'result': 'IGNORING - DISABLED IN PREFERENCES'});
+      return;
+    }
+
     // choose the algorithm to us to select the teams
     var algorithmType = "algorithm3";
 
