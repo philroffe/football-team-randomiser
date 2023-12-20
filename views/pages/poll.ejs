@@ -81,7 +81,7 @@
           <div id="scoreHeader" class="gameheader"></div>
           <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled>Save</button>
           <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled>Cancel</button>
-          <p><button id="closeMonthGeneratePaymentsButton" style="background-color: #90EE90;" type="button" onclick="closeMonthGeneratePayments();" disabled>Close Month & Copy Availability</button>
+          <p><button id="closeMonthGeneratePaymentsButton" style="background-color: #90EE90;" type="button" onclick="closeMonthGeneratePayments();">Close Month & Copy Availability</button>
 
           <p>Problem with the list? <a href="/admin-aliases">Check the aliases...</a>
         </div>
@@ -255,19 +255,10 @@
 
     // check if all scores are in (enables close month and gen payments button)
     var allScoresCompleted = true;
-    if (scoresMap.status != "closed") {
-      for (var i = 0; i < mondaysDates.length; i ++) {
-        if (!document.getElementById("week" + i + "Editattendance").hidden) {
-          if (!scoresMap[i]) {
-            allScoresCompleted = false;
-          }
-        }
-      }
-      if (allScoresCompleted) {
-        document.getElementById("closeMonthGeneratePaymentsButton").disabled = false; 
-      }
-    } else {
+    console.log(scoresMap)
+    if (scoresMap.status == "closed") {
       document.getElementById("closeMonthGeneratePaymentsButton").innerHTML = "Month already closed"
+      document.getElementById("closeMonthGeneratePaymentsButton").disabled = true; 
     }
 
     function changeTab(tabName) {
