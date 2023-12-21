@@ -130,6 +130,7 @@
         var option = document.createElement("option");
         option.id = key;
         option.text = key.replace(EMAIL_DOC_PREFIX, "");
+        option.value = key.replace(EMAIL_DOC_PREFIX, "");
         x.add(option);
 
         // identify NEW emails - parse the email and check if the payment is already added
@@ -336,9 +337,9 @@
     });
     var kitty = overallTotalPayments + overallTotalGamesCost + adminCharge;
     // 
-    document.getElementById("formEntryDiv2").innerHTML += "<pre>(UNPAID: " + totalPlayerGamesOwed + " payments)</pre>"
+    document.getElementById("formEntryDiv2").innerHTML += "<pre>(UNPAID: " + totalPlayerGamesOwed + " payments = £" + totalPlayerGamesOwed*4 + ")</pre>"
     document.getElementById("formEntryDiv2").innerHTML += "<pre>\t\t\t\t(ADMIN COSTS)\t   KITTY</pre>";
-    document.getElementById("formEntryDiv2").innerHTML += "<pre>\t\t\t\t" + String(adminCharge).padStart(8, ' ') + "\t" + String("£" + kitty).padStart(8, ' ') + "</pre>";
+    document.getElementById("formEntryDiv2").innerHTML += "<pre>\t\t\t\t" + String(adminCharge.toFixed(2)).padStart(8, ' ') + "\t" + String("£" + kitty.toFixed(2)).padStart(8, ' ') + "</pre>";
     //console.log("-OVERALLS-", overallTotalPayments, overallTotalCost, kitty);
 
     function updateEmailText(text) {
@@ -394,7 +395,7 @@
           console.log("Saved response", this.responseText);
           //location.reload(true);
           document.getElementById("response").innerHTML = "Success!";
-          document.getElementById("submit").disabled = true;
+          //document.getElementById("submit").disabled = true;
         } else if (this.readyState == 4) {
           document.getElementById("response").innerHTML = "Error!  Something went wrong - check logs to see why it failed";
         }
