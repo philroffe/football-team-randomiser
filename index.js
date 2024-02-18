@@ -28,11 +28,16 @@ if (process.env.FIRESTORE_EMULATOR_HOST) {
   console.log("RUNNING LOCALLY WITH FIREBASE EMULATOR:", process.env.FIRESTORE_EMULATOR_HOST, "Environment:", environment);
 }
   
-
-// store a cache of the data for X seconds
 // useful to allow a quick refresh of the screen to randomise players
 var nextMonday = new Date();
+
 var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
+const localeDateOptions = {
+  weekday: 'short',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+};
 var bankHolidaysCache = {};
 var bankHolidaysCacheLastRefresh = new Date();
 var bankHolidaysMaxCacheSecs = 86400; // 1 day
@@ -574,6 +579,9 @@ app.use(express.static(path.join(__dirname, 'public')))
         rowdata.outstandingPayments = outstandingPayments;
         console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
         
+        // read the teams from the playersPreviewData
+        rowdata.playersPreviewData = await getGameWeekPreviewTeams();;
+        
         // combine database data with supplimentary game data and render the page
         var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString(), "environment": environment };
         if (userProfile) {
@@ -779,6 +787,34 @@ app.use(express.static(path.join(__dirname, 'public')))
       // if you got here without an exception then everything was successful
       //res.sendStatus(200);
       //res.redirect('/poll');
+
+      // check if preview of teams has already been generated
+      var playersPreviewData = await getGameWeekPreviewTeams();
+      if (playersPreviewData.redPlayers.length > 0) {
+        // it has so check if player was added or removed from this weeks teams
+        var nextMonday = getDateNextMonday(new Date());
+        var currentGameWeekIndex = getGameWeekMonthIndex(nextMonday);
+
+        var teamsUpdateNeeded = false;
+        var allCurrentPlayers = playersPreviewData.redPlayers.concat(playersPreviewData.bluePlayers, playersPreviewData.standbyPlayers);
+        if (allCurrentPlayers[playerName]) {
+          if (!playerAvailability[currentGameWeekIndex]) {
+            // player is on the current list but has been removed
+            teamsUpdateNeeded = true;
+          }
+        } else {
+          if (!playerAvailability[currentGameWeekIndex]) {
+            // player is NOT on the current list but has been added
+            teamsUpdateNeeded = true;
+          }
+        }
+
+        if (teamsUpdateNeeded) {
+          // send an admin email to inform that draft teams need updating
+          sendAdminEvent("[DRAFT TEAMS UPDATE NEEDED Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
+        }
+      }
+
       res.json({'result': 'OK'})
     } catch (err) {
       console.error(err);
@@ -947,6 +983,73 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.sendStatus(400);
   }
 })
+.get('/schedule/generate-draft-list-for-admins', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  console.log("Scheduling weekly teams GET", ip, req.get('X-Appengine-Cron'));
+  //could also restrict by IP (ip == '0.1.0.2' || ip.endsWith('127.0.0.1'))
+  if ((req.get('X-Appengine-Cron') === 'true') 
+    && (ip.startsWith('0.1.0.2') || ip.endsWith('127.0.0.1'))) {
+
+    //await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
+    //res.json({'result': 'DELETED'});
+    //return;
+
+    // allow cron to be disabled by setting app preferences
+    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+    var preferences = preferencesDoc.data();
+    if (!preferences) { preferences = {}; }
+    if (!preferences.enableCronEmail) {
+      console.log("SKIPPING SCHEDULED EMAIL - DISABLED IN PREFERENCES");
+      res.json({'result': 'IGNORING - DISABLED IN PREFERENCES'});
+      return;
+    }
+
+    var nextMonday = getDateNextMonday(new Date());
+    var dateString = nextMonday.toLocaleDateString('en-GB', localeDateOptions);
+
+    // calculate next game teams and save
+    var playersGamesPlayedRatio = await calculateNextGameTeams();
+    var playersPreviewData = playersGamesPlayedRatio.generatedTeams;
+    playersPreviewData.gameWeek = dateString;
+
+    // save the list for future
+    console.log("SAVING", playersGamesPlayedRatio.generatedTeams);
+    playersPreviewData.lastUpdated = "Auto: " + new Date().toISOString();
+    await firestore.collection("ADMIN").doc("GameWeekPreview").set(playersPreviewData);
+
+    // now generate the email text and send it
+    var emailSubject = "STANDBY ADMIN " + dateString + " [ADMIN Footie, Goodwin, 6pm Mondays]\n"
+    var emailBody = dateString + "\n";
+    emailBody += "Check teams and edit list here:\n"
+    emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/admin-standby\n"
+    emailBody += "\nREDS";
+    for (var i = 0; i < playersPreviewData.redPlayers.length; i ++) {
+      emailBody += "\n" + playersPreviewData.redPlayers[i];
+    }
+    emailBody += "\n\nBLUES";
+    for (var i = 0; i < playersPreviewData.bluePlayers.length; i ++) {
+      emailBody += "\n" + playersPreviewData.bluePlayers[i];
+    }
+    emailBody += "\n\nSTANDBY";
+    for (var i = 0; i < playersPreviewData.standbyPlayers.length; i ++) {
+      emailBody += "\n" + playersPreviewData.standbyPlayers[i];
+    }
+    var emailTo = "admins";
+    var mailOptions = {
+      from: GOOGLE_MAIL_FROM_NAME,
+      to: emailTo,
+      subject: emailSubject,
+      text: emailBody
+    };
+    console.log(mailOptions);
+    //var emailResult = sendEmailToList(mailOptions, req.hostname);
+
+    res.json({'result': 'OK'});
+  } else {
+    console.log("ERROR: Denied - internal endpoint only");
+    res.status(403).end();
+  }
+})
 .get('/schedule/send-weekly-teams', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log("Scheduling weekly teams GET", ip, req.get('X-Appengine-Cron'));
@@ -964,50 +1067,34 @@ app.use(express.static(path.join(__dirname, 'public')))
       return;
     }
 
-    // choose the algorithm to us to select the teams
-    var algorithmType = "algorithm3";
+    // read the teams from the playersPreviewData
 
-    // TODO find a better way to import the library as a module rather than as a file
-    var nextMonday = getDateNextMonday();
-    eval(fs.readFileSync('./views/pages/generate-teams-utils.js')+'');
-
-    var nextMonday = getDateNextMonday(new Date());
-    var gameYear = nextMonday.getFullYear();
-    var gameMonth = nextMonday.toISOString().split('-')[1];
-    var dateString = gameYear + "-" + gameMonth + "-01";
-
-    console.log('Schedule - Generating TEAMS page with data for date: ', dateString);
-    //calc date - use the next Monday after the email date
-    var rowdata = await queryDatabaseAndBuildPlayerList(dateString);
-    var players = rowdata.players;
-
-    // read the list of players and aliases
-    var playerAliasMaps = {};
-    playerAliasMaps = await getDefinedPlayerAliasMaps();
-    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
-
-    //
-    var mondaysDates = mondaysInMonth(nextMonday.getMonth()+1, nextMonday.getFullYear());  //=> [ 7,14,21,28 ]
-    var nextMondayOptionIndex = getNextMondayIndex(mondaysDates, nextMonday);
-    console.log("mondaysDates:", mondaysDates, nextMondayOptionIndex);
-
-    // change the algorithm for all players and regenerate teams
-    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(nextMonday, 12);
-    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex);
+    var playersPreviewData = await getGameWeekPreviewTeams();
+    if (playersPreviewData.redPlayers.length > 0) {
+      //need to validate the player list incase anything has changed
+      //TODO
+    } else {
+      console.error("ERROR - No ADMIN-GameWeekPreview data found (should have been generated by Thursday cron)")
+      var playersGamesPlayedRatio = await calculateNextGameTeams();
+      playersPreviewData = playersGamesPlayedRatio.generatedTeams;
+    }
 
     // get the list of people on the email list
+    var playerAliasMaps = await getDefinedPlayerAliasMaps();
     var emailTo = Object.values(playerAliasMaps.activeEmailList);
-
     // now generate the email text and send it
-    var emailDetails = generateTeamsEmailText(playersGamesPlayedRatio.generatedTeams, nextMonday);
+    var emailDetails = generateTeamsEmailText(playersPreviewData, nextMonday);
     var mailOptions = {
       from: GOOGLE_MAIL_FROM_NAME,
       to: emailTo,
       subject: emailDetails.emailSubject,
       text: emailDetails.emailBody
     };
-    
-    var emailResult = sendEmailToList(mailOptions, req.hostname);
+    console.log(mailOptions);
+    //var emailResult = sendEmailToList(mailOptions, req.hostname);
+
+    // finally delete the old gameweek preview - email has been sent
+    await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
 
     res.json({'result': 'OK'});
   } else {
@@ -1015,7 +1102,67 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.status(403).end();
   }
 })
+.post('/services/update-game-week-preview', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT UPDATE GAME WEEK PREVIEW POST FROM EMAIL:', ip, req.body);
+  try {
+    await firestore.collection("ADMIN").doc("GameWeekPreview").set(req.body);
+    res.json({'result': 'OK'})
+  } catch (err) {
+    console.error(err);
+    res.sendStatus(400);
+  }
+})
+.get('/admin-team-preview', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT ADMIN TEAM-PREVIEW GET FROM:', ip, req.body);
+  try {
+    var playersPreviewData = await getGameWeekPreviewTeams();
+    var pageData = { playersPreviewData: playersPreviewData, "environment": environment };
+
+    //////////////////////////////////////////
+    //////////////////////////////////////////
+    //////////////////////////////////////////
+    // Query database and get all players for games matching this month
+    var requestedDateMonth = "2024-02-01"
+    const dbresult = await firestore.collection("games_" + requestedDateMonth).orderBy('timestamp', 'asc').get();
+    //console.log('dbresult=' + JSON.stringify(dbresult));
+    var rowdata = {};
+    console.log("QQQ", "games_" + requestedDateMonth)
+    if (dbresult.size > 0) {
+      // We have data! now build the player list and set it as the players for the front-end
+      console.log("PPP")
+      rowdata = {}
+      rowdata.status = "FROM_DATABASE"
+      rowdata.gameid = requestedDateMonth
+      //rowdata.playerAliasMaps = playerAliasMaps;
+      //if (filterType == PLAYER_LOG_FILTER) {
+        rowdata.players = buildPlayerLogList(dbresult);
+        pageData.players = rowdata.players;
+      //}
+    }
+    //////////////////////////////////////////
+    //////////////////////////////////////////
+    //////////////////////////////////////////
+
+    // get all ratio data for comparison
+    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date, 12);
+    pageData.allAttendanceData = allAttendanceData;
+
+    console.log('Rendering POLL page with data' + req.query.date);
+    var rowdata = await queryDatabaseAndBuildPlayerList(new Date(requestedDateMonth));
+    pageData.players = rowdata;
+    
+    res.render('pages/admin-team-preview', { pageData: JSON.stringify(pageData)} );
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
+
+// TODO find a better way to import the library as a module rather than as a file
+eval(fs.readFileSync('./views/pages/generate-teams-utils.js')+'');
 
 function getDateNextMonday(fromDate = new Date()) {
   // Get the date next Monday
@@ -1784,6 +1931,39 @@ async function addRemoveEmailSubscription(details, hostname) {
   return true;
 }
 
+
+async function calculateNextGameTeams() {
+    // choose the algorithm to us to select the teams
+    var algorithmType = "algorithm3";
+    var nextMonday = getDateNextMonday(new Date());
+    var gameYear = nextMonday.getFullYear();
+    var gameMonth = nextMonday.toISOString().split('-')[1];
+    var dateString = gameYear + "-" + gameMonth + "-01";
+
+    console.log('Generating TEAMS data for date: ', dateString);
+    //calc date - use the next Monday after the email date
+    var rowdata = await queryDatabaseAndBuildPlayerList(dateString);
+    var players = rowdata.players;
+
+    // read the list of players and aliases
+    var playerAliasMaps = {};
+    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+
+    //
+    var mondaysDates = mondaysInMonth(nextMonday.getMonth()+1, nextMonday.getFullYear());  //=> [ 7,14,21,28 ]
+    var nextMondayOptionIndex = getNextMondayIndex(mondaysDates, nextMonday);
+    console.log("mondaysDates:", mondaysDates, nextMondayOptionIndex);
+
+    // read the teams from the playersPreviewData
+    var playersPreviewData = await getGameWeekPreviewTeams();
+
+    // change the algorithm for all players and regenerate teams
+    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(nextMonday, 12);
+    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex);
+    return playersGamesPlayedRatio;
+}
+
 // get all data from DB
 async function getAllDataFromDB() {
   // get a list of all collections
@@ -1813,4 +1993,32 @@ async function getAllDataFromDB() {
     })
   }
   return allCollectionDocs;
+}
+
+async function getGameWeekPreviewTeams() {
+  // read the teams from the playersPreviewData
+  var playersPreviewDoc = await firestore.collection("ADMIN").doc("GameWeekPreview").get();
+  var playersPreviewData = playersPreviewDoc.data();
+  console.log("SAVED PREVIEW", playersPreviewData);
+  if (!playersPreviewData) {
+    // not yet available so create empty object
+    playersPreviewData = {};
+    playersPreviewData.redPlayers = [];
+    playersPreviewData.bluePlayers = [];
+    playersPreviewData.standbyPlayers = [];
+  }
+  return playersPreviewData;
+}
+
+function getGameWeekMonthIndex(gameDate) {
+   // find the index for the week
+   var mondaysDates = mondaysInMonth(gameDate.getMonth()+1, gameDate.getFullYear());  //=> [ 7,14,21,28 ]
+   var weekNumber = -1;
+   for (var i = 0; i < mondaysDates.length; i ++) {
+     if (mondaysDates[i] == gameDate.getDate()) {
+       weekNumber = i;
+       console.log("Found date:" + gameDate + " with index:" + weekNumber);
+       break;
+     }
+   }
 }

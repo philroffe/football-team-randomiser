@@ -118,7 +118,7 @@
   var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
   var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
 
-  var playerNameSuggestions, allAttendanceData, outstandingPayments;
+  var playerNameSuggestions, allAttendanceData, outstandingPayments, playersPreviewData;
   //var playersList = [];
 
   var algorithmTitle = { "algorithm0": "Everyone Randomly Weighted", 
@@ -138,6 +138,8 @@
     if (!allAttendanceData) { allAttendanceData = {}; }
     outstandingPayments = pagedata.data.outstandingPayments;
     if (!outstandingPayments) { outstandingPayments = {}; }
+    playersPreviewData = pagedata.data.playersPreviewData;
+    if (!playersPreviewData) { playersPreviewData = {}; }
 
     pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
     //console.log(pollDate);
@@ -264,43 +266,45 @@
     }
 
     // change the algorithm for all players and regenerate teams
-    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex);
+    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex);
 
     // get the generated variables returned as playersGamesPlayedRatio
     var totalPossibleGames = playersGamesPlayedRatio.totalPossibleGames;
     var sortedPlayers = playersGamesPlayedRatio.sortedPlayers;
-    var standbyPlayers = playersGamesPlayedRatio.standbyPlayers;
     var generatedTeams = playersGamesPlayedRatio.generatedTeams;
-    var redPlayers = shuffle(generatedTeams.redPlayers);
-    var bluePlayers = shuffle(generatedTeams.bluePlayers);
+    var standbyPlayers = generatedTeams.standbyPlayers;
+    if (generatedTeams) {
+      var redPlayers = shuffle(generatedTeams.redPlayers);
+      var bluePlayers = shuffle(generatedTeams.bluePlayers);
 
-    // print the list for viewing
-    var playerStringList = "";
-    for (var i = 0; i < sortedPlayers.length; i++) {
-      playerName = sortedPlayers[i][0];
-      playerNameClean = playerName.replace(/&#39;/g, "'");
-      playerAlgorithmScore = Number(sortedPlayers[i][1][algorithmType + "ratio"]).toFixed(2);
+      // print the list for viewing
+      var playerStringList = "";
+      for (var i = 0; i < sortedPlayers.length; i++) {
+        playerName = sortedPlayers[i][0];
+        playerNameClean = playerName.replace(/&#39;/g, "'");
+        playerAlgorithmScore = Number(sortedPlayers[i][1][algorithmType + "ratio"]).toFixed(2);
 
-      var cssStyle = "";
-      if (redPlayers.includes(playerName)) {
-        cssStyle = "font-weight:bold;color:white;background-color:red";
-      } else if (bluePlayers.includes(playerName)) {
-        cssStyle = "font-weight:bold;color:white;background-color:blue";
-      } else if (standbyPlayers.includes(playerName)) {
-        cssStyle = "font-weight:bold;color:white;background-color:gold";
+        var cssStyle = "";
+        if (redPlayers.includes(playerName)) {
+          cssStyle = "font-weight:bold;color:white;background-color:red";
+        } else if (bluePlayers.includes(playerName)) {
+          cssStyle = "font-weight:bold;color:white;background-color:blue";
+        } else if (standbyPlayers.includes(playerName)) {
+          cssStyle = "font-weight:bold;color:white;background-color:gold";
+        }
+        var wonLostDrawnString = "(" + playersGamesPlayedRatio[playerName].won + "|" + playersGamesPlayedRatio[playerName].drawn + "|" + playersGamesPlayedRatio[playerName].lost + ")"
+        wonLostDrawnString = wonLostDrawnString.padEnd(10);
+
+        playerStringList += "<div style='" + cssStyle + "'>" + playerAlgorithmScore.padEnd(5) + " " + wonLostDrawnString  + playerNameClean + "\n</div>";
+
       }
-      var wonLostDrawnString = "(" + playersGamesPlayedRatio[playerName].won + "|" + playersGamesPlayedRatio[playerName].drawn + "|" + playersGamesPlayedRatio[playerName].lost + ")"
-      wonLostDrawnString = wonLostDrawnString.padEnd(10);
+      document.getElementById("paymentsEntryDiv").innerHTML = '<pre>' + algorithmTitle[algorithmType] 
+        + '\n(Total No of Games: ' + totalPossibleGames + ')\n\n'
+        + playerStringList + '</pre>';
 
-      playerStringList += "<div style='" + cssStyle + "'>" + playerAlgorithmScore.padEnd(5) + " " + wonLostDrawnString  + playerNameClean + "\n</div>";
-
+      generateTeamsEmailText(generatedTeams, nextMondayDate);
+      updateDivText();
     }
-    document.getElementById("paymentsEntryDiv").innerHTML = '<pre>' + algorithmTitle[algorithmType] 
-      + '\n(Total No of Games: ' + totalPossibleGames + ')\n\n'
-      + playerStringList + '</pre>';
-
-    generateTeamsEmailText(generatedTeams, nextMondayDate);
-    updateDivText();
 
     return playersGamesPlayedRatio;
   }
@@ -323,7 +327,7 @@
 
   function generateAvailabilityEmailText() {
     document.getElementById("paymentsEntryDiv").innerHTML = '<p>';
-    addPaymentsTableRows(outstandingPayments, true);
+    addPaymentsTableRows(outstandingPayments, true, false);
 
     var dateText = monthDateLongFormat.format(nextMondayDate) + " " + nextMondayDate.getFullYear();
     var emailSubject = "Availability for " + dateText + " [Footie, Goodwin, 6pm Mondays]"
@@ -334,15 +338,17 @@
     emailBody += "\n\nCheers,\nPhil\n"
     emailBody += "\nMobile: 07960951917\n"
     emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/poll\n"
+    //emailBody += "\n-----------\n"
+    //emailBody += "To unsubscribe: https://tensile-spirit-360708.nw.r.appspot.com/mailing-list?type=unsubscribe\n"
     document.getElementById("emailTitle").value = emailSubject;
     document.getElementById("emailBody").value = emailBody;
     document.getElementById("emailTitle").style.width = "100%";
     document.getElementById("emailBody").style.width = "100%";
   }
-
+  
   function generatePaymentsEmailText() {
     document.getElementById("paymentsEntryDiv").innerHTML = '<p>';
-    addPaymentsTableRows(outstandingPayments, true);
+    addPaymentsTableRows(outstandingPayments, true, false);
 
     var emailSubject = "Payments for Monday Footie Please [Footie, Goodwin, 6pm Mondays]"
     var emailBody = "Hi all,\n\nOutstanding payments for games over the last few months when you get a sec please...\n\n"
@@ -350,6 +356,8 @@
     emailBody += "\n\nCheers,\nPhil\n"
     emailBody += "\nMobile: 07960951917\n"
     emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/poll\n"
+    //emailBody += "\n-----------\n"
+    //emailBody += "To unsubscribe: https://tensile-spirit-360708.nw.r.appspot.com/mailing-list?type=unsubscribe\n"
     document.getElementById("emailTitle").value = emailSubject;
     document.getElementById("emailBody").value = emailBody;
     document.getElementById("emailTitle").style.width = "100%";
