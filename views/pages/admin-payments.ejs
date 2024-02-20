@@ -133,12 +133,11 @@
       var panelcontentouter = document.getElementById("paymentsEntryDiv");
       if (Object.keys(outstandingPaymentsMap).length > 0) {
         panelcontentouter.appendChild(document.createTextNode("Outstanding Balances:"));
-        addPaymentsTableRows(outstandingPaymentsMap, false);
+        addPaymentsTableRows(outstandingPaymentsMap, false, true);
         panelcontentouter.appendChild(document.createElement("br"));
       }
       panelcontentouter.appendChild(document.createTextNode("This Month:"));
-      addPaymentsTableRows(outstandingPaymentsThisMonthMap, true);
-
+      addPaymentsTableRows(outstandingPaymentsThisMonthMap, true, true);
 }
 
 function togglePaymentVisbility(e) {
@@ -156,7 +155,7 @@ function togglePaymentVisbility(e) {
   }
 }
 
-function addPaymentsTableRows(paymentsMap, showEditTotals = true) {
+function addPaymentsTableRows(paymentsMap, showEditTotals = true, showExpandableWeekCharges = false) {
       var overallGamesTotal = 0;
       var overallOwesTotal = 0;
       var overallPaidTotal = 0;
@@ -198,19 +197,20 @@ function addPaymentsTableRows(paymentsMap, showEditTotals = true) {
           const tdName = tr.insertCell();
           tdName.appendChild(document.createTextNode(playerName));
           tdName.setAttribute("id", "player" + showEditTotals + playerName + "NamePayment");
-          /////////////////
-          var paymentDiv = document.createElement("div");
-          paymentDiv.setAttribute("id", "player" + showEditTotals + playerName + "NamePaymentList");
-          var charges = paymentsMap[playerName]["charges"];
-          for (let i = 0; i < charges.length; i++) {
-            paymentDiv.appendChild(document.createTextNode(charges[i]));
-            paymentDiv.appendChild(document.createElement("br"));
+          if (showExpandableWeekCharges) {
+            // add the list of charges as an expandable div
+            var paymentDiv = document.createElement("div");
+            paymentDiv.setAttribute("id", "player" + showEditTotals + playerName + "NamePaymentList");
+            var charges = paymentsMap[playerName]["charges"];
+            for (let i = 0; i < charges.length; i++) {
+              paymentDiv.appendChild(document.createTextNode(charges[i]));
+              paymentDiv.appendChild(document.createElement("br"));
+            }
+            paymentDiv.hidden = true;
+            tdName.appendChild(paymentDiv);
+            tdName.addEventListener("click", togglePaymentVisbility);
+            tdName.className = "expandable";
           }
-          paymentDiv.hidden = true;
-          tdName.appendChild(paymentDiv);
-          tdName.addEventListener("click", togglePaymentVisbility);
-          tdName.className = "expandable";
-          /////////////////
 
           // add table cell
           const tdGames = tr.insertCell();
