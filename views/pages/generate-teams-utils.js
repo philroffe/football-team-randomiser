@@ -36,8 +36,33 @@
       first.getDate() === second.getDate();
   }
 
-  function changeAlgorithmForPlayers(algorithmType, players, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex) {
+  function changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex
+    , noOfPreviousMonths) {
     var playersGamesPlayedRatio = {};
+
+    
+    /////////////////////
+    /////////////////////
+    /////////////////////
+    //var requestedDate = new Date(startDate);
+    //maxNoOfMonths = monthDiff(new Date("2023-01-01"), requestedDate);
+    //noOfMonths = Math.min(noOfPreviousMonths, maxNoOfMonths);
+
+    // clone the 
+    //let allAttendanceData = { ...allAttendanceData }
+    var currentCount = 0;
+    var filteredAllAttendanceData = {};
+    for (const gamesCollectionId in allAttendanceData) {
+      if (currentCount <= noOfPreviousMonths) {
+        filteredAllAttendanceData[gamesCollectionId] = allAttendanceData[gamesCollectionId];
+        //console.log(gamesCollectionId)
+        currentCount++;
+      }
+    }
+    allAttendanceData = filteredAllAttendanceData;
+    /////////////////////
+    /////////////////////
+    /////////////////////
 
     // create list of all players from allAttendanceData
     var allPlayers = [];
@@ -61,7 +86,7 @@
 
 
     // create list of all players who have ticked this option this week
-    console.log("PLAYERS", players);
+    //console.log("PLAYERS", players);
     var thisWeekPlayers = [];
     Object.keys(players).forEach(function(key) {
       playerName = key;
@@ -207,20 +232,58 @@
     })
     //console.log("SORTED PLAYERS THIS WEEK:", sortedPlayerNamesThisWeek);
 
-    // generate the teams - standby first, then divide into reds and blues
-    var standbyPlayers = generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek);
-    var generatedTeams = generateRedBlueTeams(sortedPlayerNamesThisWeek, standbyPlayers);
-    //console.log("NEW TEAMS", generatedTeams)
+    /////////////////////////////////////////////
+    /////////////////////////////////////////////
+    /////////////////////////////////////////////
+    var forceUpdate = false;
+    if (playersPreviewData) {
+      var tmpAllPlayersThisWeek = [...sortedPlayerNamesThisWeek];
+      var tmpPreviewPlayersThisWeek = playersPreviewData.redPlayers.concat(playersPreviewData.bluePlayers, playersPreviewData.standbyPlayers);
+      var playersRemovedFromPreview = [];
+
+      for (var i = 0; i < tmpPreviewPlayersThisWeek.length; i++) {
+        const index = tmpAllPlayersThisWeek.indexOf(tmpPreviewPlayersThisWeek[i]);
+        if (index > -1) {
+          // remove player from full list
+          tmpAllPlayersThisWeek.splice(index, 1);
+        } else {
+          // player removed so need to regenerate teams
+          playersRemovedFromPreview.push(tmpPreviewPlayersThisWeek[i]);
+        }
+      }
+      if (tmpAllPlayersThisWeek.length > 0 || playersRemovedFromPreview.length > 0) {
+        // player change so force update
+        playersPreviewData.redPlayers = [];
+        playersPreviewData.bluePlayers = [];
+        forceUpdate = true;
+      }
+      playersGamesPlayedRatio.generatedTeams = playersPreviewData;
+    } else {
+      // not yet generated so initialise it set force update
+      playersPreviewData = {};
+      playersPreviewData.standbyPlayers = [];
+      forceUpdate = true;
+    }
+    /////////////////////////////////////////////
+    /////////////////////////////////////////////
+    /////////////////////////////////////////////
+
+    if (forceUpdate) {
+      // generate the teams - standby first, then divide into reds and blues
+      var standbyPlayers = generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, playersPreviewData.standbyPlayers);
+      var generatedTeams = generateRedBlueTeams(sortedPlayerNamesThisWeek, standbyPlayers);
+      //console.log("NEW TEAMS", generatedTeams)
+      playersGamesPlayedRatio.standbyPlayers = standbyPlayers;
+      playersGamesPlayedRatio.generatedTeams = generatedTeams;
+    }
     
     playersGamesPlayedRatio.sortedPlayers = sortedPlayers;
-    playersGamesPlayedRatio.standbyPlayers = standbyPlayers;
-    playersGamesPlayedRatio.generatedTeams = generatedTeams;
     playersGamesPlayedRatio.totalPossibleGames = totalPossibleGames;
 
     return playersGamesPlayedRatio;
   }
 
-function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek) {
+function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, forcePlayersOnStandby) {
     var standbyPlayers = [];
     var numberStandbyNeeded = 0;
     if (sortedPlayerNamesThisWeek.length >= 12) {
@@ -244,6 +307,25 @@ function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek) {
           randomStandbyOptions.push(standbyPlayerName);
         }
       }
+
+      console.log("CHECK standby:", forcePlayersOnStandby);
+
+      // allocate the forcePlayersOnStandby first
+      if (forcePlayersOnStandby && forcePlayersOnStandby.length > 0 && numberStandbyNeeded > 0) {
+        for (var i = 0; i < numberStandbyNeeded; i++) {
+          if (forcePlayersOnStandby.length > i) {
+            const index = randomStandbyOptions.indexOf(forcePlayersOnStandby[i]);
+            if (index > -1) {
+              // forced-standby player exists so add to standby and remove from main sorted list
+              console.log("Added to forced standby:", forcePlayersOnStandby[i]);
+              standbyPlayers.push(forcePlayersOnStandby[i]);
+              numberStandbyNeeded--;
+              //randomStandbyOptions.splice(index, 1);
+            }
+          }
+        }
+      }
+
       // take half(ish) of the ordered list
       randomStandbyOptions = randomStandbyOptions.slice(0, Math.floor(randomStandbyOptions.length/2) - 2);
       // randomise the list
@@ -386,6 +468,9 @@ function generateTeamsEmailText(generatedTeams, nextMondayDate) {
   fullEmailText += "\nCheers,\nPhil\n"
   fullEmailText += "\nMobile: 07960951917\n"
   fullEmailText += pollLink + "\n"
+  
+  fullEmailText += "\n-----------\n"
+  fullEmailText += "To unsubscribe: https://tensile-spirit-360708.nw.r.appspot.com/mailing-list?type=unsubscribe\n"
 
   var emailDetails = {"emailSubject": fullEmailSubject, "emailBody": fullEmailText};
   return emailDetails;
@@ -444,4 +529,34 @@ function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {
   }*/
   return officialName;
 }
+
+
+function mondaysInMonth(m,y) {
+  var lastDateOfMonth = new Date(y,m,0).getDate();
+  var firstDayNumberOfMonth =  new Date(m +'/01/'+ y).getDay(); // 0=Sun, 1=Mon...
+
+  // check what day the 1st of the month is, and then calc the date of the next Monday
+  var mondayDate;
+  if (firstDayNumberOfMonth == 1) {
+    // already a Monday (1st of the month)
+    mondayDate = 1;
+  } else if (firstDayNumberOfMonth == 0) {
+    // it's a Sunday, so Monday is 1 day away (2nd of the month)
+    mondayDate = 2;
+  } else {
+    // must be Tues-Sat so subtract from 9 (because max 7 days from )
+    var mondayDate = 7 - (firstDayNumberOfMonth - 2);
+  }
+
+  // now loop through every 7 days and form an array of Monday dates
+  var mondays = [];
+  for (var i = mondayDate; i <= lastDateOfMonth; i += 7) {
+    mondays.push(i);
+  }
+
+  console.log("First Monday of month:", new Date(m +'/0' + mondays[0] + '/'+ y));
+  //console.log("Mondays in the month:", mondays);
+  return mondays;
+}
+
 //module.exports = { getNextMondayIndex, datesAreOnSameDay, changeAlgorithmForPlayers, generateStandbyPlayers, generateRedBlueTeams, shuffle, generateTeamsEmailText};

@@ -24,6 +24,17 @@
         </select>
       </div>
 
+      <div id="chooseOptionAlgorithm" style="display:inline;margin-left:30px;">
+        # of months:
+        <select name="algorithmChoice" id="algorithmChoice" checked onchange="changeAlgorithmRange(this.value)">
+          <option value="12">12 Months</option>
+          <option value="6">6 Months</option>
+          <option value="3">3 Months</option>
+          <option value="1">1 Months</option>
+          <option value="999999999">All-Time (Since Jan 2023)</option>
+        </select>
+      </div>
+
       <div id="description"></div>
         <div class="panelcontentouter">
         <div class="panelcontentinnerleft" style="width: 32%">
@@ -53,7 +64,10 @@
 
       <br><p>
       <div class="panelcontentouter">
-        <div class="panelcontentinnerleft" style="width: 50%">
+        <div class="panelcontentinnerleft" style="width: 20%">
+          <div id="teamListRatiosDiv"><textarea id="teamListRatios" style="overflow:hidden; background-color: transparent; border:0; padding-right: 10px; text-align: right; color: #666; width: 100%;" readonly></textarea></div>
+        </div>
+        <div class="panelcontentinnerleft" style="width: 30%">
           <div id="teamListDiv"><textarea id="teamList" style="overflow:hidden; background-color: transparent; border:0; width: 100%;" readonly></textarea></div>
         </div>
         <div class="panelcontentinnerright" style="width: 50%">
@@ -61,9 +75,6 @@
         </div>
         <div style="clear:both;"></div>
       </div>
-
-      
-      <button id="copyToClipboard" style="background-color: #90EE90;" type="button" onclick="copyToClipboard();">Copy To Clipboard</button>
 
       <!--
       <div id="forceStandby">
@@ -105,12 +116,13 @@
 
       // change the algorithm for all players and regenerate teams
       var algorithmType = "algorithm3"; //default
+      var algorithmRange = 12; //default
       document.getElementById("algorithmChoice").value = algorithmType;
       var nextMondayOptionIndex = 2;
       // need to clone these (which means it must be destructive - maybe fix?)
       let clonePlayers = { ...pagedata.players }
       let clonePlayersPreviewData = { ...pagedata.playersPreviewData }
-      var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex);
+      var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
       //console.log("playersGamesPlayedRatio", playersGamesPlayedRatio)
 
       var redPlayers = pagedata.playersPreviewData["redPlayers"];
@@ -180,7 +192,32 @@
         // need to clone these (which means it must be destructive - maybe fix?)
         let clonePlayers = { ...pagedata.players }
         let clonePlayersPreviewData = { ...pagedata.playersPreviewData }
-        playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex);
+        playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
+        updateHtmlSelect();
+        updatePlayerChoice();
+      }
+
+      function changeAlgorithmRange(newAlgorithmRange) {
+        algorithmRange = newAlgorithmRange;
+        /*
+        //// IDEALLY DO NOT WANT TO DO THIS - IT'S Server side to recalc the number of months history (loses current state)
+        // calculate updated URL
+        var newURL = window.location.href;
+        if (window.location.href.includes("algorithmRange=")) {
+          newURL = window.location.href.replace(/(algorithmRange=)\w+/g, 'algorithmRange=' + algorithmRange);
+        } else {
+          (window.location.href.includes("?")) ? newURL += "&" : newURL += "?";
+          newURL += "algorithmRange=" + algorithmRange;
+        }
+        // update the URL (without refreshing) to reflect tab change
+        window.history.pushState({}, 'unused', newURL);
+        location.reload(true);
+        */
+
+        // need to clone these (which means it must be destructive - maybe fix?)
+        let clonePlayers = { ...pagedata.players }
+        let clonePlayersPreviewData = { ...pagedata.playersPreviewData }
+        playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
         updateHtmlSelect();
         updatePlayerChoice();
       }
@@ -212,17 +249,6 @@
         pagedata.playersPreviewData["standbyPlayers"].push(playerName);
         updateHtmlSelect();
         updatePlayerChoice();
-      }
-
-      function copyToClipboard() {
-       // Copy the teams, replacing the ratios
-       var teamsTextElement = document.getElementById("teamList");
-       teamsTextElement.select();
-       teamsTextElement.setSelectionRange(0,99999);// For mobile devices
-       var teamsString = teamsTextElement.value; //textContent;
-       teamsString = teamsString.replace(/ = .*/g, "");
-       navigator.clipboard.writeText(teamsString);
-       //console.log(teamsString);
       }
 
       // change the default behaviour on desktop to not need ctrl for multi-select
@@ -257,39 +283,48 @@
         var removedPlayers = [];
         // loop through all players and create text
         var teamListText = "REDS\n";
+        var teamListRatiosText = "\n";
         var redOptions = document.getElementById("redPlayerSelect").options;
         var redTotalRatio = 0;
         for (var i=0; i<redOptions.length; i++) {
           if (redOptions[i].selected) {
             var playerName = redOptions[i].value.split(" = (")[0];
-            redTotalRatio += Number(redOptions[i].value.split(" = (")[1].split(")")[0]);
-            teamListText += redOptions[i].value + "\n";
+            var playerRatio = Number(redOptions[i].value.split(" = (")[1].split(")")[0]);
+            redTotalRatio += playerRatio;
+            teamListText += playerName + "\n"; //redOptions[i].value + "\n";
+            teamListRatiosText += playerRatio + "\n";
             currentState.redPlayers.push(playerName);
             validatePlayerSelection(allPlayersCopy, playerName, failedValidationPlayers);
           }
         }
-        teamListText += " = " + redTotalRatio.toFixed(2) + "\n";
+        teamListRatiosText += "=" + redTotalRatio.toFixed(2) + "\n";
 
         teamListText += "\nBLUES\n";
+        teamListRatiosText += "\n";
         var blueOptions = document.getElementById("bluePlayerSelect").options;
         var blueTotalRatio = 0;
         for (var i=0; i<blueOptions.length; i++) {
           if (blueOptions[i].selected) {
             var playerName = blueOptions[i].value.split(" = (")[0];
+            var playerRatio = Number(blueOptions[i].value.split(" = (")[1].split(")")[0]);
             blueTotalRatio += Number(blueOptions[i].value.split(" = (")[1].split(")")[0]);
-            teamListText += blueOptions[i].value + "\n";
+            teamListText += playerName + "\n"; //blueOptions[i].value + "\n";
+            teamListRatiosText += playerRatio + "\n";
             currentState.bluePlayers.push(playerName);
             validatePlayerSelection(allPlayersCopy, playerName, failedValidationPlayers);
           }
         }
-        teamListText += " = " + blueTotalRatio.toFixed(2) + "\n";
+        teamListRatiosText += "=" + blueTotalRatio.toFixed(2) + "\n";
 
         teamListText += "\nSTANDBY\n";
+        teamListRatiosText += "\n";
         var standbyOptions = document.getElementById("standbyPlayerSelect").options;
         for (var i=0; i<standbyOptions.length; i++) {
           if (standbyOptions[i].selected) {
             var playerName = standbyOptions[i].value.split(" = (")[0];
-            teamListText += playerName + "\n";
+            var playerRatio = Number(standbyOptions[i].value.split(" = (")[1].split(")")[0]);
+            teamListText += playerName + "\n"; //standbyOptions[i].value + "\n";
+            teamListRatiosText += playerRatio + "\n";
             currentState.standbyPlayers.push(playerName);
             validatePlayerSelection(allPlayersCopy, playerName, failedValidationPlayers);
           }
@@ -340,9 +375,11 @@
         //document.getElementById("teamList").innerHTML = "<pre>" + teamListText + "</pre>";
         //document.getElementById("invalidList").innerHTML = "<pre>" + invalidText + "</pre>";
         document.getElementById("teamList").value = teamListText;
+        document.getElementById("teamListRatios").value = teamListRatiosText;
         document.getElementById("invalidList").value =  removedPlayersText + additionalPlayersText + invalidText + unevenSidesText;
 
         document.getElementById("teamList").style.height = document.getElementById("teamList").scrollHeight + 'px';
+        document.getElementById("teamListRatios").style.height = document.getElementById("teamList").scrollHeight + 'px';
         document.getElementById("invalidList").style.height = document.getElementById("teamList").scrollHeight + 'px';
       }
 

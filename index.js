@@ -566,7 +566,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         playerAliasMaps = await getDefinedPlayerAliasMaps();
         rowdata.playerAliasMaps = playerAliasMaps;
 
-        var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date, 12);
+        var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio();
         rowdata.allAttendanceData = allAttendanceData;
 
 
@@ -1042,7 +1042,7 @@ app.use(express.static(path.join(__dirname, 'public')))
       text: emailBody
     };
     console.log(mailOptions);
-    //var emailResult = sendEmailToList(mailOptions, req.hostname);
+    var emailResult = sendEmailToList(mailOptions, req.hostname);
 
     res.json({'result': 'OK'});
   } else {
@@ -1091,7 +1091,7 @@ app.use(express.static(path.join(__dirname, 'public')))
       text: emailDetails.emailBody
     };
     console.log(mailOptions);
-    //var emailResult = sendEmailToList(mailOptions, req.hostname);
+    var emailResult = sendEmailToList(mailOptions, req.hostname);
 
     // finally delete the old gameweek preview - email has been sent
     await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
@@ -1146,7 +1146,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     //////////////////////////////////////////
 
     // get all ratio data for comparison
-    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(req.query.date, 12);
+    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio();
     pageData.allAttendanceData = allAttendanceData;
 
     console.log('Rendering POLL page with data' + req.query.date);
@@ -1959,8 +1959,9 @@ async function calculateNextGameTeams() {
     var playersPreviewData = await getGameWeekPreviewTeams();
 
     // change the algorithm for all players and regenerate teams
-    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(nextMonday, 12);
-    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex);
+    var algorithmRange = 12;
+    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio();
+    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
     return playersGamesPlayedRatio;
 }
 
