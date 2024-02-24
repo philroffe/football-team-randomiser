@@ -1,7 +1,7 @@
 cron:
 - description: "thursday evening pre-team admin mail"
   url: /schedule/generate-draft-list-for-admins
-  schedule: every thursday 20:30
+  schedule: every thursday 18:00
   timezone: Europe/London
   retry_parameters:
     job_retry_limit: 5
