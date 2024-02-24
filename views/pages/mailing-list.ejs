@@ -44,6 +44,12 @@
     
 
     <script type="text/javascript">
+    
+      const typeParam = new URLSearchParams(window.location.search).get('type');
+      if (typeParam == "unsubscribe") {
+        document.getElementById("unsubscribeChoice").checked = true;
+      }
+
       function validateEmail(input) {
         document.getElementById("response").innerHTML = "";
         var validRegex = /^([a-zA-Z0-9._%-+]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/;

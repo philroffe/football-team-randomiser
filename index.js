@@ -10,6 +10,7 @@ const fs = require('fs');
 const mimelib = require("mimelib");
 const { convert } = require('html-to-text');
 const simpleParser = require('mailparser').simpleParser;
+const messageHelper = require("./messageHelper");
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -50,6 +51,9 @@ const EMAIL_TITLE_POSTFIX = " [Footie, Goodwin, 6pm Mondays]";
 const MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED = 2
 const MAIL_SUBSCRIPTION_STATUS_CONFIRMING = 1
 const MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED = 0
+const EMAIL_TYPE_ALL_PLAYERS = 0;
+const EMAIL_TYPE_ADMIN_ONLY = 1;
+const EMAIL_TYPE_TEAMS_ADMIN = 2;
 
 const app = express();
 app.use(session({
@@ -69,8 +73,9 @@ const GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_CALLBACK_URL = (process.env.GOOGLE_CALLBACK_URL) ? process.env.GOOGLE_CALLBACK_URL : "http://localhost:5000/auth/google/callback";
-const ALLOWED_ADMIN_EMAILS = (process.env.ALLOWED_ADMIN_EMAILS) ? process.env.ALLOWED_ADMIN_EMAILS : "philroffe@gmail.com";
+const ALLOWED_ADMIN_EMAIL_ADDRS = (process.env.ALLOWED_ADMIN_EMAIL_ADDRS) ? process.env.ALLOWED_ADMIN_EMAIL_ADDRS : "philroffe@gmail.com";
 
+/* Email functionality */
 const GOOGLE_MAIL_FROM_NAME = (process.env.GOOGLE_MAIL_FROM_NAME) ? process.env.GOOGLE_MAIL_FROM_NAME : "Phil Roffe <philroffe@gmail.com>";
 const GOOGLE_MAIL_USERNAME = (process.env.GOOGLE_MAIL_USERNAME) ? process.env.GOOGLE_MAIL_USERNAME : "NOT_SET";
 const GOOGLE_MAIL_APP_PASSWORD = (process.env.GOOGLE_MAIL_APP_PASSWORD) ? process.env.GOOGLE_MAIL_APP_PASSWORD : "NOT_SET";
@@ -81,6 +86,13 @@ var transporter = nodemailer.createTransport({
     pass: GOOGLE_MAIL_APP_PASSWORD
   }
 });
+const SYSTEM_ADMIN_EMAIL_ADDRS = (process.env.SYSTEM_ADMIN_EMAIL_ADDRS) ? process.env.SYSTEM_ADMIN_EMAIL_ADDRS : "Phil Roffe <philroffe@gmail.com>";
+const TEAMS_ADMIN_EMAIL_ADDRS = (process.env.TEAMS_ADMIN_EMAIL_ADDRS) ? process.env.TEAMS_ADMIN_EMAIL_ADDRS : SYSTEM_ADMIN_EMAIL_ADDRS;
+const ATTENDANCE_ADMIN_EMAIL_ADDRS = (process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS) ? process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS : TEAMS_ADMIN_EMAIL_ADDRS;
+const MAILING_LIST_ADMIN_EMAIL_ADDRS = (process.env.MAILING_LIST_ADMIN_EMAIL_ADDRS) ? process.env.MAILING_LIST_ADMIN_EMAIL_ADDRS : SYSTEM_ADMIN_EMAIL_ADDRS;
+
+const ENABLE_WHATSAPP = (process.env.ENABLE_WHATSAPP) ? (process.env.ENABLE_WHATSAPP.toUpperCase() === "ENABLED") : false;
+const ENABLE_TEST_EMAILS = (process.env.ENABLE_TEST_EMAILS) ? (process.env.ENABLE_TEST_EMAILS.toUpperCase() === "ENABLED") : false;
 
 passport.use(new GoogleStrategy({
     clientID: GOOGLE_CLIENT_ID,
@@ -88,7 +100,7 @@ passport.use(new GoogleStrategy({
     callbackURL: GOOGLE_CALLBACK_URL
   },
   function(accessToken, refreshToken, profile, done) {
-    var allowedUsers = ALLOWED_ADMIN_EMAILS.split(",");
+    var allowedUsers = ALLOWED_ADMIN_EMAIL_ADDRS.split(",");
     if (profile) {
       if (allowedUsers.includes(profile["_json"].email)) {
         userProfile = profile;
@@ -379,7 +391,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
         var title = "[Mailing List CONFIRMED] " + playerAliasMap[playerConfirmedKey].email + " [Footie, Goodwin, 6pm Mondays]";
         var subject = playerAliasMap[playerConfirmedKey].email + "\n" + playerAliasMap[playerConfirmedKey].subscriptionStatus;
-        sendAdminEvent(title, subject);
+        sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, title, subject);
       }
       if (!playerAliasData) {
         console.log("ERROR FINDING MAILING LIST CODE:", code);
@@ -770,7 +782,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": ip };
 
     var eventDetails = convertAvailibilityToDates(gameMonth, gameYear, playerAvailability);
-    sendAdminEvent("[Player Change Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
+    sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[Player Change Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
 
     console.log('Inserting DB game data:', JSON.stringify(gamedetails_new));
     try {
@@ -811,7 +823,7 @@ app.use(express.static(path.join(__dirname, 'public')))
 
         if (teamsUpdateNeeded) {
           // send an admin email to inform that draft teams need updating
-          sendAdminEvent("[DRAFT TEAMS UPDATE NEEDED Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
+          sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[DRAFT TEAMS UPDATE NEEDED Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
         }
       }
 
@@ -1021,7 +1033,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     var emailSubject = "STANDBY ADMIN " + dateString + " [ADMIN Footie, Goodwin, 6pm Mondays]\n"
     var emailBody = dateString + "\n";
     emailBody += "Check teams and edit list here:\n"
-    emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/admin-standby\n"
+    emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/admin-team-preview\n"
     emailBody += "\nREDS";
     for (var i = 0; i < playersPreviewData.redPlayers.length; i ++) {
       emailBody += "\n" + playersPreviewData.redPlayers[i];
@@ -1034,15 +1046,10 @@ app.use(express.static(path.join(__dirname, 'public')))
     for (var i = 0; i < playersPreviewData.standbyPlayers.length; i ++) {
       emailBody += "\n" + playersPreviewData.standbyPlayers[i];
     }
-    var emailTo = "admins";
-    var mailOptions = {
-      from: GOOGLE_MAIL_FROM_NAME,
-      to: emailTo,
-      subject: emailSubject,
-      text: emailBody
-    };
-    console.log(mailOptions);
-    var emailResult = sendEmailToList(mailOptions, req.hostname);
+    sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, emailSubject, emailBody);
+    if (ENABLE_WHATSAPP) {
+      messageHelper.sendWhatsappEvent(EMAIL_TYPE_TEAMS_ADMIN, emailSubject, playersPreviewData);
+    }
 
     res.json({'result': 'OK'});
   } else {
@@ -1529,30 +1536,54 @@ function convertAvailibilityToDates(gameMonth, gameYear, availabilityMap) {
 }
 
 // send an email to the admins to notify of certain events (such as a player availability change)
-function sendAdminEvent(title, details) {
+// type determines list of people in the TO address - see EMAIL_TYPE_* constants
+function sendAdminEvent(type, title, details) {
+  var emailTo = 'Phil R Test1 <philroffe+Test1@gmail.com>';
+  switch (type) {
+    case EMAIL_TYPE_ADMIN_ONLY:
+      emailTo = SYSTEM_ADMIN_EMAILS_ADDRS;
+      break;
+    case EMAIL_TYPE_TEAMS_ADMIN:
+      emailTo = TEAMS_ADMIN_EMAIL_ADDRS; 
+      break;
+    default:
+      console.log('WARN - Skipping sending admin email:' + title + ' Unknown admin event type:' + type);
+      return;
+  }
+
   var mailOptions = {
     from: "philroffe+footie@gmail.com",
-    to: "philroffe@gmail.com",
+    to: emailTo,
     subject: title,
     html: "<pre>" + details + "</pre>"
   };
-  console.log(mailOptions);
 
-  if (environment == "PRODUCTION") {
-    transporter.sendMail(mailOptions, function(error, info){
-      console.log('Trying to send admin email: ', mailOptions);
-      if (error) {
-        console.log(error);
-        return false;
-      } else {
-        console.log('Admin email sent: ' + info.response);
-        return true;
-      }
-    });
-  } else {
-    console.log('DUMMY - test env so not sending admin email: ', mailOptions);
+  // if a test env, check whether to send and update to/from accordingly
+  if (environment != "PRODUCTION") {
+    if (ENABLE_TEST_EMAILS) {
+      // if localhost then force testing emails only
+      mailOptions.to = ['Phil R Test1 <philroffe+Test1@gmail.com>'];
+      mailOptions.from = ['Phil R TestEnv <philroffe+TestEnv@gmail.com>'];
+      console.log('FORCING SENDING _TEST_ ADMIN MSG BECAUSE RUNNING LOCALLY');
+    } else {
+      console.log('DUMMY - test env so not sending admin email: ', mailOptions);
+      return;
+    }
   }
+
+  // now send the email
+  transporter.sendMail(mailOptions, function(error, info){
+    console.log('Trying to send admin email: ', mailOptions);
+    if (error) {
+      console.log(error);
+      return false;
+    } else {
+      console.log('Admin email sent: ' + info.response);
+      return true;
+    }
+  });
 }
+
 
 // send an email to the admins to notify of certain events (such as a player availability change)
 function sendEmailToList(mailOptions, hostname) {
@@ -1925,7 +1956,7 @@ async function addRemoveEmailSubscription(details, hostname) {
   }
   if (mailinglistChanged) {
     console.log("UPDATED LIST SO SAVING", playerAliasMap[playerKey]);
-    sendAdminEvent("[Mailing List Change Event] " + email + EMAIL_TITLE_POSTFIX, email + "\n" + playerAliasMap[playerKey].subscriptionStatus);
+    sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Mailing List Change Event] " + email + EMAIL_TITLE_POSTFIX, email + "\n" + playerAliasMap[playerKey].subscriptionStatus);
     await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
   }
   return true;
