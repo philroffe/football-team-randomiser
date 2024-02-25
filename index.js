@@ -2,6 +2,7 @@ const express = require('express')
 const path = require('path')
 const PORT = process.env.PORT || 5000
 const https = require('https')
+const compression = require('compression');
 const ical = require('node-ical');
 const request = require('request');
 const session = require('express-session');
@@ -57,6 +58,7 @@ const EMAIL_TYPE_ADMIN_ONLY = 1;
 const EMAIL_TYPE_TEAMS_ADMIN = 2;
 
 const app = express();
+app.use(compression());
 app.use(session({
   resave: false,
   saveUninitialized: true,
