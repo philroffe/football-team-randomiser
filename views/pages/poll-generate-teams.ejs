@@ -266,7 +266,8 @@
     }
 
     // change the algorithm for all players and regenerate teams
-    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex);
+    var algorithmRange = 12;
+    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
 
     // get the generated variables returned as playersGamesPlayedRatio
     var totalPossibleGames = playersGamesPlayedRatio.totalPossibleGames;
