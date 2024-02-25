@@ -13,28 +13,6 @@
       <br>
       <div id="teamTitle"><H3>Teams not yet generated - please try later</H3></div>
 
-      <div id="chooseOptionAlgorithm" style="display:inline;margin-left:30px;">
-        Compare by ratio:
-        <select name="algorithmChoice" id="algorithmChoice" checked onchange="changeAlgorithm(this.value)">
-          <option value="algorithm3">Avg Score Per Game</option>
-          <option value="algorithm2">Win+Draw Ratio</option>
-          <option value="algorithm1">Win Ratio</option>
-          <option value="algorithm4">Total Score Per Game</option>
-          <option value="algorithm5">Most Played</option>
-        </select>
-      </div>
-
-      <div id="chooseOptionAlgorithm" style="display:inline;margin-left:30px;">
-        # of months:
-        <select name="algorithmChoice" id="algorithmChoice" checked onchange="changeAlgorithmRange(this.value)">
-          <option value="12">12 Months</option>
-          <option value="6">6 Months</option>
-          <option value="3">3 Months</option>
-          <option value="1">1 Months</option>
-          <option value="999999999">All-Time (Since Jan 2023)</option>
-        </select>
-      </div>
-
       <div id="description"></div>
         <div class="panelcontentouter">
         <div class="panelcontentinnerleft" style="width: 32%">
@@ -54,15 +32,37 @@
         </div>
         <div style="clear:both;"></div>
       </div>
-
-      <div style="clear:both;"></div>Add Player:
-      <div class="autocomplete"><input type="text" id="newPlayerInput"></input></div>
-      <button id="submitAddPlayer" style="background-color: #90EE90;" type="button" onclick="saveAddPlayer();">Add</button>
-      <div style="clear:both;"></div>
       <button id="submit" style="background-color: #90EE90;float:left;" type="button" onclick="savePreviewTeams();">Save</button>
       <div id="response"></div>
-
       <br><p>
+
+      <div id="toggleAlgorithm" class="expandable" onclick="toggleVisbility(this);">Change Algorithm<br></div>
+      <div id="chooseOptionAlgorithm" style="display:inline;">
+        <select name="algorithmChoice" id="algorithmChoice" checked onchange="changeAlgorithm(this.value)" hidden>
+          <option value="algorithm3">Avg Score Per Game</option>
+          <option value="algorithm2">Win+Draw Ratio</option>
+          <option value="algorithm1">Win Ratio</option>
+          <option value="algorithm4">Total Score Per Game</option>
+          <option value="algorithm5">Most Played</option>
+        </select>
+      </div>
+      <div id="chooseOptionAlgorithm" style="display:inline;">
+        <select name="algorithmChoiceRange" id="algorithmChoiceRange" checked onchange="changeAlgorithmRange(this.value)" hidden>
+          <option value="12">12 Months</option>
+          <option value="6">6 Months</option>
+          <option value="3">3 Months</option>
+          <option value="999999999">Since Jan23</option>
+        </select>
+      </div>
+      <div style="clear:both;"></div>
+
+      <div id="toggleAddPlayer" class="expandable" onclick="toggleVisbility(this);">Add another player</div>
+      <div class="autocomplete">
+        <input type="text" id="newPlayerInput" placeholder="Full name" hidden></input>
+        <button id="submitAddPlayer" style="background-color: #90EE90;" type="button" onclick="saveAddPlayer();" hidden>Add</button>
+      </div>
+      <div style="clear:both;"></div>
+
       <div class="panelcontentouter">
         <div class="panelcontentinnerleft" style="width: 20%">
           <div id="teamListRatiosDiv"><textarea id="teamListRatios" style="overflow:hidden; background-color: transparent; border:0; padding-right: 10px; text-align: right; color: #666; width: 100%;" readonly></textarea></div>
@@ -144,7 +144,7 @@
         if (gameWeek) {
           document.getElementById("teamTitle").innerHTML = "<H3>Preview Teams for " + gameWeek + "</H3>";
         }
-        document.getElementById("description").innerHTML = "Change teams as required and click update";
+        document.getElementById("description").innerHTML = "Change teams and click Save...";
         //document.getElementById("forceStandbyDescription").innerHTML = "In case teams change, force these players onto standby.<br>Last updated:" + pagedata.playersPreviewData["lastUpdated"];
 
         updateHtmlSelect();
@@ -152,6 +152,32 @@
 
         // add autocomplete to the newPlayerInput
         autocomplete(document.getElementById("newPlayerInput"), playerNameSuggestions);
+      }
+
+      function toggleVisbility(e) {
+        //console.log("Clicked...", e);
+        var elementIds = [];
+        if (e.id == "toggleAddPlayer") {
+          elementIds = ["newPlayerInput", "submitAddPlayer"];
+        } else if (e.id == "toggleAlgorithm") {
+          elementIds = ["algorithmChoice", "algorithmChoiceRange"];
+        } else {
+          // unknown element so return
+          return;
+        }
+
+        // now perform the toggle
+        if (e.className == "expandable") {
+          for(i = 0; i < elementIds.length; i++) {
+            document.getElementById(elementIds[i]).hidden = false;
+          }
+          e.className = "contractable";
+        } else {
+          for(i = 0; i < elementIds.length; i++) {
+            document.getElementById(elementIds[i]).hidden = true;
+          }
+          e.className = "expandable";
+        }
       }
 
       function updateHtmlSelect() {
@@ -249,6 +275,7 @@
         pagedata.playersPreviewData["standbyPlayers"].push(playerName);
         updateHtmlSelect();
         updatePlayerChoice();
+        toggleVisbility(document.getElementById("toggleAddPlayer"));
       }
 
       // change the default behaviour on desktop to not need ctrl for multi-select
