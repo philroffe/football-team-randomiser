@@ -11,6 +11,7 @@ const mimelib = require("mimelib");
 const { convert } = require('html-to-text');
 const simpleParser = require('mailparser').simpleParser;
 const messageHelper = require("./messageHelper");
+const teamUtils = require("./views/pages/generate-teams-utils.js");
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -155,7 +156,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     await docRef.set(savedata, { merge: true });
 
     // now request payment for all game attendance
-    var mondaysDates = mondaysInMonth(Number(gameMonth), Number(gameYear));  //=> [ 7,14,21,28 ]
+    var mondaysDates = teamUtils.mondaysInMonth(Number(gameMonth), Number(gameYear));  //=> [ 7,14,21,28 ]
     for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
       console.log("week", weekNumber)
       var playerList = attendanceData[weekNumber];
@@ -1090,7 +1091,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     var playerAliasMaps = await getDefinedPlayerAliasMaps();
     var emailTo = Object.values(playerAliasMaps.activeEmailList);
     // now generate the email text and send it
-    var emailDetails = generateTeamsEmailText(playersPreviewData, nextMonday);
+    var emailDetails = teamUtils.generateTeamsEmailText(playersPreviewData, nextMonday);
     var mailOptions = {
       from: GOOGLE_MAIL_FROM_NAME,
       to: emailTo,
@@ -1167,9 +1168,6 @@ app.use(express.static(path.join(__dirname, 'public')))
   }
 })
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
-
-// TODO find a better way to import the library as a module rather than as a file
-eval(fs.readFileSync('./views/pages/generate-teams-utils.js')+'');
 
 function getDateNextMonday(fromDate = new Date()) {
   // Get the date next Monday
@@ -1467,51 +1465,6 @@ async function getDefinedPlayerAliasMaps() {
   return playerAliasMaps;
 }
 
-function mondaysInMonth(m,y) {
-  var lastDateOfMonth = new Date(y,m,0).getDate();
-  var firstDayNumberOfMonth =  new Date(m +'/01/'+ y).getDay(); // 0=Sun, 1=Mon...
-
-  // check what day the 1st of the month is, and then calc the date of the next Monday
-  var mondayDate;
-  if (firstDayNumberOfMonth == 1) {
-    // already a Monday (1st of the month)
-    mondayDate = 1;
-  } else if (firstDayNumberOfMonth == 0) {
-    // it's a Sunday, so Monday is 1 day away (2nd of the month)
-    mondayDate = 2;
-  } else {
-    // must be Tues-Sat so subtract from 9 (because max 7 days from )
-    var mondayDate = 7 - (firstDayNumberOfMonth - 2);
-  }
-
-  // now loop through every 7 days and form an array of Monday dates
-  var mondays = [];
-  for (var i = mondayDate; i <= lastDateOfMonth; i += 7) {
-    mondays.push(i);
-  }
-
-  //console.log("First Monday of month:", new Date(m +'/0' + mondays[0] + '/'+ y));
-  //console.log("Mondays in the month:", mondays);
-  return mondays;
-}
-
-
-// get the official name from a map of aliases (using case insensitive search)
-function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {
-  nameToCheck = nameToCheck.trim();
-  var officialName = undefined;
-  var fullAliasList = Object.keys(aliasToPlayerMap);
-  for (var i = 0; i < fullAliasList.length; i++) { 
-    if (nameToCheck.toUpperCase() == fullAliasList[i].toUpperCase()) {
-      officialName = aliasToPlayerMap[nameToCheck.toUpperCase()]
-    }
-  }
-  /*if (!officialName) {
-    console.log("WARNING: Failed to find official name for:", nameToCheck);
-  }*/
-  return officialName;
-}
-
 // clear the stats and database cache - need recalculating next time it reloads
 function invalidateDataCaches() {
   attendanceMapByYearCache = {};
@@ -1522,7 +1475,7 @@ function invalidateDataCaches() {
 // From: availabilityMap = {"0":true, "1":false, "2":true, "3":true };
 // To: '2023-10-08: YES\n2023-10-16: NO...'
 function convertAvailibilityToDates(gameMonth, gameYear, availabilityMap) {
-  var mondaysDates = mondaysInMonth(Number(gameMonth), Number(gameYear));  //=> [ 7,14,21,28 ]
+  var mondaysDates = teamUtils.mondaysInMonth(Number(gameMonth), Number(gameYear));  //=> [ 7,14,21,28 ]
 
   var returnString = "";
   Object.keys(availabilityMap).forEach(function(weekNumber) {
@@ -1613,7 +1566,7 @@ async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, sc
    var gamesCollectionId = "games_" + gameMonth + "-01";
 
    // find the index for the week
-   var mondaysDates = mondaysInMonth(gameDate.getMonth()+1, gameDate.getFullYear());  //=> [ 7,14,21,28 ]
+   var mondaysDates = teamUtils.mondaysInMonth(gameDate.getMonth()+1, gameDate.getFullYear());  //=> [ 7,14,21,28 ]
    var weekNumber = -1;
    for (var i = 0; i < mondaysDates.length; i ++) {
      if (mondaysDates[i] == gameDate.getDate()) {
@@ -1637,14 +1590,14 @@ async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, sc
    for(var i = 0; i < redTeamPlayers.length; i++) {
      var playerName = redTeamPlayers[i].replace(/\d+/g, '').replace(/\*/g, '').trim();
      // check if there is an official name
-     var officialPlayerName = getOfficialNameFromAlias(playerName, aliasToPlayerMap);
+     var officialPlayerName = teamUtils.getOfficialNameFromAlias(playerName, aliasToPlayerMap);
      playerName = (officialPlayerName) ? officialPlayerName : playerName;
      allPlayers[playerName] = 1;
    }
    for(var i = 0; i < blueTeamPlayers.length; i++) {
      var playerName = blueTeamPlayers[i].replace(/\d+/g, '').replace(/\*/g, '').trim();
      // check if there is an official name
-     var officialPlayerName = getOfficialNameFromAlias(playerName, aliasToPlayerMap);
+     var officialPlayerName = teamUtils.getOfficialNameFromAlias(playerName, aliasToPlayerMap);
      playerName = (officialPlayerName) ? officialPlayerName : playerName;
      allPlayers[playerName] = 2;
    }
@@ -1708,7 +1661,7 @@ function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
       break;
     } else if (cleanName) {
       //console.log("Adding player to team", j, cleanName);
-      var officialPlayerName = getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
+      var officialPlayerName = teamUtils.getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
       if (officialPlayerName) {
         nameArray.push(officialPlayerName);
         blankLines = 0;
@@ -1735,7 +1688,7 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
   var playerAliasMaps = {};
   playerAliasMaps = await getDefinedPlayerAliasMaps();
   var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
-  var officialPlayerName = getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
+  var officialPlayerName = teamUtils.getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
 
   try {
     // read list of outstanding payments for the player
@@ -1982,8 +1935,8 @@ async function calculateNextGameTeams() {
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
 
     //
-    var mondaysDates = mondaysInMonth(nextMonday.getMonth()+1, nextMonday.getFullYear());  //=> [ 7,14,21,28 ]
-    var nextMondayOptionIndex = getNextMondayIndex(mondaysDates, nextMonday);
+    var mondaysDates = teamUtils.mondaysInMonth(nextMonday.getMonth()+1, nextMonday.getFullYear());  //=> [ 7,14,21,28 ]
+    var nextMondayOptionIndex = teamUtils.getNextMondayIndex(mondaysDates, nextMonday);
     console.log("mondaysDates:", mondaysDates, nextMondayOptionIndex);
 
     // read the teams from the playersPreviewData
@@ -1992,7 +1945,8 @@ async function calculateNextGameTeams() {
     // change the algorithm for all players and regenerate teams
     var algorithmRange = 12;
     var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio();
-    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
+    var playersGamesPlayedRatio = teamUtils.changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, 
+      allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
     return playersGamesPlayedRatio;
 }
 
@@ -2044,7 +1998,7 @@ async function getGameWeekPreviewTeams() {
 
 function getGameWeekMonthIndex(gameDate) {
    // find the index for the week
-   var mondaysDates = mondaysInMonth(gameDate.getMonth()+1, gameDate.getFullYear());  //=> [ 7,14,21,28 ]
+   var mondaysDates = teamUtils.mondaysInMonth(gameDate.getMonth()+1, gameDate.getFullYear());  //=> [ 7,14,21,28 ]
    var weekNumber = -1;
    for (var i = 0; i < mondaysDates.length; i ++) {
      if (mondaysDates[i] == gameDate.getDate()) {

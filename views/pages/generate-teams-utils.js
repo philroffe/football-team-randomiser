@@ -559,4 +559,14 @@ function mondaysInMonth(m,y) {
   return mondays;
 }
 
-//module.exports = { getNextMondayIndex, datesAreOnSameDay, changeAlgorithmForPlayers, generateStandbyPlayers, generateRedBlueTeams, shuffle, generateTeamsEmailText};
+// workaround check as this file is included serverside as a module
+if (typeof module != "undefined") {
+  module.exports = {
+    getNextMondayIndex,
+    changeAlgorithmForPlayers,
+    generateTeamsEmailText,
+    getOfficialNameFromAlias,
+    mondaysInMonth
+  };
+}
+
