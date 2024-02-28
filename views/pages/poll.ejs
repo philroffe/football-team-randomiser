@@ -201,7 +201,15 @@
     var playerAliasMaps = pagedata.data.playerAliasMaps;
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
-    var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap));
+    // create list of active players (used in the autocomplete dropdown)
+    var playerNameSuggestions = [];
+    var fullAliasList = Object.keys(playerToAliasMap);
+    for (var i = 0; i < fullAliasList.length; i++) { 
+      var playerName = fullAliasList[i];
+      if (playerToAliasMap[playerName].subscriptionStatus > 0) {
+        playerNameSuggestions.push(playerName);
+      }
+    }
     /*
     console.log("playerAliasMaps", playerAliasMaps);
     console.log("playerToAliasMap", playerToAliasMap);
