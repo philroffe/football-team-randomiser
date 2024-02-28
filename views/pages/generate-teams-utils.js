@@ -2,15 +2,14 @@
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
     var monthDateLongFormat = new Intl.DateTimeFormat('en', { month: 'long' });
     var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
-    var todayDate = new Date();
+    var nextMondayDate = new Date(nextMondayDate);
 
     // loop throught the options and find the index for next Monday
     var nextMondayOptionIndex = -1
     //optionDates = "Dates"
     Object.keys(options).forEach(function(key) {
       //optionDate = new Date(options[key].date);
-      // Generate a 
-      optionDate = new Date(options[key] + " " + monthDateFormat.format(todayDate) + " " + todayDate.getFullYear());
+      optionDate = new Date(options[key] + " " + monthDateFormat.format(nextMondayDate) + " " + nextMondayDate.getFullYear());
       //optionDateText = dayDateFormat.format(optionDate) + " " + monthDateFormat.format(optionDate);
 
       if (datesAreOnSameDay(optionDate, nextMondayDate)) {
@@ -36,11 +35,19 @@
       first.getDate() === second.getDate();
   }
 
+  /**
+  * algorithmType - "algorithm[0-5]" - name of the algorithm to sort players by 
+  * players - a map of players availability for selection this month
+  * playersPreviewData - a map of previously generated redTeam, blueTeam, standby lists (if previously generated)
+  * allAttendanceData - A full collection of historical attendance data (to be filtered by noOfPreviousMonths before use by algorith calculation)
+  * aliasToPlayerMap - A map of player name aliases to get the official name
+  * nextMondayOptionIndex - the index of next Monday's game - used in the players map to get availability
+  * noOfPreviousMonths - the number of months of historical attendance data to use to generate the algorithm score
+  */
   function changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex
     , noOfPreviousMonths) {
     var playersGamesPlayedRatio = {};
 
-    
     /////////////////////
     /////////////////////
     /////////////////////
@@ -65,7 +72,7 @@
     /////////////////////
 
     // create list of all players from allAttendanceData
-    var allPlayers = [];
+    var allPastPlayers = [];
     Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
       var weekAttendanceData = allAttendanceData[gamesCollectionId];
       Object.keys(weekAttendanceData).forEach(function(weekNumber) {
@@ -74,15 +81,16 @@
           Object.keys(playerList).forEach(function(playerName) {
             if (playerName != "scores") {
               //console.log("FOUND:", playerName, weekNumber, gamesCollectionId);
-              if (!allPlayers.includes(playerName)) {
-                allPlayers.push(playerName);
+              if (!allPastPlayers.includes(playerName)) {
+                allPastPlayers.push(playerName);
               }
             }
           });
         }
       });
     });
-    //playersGamesPlayedRatio.allPlayers = allPlayers;
+    //playersGamesPlayedRatio.allPastPlayers = allPastPlayers;
+    //console.log("allPastPlayers:", allPastPlayers);
 
 
     // create list of all players who have ticked this option this week
@@ -94,8 +102,8 @@
       if (!officialName) {
         // new player so use unofficial name and add to player list if needed
         officialName = playerName;
-        if (!allPlayers.includes(officialName)) {
-          allPlayers.push(officialName);
+        if (!allPastPlayers.includes(officialName)) {
+          allPastPlayers.push(officialName);
         }
       }
       //console.log("ALIAS", playerName, officialName);
@@ -106,6 +114,7 @@
         thisWeekPlayers.push(officialName);
       }
     });
+    //console.log("thisWeekPlayers", thisWeekPlayers);
 
     // get total number of games possible
     var totalPossibleGames = 0;
@@ -118,8 +127,16 @@
     });
     //console.log("Total games...", totalPossibleGames);
 
-    // now calculate the ratio for algorithms
-    Object.values(allPlayers).forEach(function(currentPlayer) {
+    // now calculate the ratio for algorithms for all players (past players + any additions this week)
+    var allPlayersCombined = [...allPastPlayers];
+    for (var i = 0; i < thisWeekPlayers.length; i++) {
+      const index = allPastPlayers.indexOf(thisWeekPlayers[i]);
+      if (index == -1) {
+        allPlayersCombined.push(thisWeekPlayers[i]);
+      }
+    }
+    //console.log("allPlayersCombined", allPlayersCombined);
+    Object.values(allPlayersCombined).forEach(function(currentPlayer) {
       //console.log("XXX", currentPlayer)
       playersGamesPlayedRatio[currentPlayer] = {'algorithm4':0, 'won':0, 'lost':0, 'drawn':0, 'didnotplay':0, 'thisWeekPlayer': false};
       
