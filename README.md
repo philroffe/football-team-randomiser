@@ -38,6 +38,10 @@ gcloud app deploy .app-prod.yaml
 # if you want a weekly scheduled task then deploy the cron too...
 gcloud app deploy cron.yaml
 ```
+```
+# you can clean up old deployments using this command (deletes everything except the latest 3)
+gcloud app versions list --format="value(version.id)" --sort-by="~version.createTime" | tail -n +4 | xargs -r gcloud app versions delete
+```
 
 ## Setting up Google Cloud App Engine and Firebase
 
