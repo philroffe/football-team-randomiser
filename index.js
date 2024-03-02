@@ -782,7 +782,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": ip };
 
     var eventDetails = convertAvailibilityToDates(gameMonth, gameYear, playerAvailability);
-    sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[Player Change Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
+    sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Player Change Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
 
     console.log('Inserting DB game data:', JSON.stringify(gamedetails_new));
     try {
@@ -796,34 +796,83 @@ app.use(express.static(path.join(__dirname, 'public')))
       delete playerSummary.playerAliasMaps; // exclude the transient alias maps in the summary
       console.log('Inserting DB summary data:', JSON.stringify(playerSummary));
       await firestore.collection(gamesCollectionId).doc("_summary").set(playerSummary);
-      // if you got here without an exception then everything was successful
-      //res.sendStatus(200);
-      //res.redirect('/poll');
 
       // check if preview of teams has already been generated
+      var nextMonday = getDateNextMonday(new Date());
       var playersPreviewData = await getGameWeekPreviewTeams();
-      if (playersPreviewData.redPlayers.length > 0) {
-        // it has so check if player was added or removed from this weeks teams
-        var nextMonday = getDateNextMonday(new Date());
+      var previewDate = new Date(playersPreviewData.gameWeek);
+      if (teamUtils.datesAreOnSameDay(previewDate, nextMonday)) {
+        // preview teams already generated - check if player was added/removed from this week
         var currentGameWeekIndex = getGameWeekMonthIndex(nextMonday);
-
+        var playerAvailableThisWeek = playerAvailability[currentGameWeekIndex];
         var teamsUpdateNeeded = false;
+
         var allCurrentPlayers = playersPreviewData.redPlayers.concat(playersPreviewData.bluePlayers, playersPreviewData.standbyPlayers);
-        if (allCurrentPlayers[playerName]) {
-          if (!playerAvailability[currentGameWeekIndex]) {
-            // player is on the current list but has been removed
+        var playerInPreviewList = allCurrentPlayers.indexOf(playerName);
+        if (playerInPreviewList == -1) {
+          // player not in list
+          if (playerAvailableThisWeek) {
+            // player is available so add them
             teamsUpdateNeeded = true;
+            if (playersPreviewData.redPlayers.length > playersPreviewData.bluePlayers.length) {
+              // uneven teams so add to the blues
+              playersPreviewData.bluePlayers.push(playerName);
+            } else if (playersPreviewData.redPlayers.length < playersPreviewData.bluePlayers.length) {
+              // uneven teams so add to the reds
+              playersPreviewData.redPlayers.push(playerName);
+            } else {
+              // even teams so check if space
+              if (playersPreviewData.standbyPlayers.length == 0) {
+                // even teams so add to standby
+                playersPreviewData.standbyPlayers.push(playerName);
+              } else {
+                if (playersPreviewData.redPlayers.length < 6) {
+                  // add existing standby to reds, and new player to blues
+                  playersPreviewData.redPlayers.push(playersPreviewData.standbyPlayers.shift());
+                  playersPreviewData.bluePlayers.push(playerName);
+                } else {
+                  // add to standby
+                  playersPreviewData.standbyPlayers.push(playerName);
+                }
+              }
+            }
           }
         } else {
-          if (!playerAvailability[currentGameWeekIndex]) {
-            // player is NOT on the current list but has been added
+          // player is on the current list
+          if (!playerAvailableThisWeek) {
+            // but is no-longer available list so remove them
             teamsUpdateNeeded = true;
+            // check standby
+            var index = playersPreviewData.standbyPlayers.indexOf(playerName);
+            if (index > -1) playersPreviewData.standbyPlayers.splice(index, 1);
+            // check reds
+            var index = playersPreviewData.redPlayers.indexOf(playerName);
+            if (index > -1) {
+              playersPreviewData.redPlayers.splice(index, 1);
+              if (playersPreviewData.standbyPlayers.length > 0) {
+                // auto replace with standby member
+                playersPreviewData.redPlayers.push(playersPreviewData.standbyPlayers.shift());
+              }
+            }
+            // check blues
+            var index = playersPreviewData.bluePlayers.indexOf(playerName);
+            if (index > -1) {
+              playersPreviewData.bluePlayers.splice(index, 1);
+              if (playersPreviewData.standbyPlayers.length > 0) {
+                // auto replace with standby member
+                playersPreviewData.bluePlayers.push(playersPreviewData.standbyPlayers.shift());
+              }
+            }
           }
         }
 
         if (teamsUpdateNeeded) {
+          // save updated teams
+          await firestore.collection("ADMIN").doc("GameWeekPreview").set(playersPreviewData);
           // send an admin email to inform that draft teams need updating
-          sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[DRAFT TEAMS UPDATE NEEDED Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
+          //sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[DRAFT TEAMS UPDATE NEEDED Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
+          var emailPrefix = playerName + " - Playing?: " + playerAvailableThisWeek;
+          sendTeamsPreviewEmail(playersPreviewData, emailPrefix);
         }
       }
 
@@ -995,19 +1044,26 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.sendStatus(400);
   }
 })
+.get('/schedule/delete-draft-list-for-admins', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  console.log("Deleting weekly teams GET", ip, req.get('X-Appengine-Cron'));
+  if ((req.get('X-Appengine-Cron') === 'true') 
+    && (ip.startsWith('0.1.0.2') || ip.endsWith('127.0.0.1'))) {
+    // delete any previous gameweekpreview
+    await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
+    console.log("DELETED", await firestore.collection("ADMIN").doc("GameWeekPreview").get())
+    res.json({'result': 'DELETED'});
+    return;
+  } else {
+    console.log("ERROR: Denied - internal endpoint only");
+    res.status(403).end();
+  }
+})
 .get('/schedule/generate-draft-list-for-admins', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log("Scheduling weekly teams GET", ip, req.get('X-Appengine-Cron'));
-  //could also restrict by IP (ip == '0.1.0.2' || ip.endsWith('127.0.0.1'))
   if ((req.get('X-Appengine-Cron') === 'true') 
     && (ip.startsWith('0.1.0.2') || ip.endsWith('127.0.0.1'))) {
-
-    // delete any previous gameweekpreview
-    //await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
-    //console.log("DELETED", await firestore.collection("ADMIN").doc("GameWeekPreview").get())
-    //res.json({'result': 'DELETED'});
-    //return;
-
     // allow cron to be disabled by setting app preferences
     var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
     var preferences = preferencesDoc.data();
@@ -1032,27 +1088,8 @@ app.use(express.static(path.join(__dirname, 'public')))
     await firestore.collection("ADMIN").doc("GameWeekPreview").set(playersPreviewData);
 
     // now generate the email text and send it
-    var emailSubject = "STANDBY ADMIN " + dateString + " [ADMIN Footie, Goodwin, 6pm Mondays]\n"
-    var emailBody = dateString + "\n";
-    emailBody += "Check teams and edit list here:\n"
-    emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/admin-team-preview\n"
-    emailBody += "\nREDS";
-    for (var i = 0; i < playersPreviewData.redPlayers.length; i ++) {
-      emailBody += "\n" + playersPreviewData.redPlayers[i];
-    }
-    emailBody += "\n\nBLUES";
-    for (var i = 0; i < playersPreviewData.bluePlayers.length; i ++) {
-      emailBody += "\n" + playersPreviewData.bluePlayers[i];
-    }
-    emailBody += "\n\nSTANDBY";
-    for (var i = 0; i < playersPreviewData.standbyPlayers.length; i ++) {
-      emailBody += "\n" + playersPreviewData.standbyPlayers[i];
-    }
-    sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, emailSubject, emailBody);
-    if (ENABLE_WHATSAPP) {
-      messageHelper.sendWhatsappEvent(EMAIL_TYPE_TEAMS_ADMIN, emailSubject, playersPreviewData);
-    }
-
+    var emailPrefix = "Auto generated teams."
+    sendTeamsPreviewEmail(playersPreviewData, emailPrefix);
     res.json({'result': 'OK'});
   } else {
     console.log("ERROR: Denied - internal endpoint only");
@@ -1062,7 +1099,6 @@ app.use(express.static(path.join(__dirname, 'public')))
 .get('/schedule/send-weekly-teams', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log("Scheduling weekly teams GET", ip, req.get('X-Appengine-Cron'));
-  //could also restrict by IP (ip == '0.1.0.2' || ip.endsWith('127.0.0.1'))
   if ((req.get('X-Appengine-Cron') === 'true') 
     && (ip.startsWith('0.1.0.2') || ip.endsWith('127.0.0.1'))) {
 
@@ -1077,19 +1113,13 @@ app.use(express.static(path.join(__dirname, 'public')))
     }
 
     // read the teams from the playersPreviewData
-
     var playersPreviewData = await getGameWeekPreviewTeams();
-    if (playersPreviewData.redPlayers.length > 0) {
-      //need to validate the player list incase anything has changed
-      //TODO
-    } else {
-      console.error("ERROR - No ADMIN-GameWeekPreview data found (should have been generated by Thursday cron)", playersPreviewData)
 
-    // finally delete the old gameweek preview - email has been sent
-    await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
-    res.json({'result': 'SKIPPED'});
-    return;
-
+    // check if preview of teams has already been generated
+    var nextMonday = getDateNextMonday(new Date());
+    var previewDate = new Date(playersPreviewData.gameWeek);
+    if (teamUtils.datesAreOnSameDay(previewDate, nextMonday)) {
+      console.error("ERROR - No ADMIN-GameWeekPreview data found (should have been generated by Thursday cron)", playersPreviewData);
       var playersGamesPlayedRatio = await calculateNextGameTeams();
       playersPreviewData = playersGamesPlayedRatio.generatedTeams;
     }
@@ -2011,6 +2041,8 @@ async function getGameWeekPreviewTeams() {
   return playersPreviewData;
 }
 
+// get the array index that matches the game-week for a given date
+// can be used in mondaysInMonth[index] or playerAvailability[index]
 function getGameWeekMonthIndex(gameDate) {
    // find the index for the week
    var mondaysDates = teamUtils.mondaysInMonth(gameDate.getMonth()+1, gameDate.getFullYear());  //=> [ 7,14,21,28 ]
@@ -2022,4 +2054,29 @@ function getGameWeekMonthIndex(gameDate) {
        break;
      }
    }
+   return weekNumber;
+}
+
+// generate email text and send it
+function sendTeamsPreviewEmail(playersPreviewData, emailPrefix) {
+  var emailSubject = "STANDBY ADMIN " + playersPreviewData.gameWeek + " [ADMIN Footie, Goodwin, 6pm Mondays]\n"
+  var emailBody = emailPrefix + "\n" + playersPreviewData.gameWeek + "\n";
+  emailBody += "Check teams and edit list here:\n"
+  emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/admin-team-preview\n"
+  emailBody += "\nREDS";
+  for (var i = 0; i < playersPreviewData.redPlayers.length; i ++) {
+    emailBody += "\n" + playersPreviewData.redPlayers[i];
+  }
+  emailBody += "\n\nBLUES";
+  for (var i = 0; i < playersPreviewData.bluePlayers.length; i ++) {
+    emailBody += "\n" + playersPreviewData.bluePlayers[i];
+  }
+  emailBody += "\n\nSTANDBY";
+  for (var i = 0; i < playersPreviewData.standbyPlayers.length; i ++) {
+    emailBody += "\n" + playersPreviewData.standbyPlayers[i];
+  }
+  sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, emailSubject, emailBody);
+  if (ENABLE_WHATSAPP) {
+    messageHelper.sendWhatsappEvent(EMAIL_TYPE_TEAMS_ADMIN, emailSubject, playersPreviewData);
+  }
 }

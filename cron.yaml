@@ -15,3 +15,11 @@ cron:
     job_retry_limit: 5
     min_backoff_seconds: 2.5
     max_doublings: 5
+- description: "monday evening admin cleanup from last game"
+  url: /schedule/delete-draft-list-for-admins
+  schedule: every monday 19:00
+  timezone: Europe/London
+  retry_parameters:
+    job_retry_limit: 5
+    min_backoff_seconds: 2.5
+    max_doublings: 5

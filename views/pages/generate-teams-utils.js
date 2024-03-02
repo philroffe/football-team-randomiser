@@ -583,7 +583,8 @@ if (typeof module != "undefined") {
     changeAlgorithmForPlayers,
     generateTeamsEmailText,
     getOfficialNameFromAlias,
-    mondaysInMonth
+    mondaysInMonth,
+    datesAreOnSameDay
   };
 }
 
