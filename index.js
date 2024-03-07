@@ -421,8 +421,14 @@ app.use(express.static(path.join(__dirname, 'public')))
       // done so convert from quoted-printable mime type
       body = mimelib.decodeQuotedPrintable(streamData);
       // store the data for future processing
-      var emailDetails = { "parsed_status": "NEW", "data": body}
-      const docRef = firestore.collection("INBOUND_EMAILS").doc("PAYMENT_ERROR_EMAIL_" + new Date().toISOString());
+      var docNamePrefix = "PAYMENT_ERROR_EMAIL";
+      if (body.includes("noreply@sheffield.ac.uk")) {
+        docNamePrefix = "PAYMENT_PITCH_EMAIL";
+      } else if (body.includes("service@paypal.co.uk")) {
+        docNamePrefix = "PAYMENT_PAYPAL_EMAIL";
+      }
+      var emailDetails = { "parsed_status": "NEW", "type": docNamePrefix, "data": body}
+      const docRef = firestore.collection("INBOUND_EMAILS").doc(docNamePrefix + "_" + new Date().toISOString());
       docRef.set(emailDetails);
     });
     res.json({'result': 'OK'});

@@ -530,6 +530,62 @@ function parsePaypalEmail(bodyText) {
   return parsedData;
 }
 
+//parse inbound paypal email and extract the relevant data
+function parsePitchEmail(bodyText) {
+  //console.log("bodyText email:", bodyText);
+  // now loop through and extract the relevant text
+  var payeeName;
+  var transactionId;
+  var transactionDate;
+  var receiptNo;
+  var orders = {};
+  // replace any tabs with newlines and loop through each line
+  bodyTextArray = bodyText.replace(/\t/g,'\n').split('\n');
+  for (i=0; i<bodyTextArray.length; i++) {
+    var thisString = bodyTextArray[i].trim();
+    if (thisString) {
+      //console.log("Line:", thisString)
+      payeeName = "Admin";
+      if (thisString.match(/Payment Date: /)) {
+        transactionDate = thisString.replace(/Payment Date: /g, '');
+      } else if (thisString.match(/Your Order Number is /)) {
+        transactionId = thisString.replace(/Your Order Number is /g, '');
+      } else if (thisString.match(/The University receipt number for this transaction is /)) {
+        receiptNo = thisString.replace(/The University receipt number for this transaction is /g, '');
+      } else if (thisString.match("John Hawley Bb")) {
+        var orderDate = thisString.replace(/John Hawley Bb \(/g, '').replace(/\)/g, '');
+        var orderAmount = bodyTextArray[i+1].trim().replace(/Amount NET: /g, '').replace(/\(.*/g, '');
+        orders[orderDate] = Number(orderAmount.replace(/Amount NET: /g, ''));
+        bodyTextArray[i+1].trim();
+        transactionDate = new Date(bodyTextArray[i+1].trim());
+      }
+    }
+  }
+  var parsedDataMap = [];
+  var allPayeeNames = "";
+  var allAmounts = "";
+  var allGameDates = "";
+  var allTransationIds = "";
+  var allTransationDates = "";
+  for (const orderDate in orders) {
+    var parsedData = { "payeeName": payeeName, "amount": orders[orderDate], "gameDate": orderDate,
+    "transactionId": transactionId, "transactionDate": orderDate};
+    parsedDataMap.push(parsedData);
+
+    allPayeeNames += "," + payeeName;
+    allAmounts += "," + orders[orderDate];
+    allGameDates += "," + orderDate;
+    allTransationIds += "," + transactionId;
+    allTransationDates += "," + orderDate;
+
+  }
+  var parsedData = { "payeeName": payeeName, "amount": orders[orderDate], "gameDate": orderDate,
+    "transactionId": transactionId, "transactionDate": orderDate};
+
+  console.log("Parsed paypal email:", parsedDataMap);
+  return parsedData;
+}
+
 
 // get the official name from a map of aliases (using case insensitive search)
 function getOfficialNameFromAlias(nameToCheck, aliasToPlayerMap) {

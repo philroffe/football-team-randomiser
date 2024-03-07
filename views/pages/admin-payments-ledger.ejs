@@ -46,9 +46,9 @@
     <div style="width:100%;display:flex;">
       <div id="formEntryDiv1" style="display:inline;width:30%">
         <!-- Radio buttons -->
-        <input id="paymentChoice" type="radio" name="transactionType" value="payment" onclick="changeHelpText();" checked/>
+        <input id="paymentChoice" type="radio" name="transactionType" value="payment" checked/>
         <label for="paymentChoice">Payment</label>
-        <input id="chargeChoice" type="radio" name="transactionType" value="charge" onclick="changeHelpText();" />
+        <input id="chargeChoice" type="radio" name="transactionType" value="charge"/>
         <label for="chargeChoice">Charge</label>
         <!-- Fields -->
         <br><input type="text" id="payeeName" placeholder="Payees Name" data-lpignore=true>
@@ -88,7 +88,10 @@
   * Display summary of transactions of all users (inc money in/money out)
   * Ability to cross-charge from one player to another (so someone can pay for someone else)
   */
-    var EMAIL_DOC_PREFIX = "PAYMENT_ERROR_EMAIL_";
+    var EMAIL_DOC_PREFIX = "PAYMENT_";
+    //var EMAIL_DOC_PREFIX = "PAYMENT_PITCH_EMAIL_";
+    //var EMAIL_DOC_PREFIX = "PAYMENT_PAYPAL_EMAIL_";
+    //var EMAIL_DOC_PREFIX = "PAYMENT_ERROR_EMAIL_";
 
     // restringify and then parse the json to get the page
     let pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
@@ -133,26 +136,30 @@
         option.value = key.replace(EMAIL_DOC_PREFIX, "");
         x.add(option);
 
-        // identify NEW emails - parse the email and check if the payment is already added
-        updateEmailText(option.text);
-        var parsedData = parsePaypalEmail(document.getElementById('htmlEmail').innerText);
-        if (parsedData.payeeName) {
-          var dateTime = key.replace(EMAIL_DOC_PREFIX, "").replace(/T(\d\d:\d\d).*/, " $1");
-          option.text = dateTime + " " + parsedData.payeeName.padEnd(20) + " £" + parsedData.amount;
+        if (inboundEmails[key].type == "PAYMENT_PITCH_EMAIL") {
 
-          var officialPlayerName = getOfficialNameFromAlias(parsedData.payeeName, aliasToPlayerMap);
-          var playerName = (officialPlayerName) ? officialPlayerName : parsedData.payeeName;
-          var paymentAlreadyRegistered = false;
-          for (const paymentId in closedLedgers[playerName]) {
-            if (paymentId.startsWith("payment_") && paymentId.includes(parsedData.transactionId)) {
-              paymentAlreadyRegistered = true;
+        } else { //if (inboundEmails[key].type == "PAYMENT_PAYPAL_EMAIL") {
+          // identify NEW emails - parse the email and check if the payment is already added
+          updateEmailText(option.text);
+          var parsedData = parsePaypalEmail(document.getElementById('htmlEmail').innerText);
+          if (parsedData.payeeName) {
+            var dateTime = key.replace(EMAIL_DOC_PREFIX, "").replace(/T(\d\d:\d\d).*/, " $1");
+            option.text = dateTime + " " + parsedData.payeeName.padEnd(20) + " £" + parsedData.amount;
+
+            var officialPlayerName = getOfficialNameFromAlias(parsedData.payeeName, aliasToPlayerMap);
+            var playerName = (officialPlayerName) ? officialPlayerName : parsedData.payeeName;
+            var paymentAlreadyRegistered = false;
+            for (const paymentId in closedLedgers[playerName]) {
+              if (paymentId.startsWith("payment_") && paymentId.includes(parsedData.transactionId)) {
+                paymentAlreadyRegistered = true;
+              }
+            }
+            if (!paymentAlreadyRegistered) {
+              option.text += " (NEW)";
             }
           }
-          if (!paymentAlreadyRegistered) {
-            option.text += " (NEW)";
-          }
+          //console.log(playerName, parsedData, paymentAlreadyRegistered);
         }
-        //console.log(playerName, parsedData, paymentAlreadyRegistered);
       }
     });
     // clear the htmlEmail element
@@ -346,16 +353,21 @@
       var emailBody = inboundEmails[EMAIL_DOC_PREFIX + text].data;
       document.getElementById("emailBody").value = emailBody;
 
-      var startOfHTML = emailBody.indexOf("<html");
-      var firstTable = emailBody.indexOf("<table cell", startOfHTML + 1);
-      var secondTable = emailBody.indexOf("<table cell", firstTable + 1);
-      var thirdTable = emailBody.indexOf("<table cell", secondTable + 1);
-      var fourthTable = emailBody.indexOf("<table cell", thirdTable + 1);
-      var interestingData = emailBody.substring(thirdTable);
-
-      //console.log(startOfHTML, firstTable, secondTable, thirdTable)
-
-      var htmlCode = emailBody.substring(emailBody.indexOf("<table"), emailBody.indexOf("Can't see the money"));
+      var htmlCode = "";
+      if (inboundEmails[EMAIL_DOC_PREFIX + text].type == "PAYMENT_PITCH_EMAIL") {
+        htmlCode = emailBody.substring(emailBody.indexOf("Payment Date"), emailBody.indexOf("Please make a note"));
+        var parsedData = parsePitchEmail(htmlCode)
+        console.log("Pitch parsedData", parsedData);
+      } else {
+        var startOfHTML = emailBody.indexOf("<html");
+        var firstTable = emailBody.indexOf("<table cell", startOfHTML + 1);
+        var secondTable = emailBody.indexOf("<table cell", firstTable + 1);
+        var thirdTable = emailBody.indexOf("<table cell", secondTable + 1);
+        var fourthTable = emailBody.indexOf("<table cell", thirdTable + 1);
+        var interestingData = emailBody.substring(thirdTable);
+        //console.log(startOfHTML, firstTable, secondTable, thirdTable)
+        htmlCode = emailBody.substring(emailBody.indexOf("<table"), emailBody.indexOf("Can't see the money"));
+      }
       document.getElementById('htmlEmail').innerHTML = htmlCode;
     }
 
