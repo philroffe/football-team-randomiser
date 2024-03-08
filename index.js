@@ -86,6 +86,7 @@ var transporter = nodemailer.createTransport({
     pass: GOOGLE_MAIL_APP_PASSWORD
   }
 });
+
 const SYSTEM_ADMIN_EMAIL_ADDRS = (process.env.SYSTEM_ADMIN_EMAIL_ADDRS) ? process.env.SYSTEM_ADMIN_EMAIL_ADDRS : "Phil Roffe <philroffe@gmail.com>";
 const TEAMS_ADMIN_EMAIL_ADDRS = (process.env.TEAMS_ADMIN_EMAIL_ADDRS) ? process.env.TEAMS_ADMIN_EMAIL_ADDRS : SYSTEM_ADMIN_EMAIL_ADDRS;
 const ATTENDANCE_ADMIN_EMAIL_ADDRS = (process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS) ? process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS : TEAMS_ADMIN_EMAIL_ADDRS;
@@ -1538,7 +1539,7 @@ function sendAdminEvent(type, title, details) {
   var emailTo = 'Phil R Test1 <philroffe+Test1@gmail.com>';
   switch (type) {
     case EMAIL_TYPE_ADMIN_ONLY:
-      emailTo = SYSTEM_ADMIN_EMAILS_ADDRS;
+      emailTo = SYSTEM_ADMIN_EMAIL_ADDRS;
       break;
     case EMAIL_TYPE_TEAMS_ADMIN:
       emailTo = TEAMS_ADMIN_EMAIL_ADDRS; 
