@@ -21,7 +21,6 @@
 
 <p>
 
-
 <div class="warpper">
   <input class="radio" id="one" name="group" type="radio" onclick="changeTab('one');" checked>
   <input class="radio" id="two" name="group" type="radio" onclick="changeTab('two');">
@@ -70,8 +69,8 @@
             <div id="nameHeaderattendance" class="gameheader"></div>
           </div>
           <div class="panelcontentinnerright">
-            <div id="weekHeaderattendance" class="gameheader"></div>
-            <div id="editHeaderattendance" class="gameheader"><br></div>
+            <div id="weekHeaderattendance" class="gameheader"><div style="padding: 4px"></div></div>
+            <div id="editHeaderattendance" class="gameheader"><br><br></div>
           </div>
         </div>
 
@@ -385,7 +384,7 @@ function addPlayerListToTab(tabName) {
       if (tabName == ATTENDANCE) {
         // create the edit button
         var weekEditButton = document.createElement("button");
-        weekEditButton.innerHTML = "e";
+        weekEditButton.setAttribute("toggleStatus", "edit");
         weekEditButton.style.backgroundColor = "lightgreen";
         weekEditButton.setAttribute("id", "week" + i + "Edit" + tabName);
         weekEditButton.setAttribute("class", "rotated"); 
@@ -485,7 +484,7 @@ function addPlayerListToTab(tabName) {
       playerName = player
       playerName = decodeHtml(player)
       var playerSelection = playersMapForTab[player];
-      //console.log("_____ " + playerName + " " + JSON.stringify(playerSelection));
+      //console.log("_____ " + playerName, playerSelection);
       var officialPlayerName = getOfficialNameFromAlias(player, aliasToPlayerMap);
       addPlayer(playerName, playerSelection, officialPlayerName, tabName)
     });
@@ -534,6 +533,7 @@ function addPlayerListToTab(tabName) {
 
     // add an additional text box and hook up listeners
     function addPlayer(playerName, availabilityMap, officialPlayerName, tabName = "availability") {
+      //console.log("Add Player:", playerName, availabilityMap, officialPlayerName, tabName)
       //update the player count for this tab
       var tabPlayerCount = playerCount[tabName];
       currentPlayerNumber = tabPlayerCount;
@@ -584,16 +584,30 @@ function addPlayerListToTab(tabName) {
         newPlayerName.focus();
         newPlayerName.select();
       }
-      
+
       for (var i = 0; i < mondaysDates.length; i ++) {
         //console.log("=============" + i + );
         var weekHeader = document.getElementById("week" + i + "Header" + tabName)
         var newPlayerWeek = document.createElement("input"); 
         newPlayerWeek.setAttribute("type", "checkbox"); 
-        newPlayerWeek.setAttribute("class", "checkmark"); 
+        newPlayerWeek.setAttribute("class", "checkmark img_goals"); 
         newPlayerWeek.setAttribute("id", "player" + currentPlayerNumber + "Week" + i + tabName); 
         newPlayerWeek.setAttribute("name", currentPlayerNumber + "myPlayerWeek[]"); 
         newPlayerWeek.setAttribute("teamValue", 0); 
+
+        var weekHeader = document.getElementById("week" + i + "Header" + tabName)
+        var newPlayerWeekGoals = document.createElement("div");
+        newPlayerWeekGoals.setAttribute("class", "overlay_goals overlay_0_goals"); 
+        newPlayerWeekGoals.setAttribute("id", "player" + currentPlayerNumber + "Week" + i + tabName + "Goals"); 
+
+        if (scoresMap[i] && scoresMap[i].team1scorers) {
+          //console.log("_____ " + playerName, scoresMap[i].team1scorers);
+          if (scoresMap[i].team1scorers[playerName]) {
+            newPlayerWeekGoals.innerHTML = scoresMap[i].team1scorers[playerName];
+          } else if (scoresMap[i].team2scorers[playerName]) {
+            newPlayerWeekGoals.innerHTML = scoresMap[i].team2scorers[playerName];
+          }
+        }
 
         if (tabName == "attendance") {
           // use a custom attribute as attendance can be 3 values 
@@ -641,8 +655,20 @@ function addPlayerListToTab(tabName) {
           newPlayerWeek.setAttribute("type", "hidden"); 
           newPlayerWeek.checked = false;
         }
-        weekHeader.appendChild(document.createElement("br"));
-        weekHeader.appendChild(newPlayerWeek);
+
+        if (tabName == "attendance") {
+          var goalsOverlayDiv = document.createElement("text"); 
+          goalsOverlayDiv.setAttribute("class", "image_wrapper_goals"); 
+          weekHeader.appendChild(document.createElement("br"));
+          goalsOverlayDiv.appendChild(newPlayerWeek);
+          goalsOverlayDiv.appendChild(newPlayerWeekGoals);
+          weekHeader.appendChild(goalsOverlayDiv);
+        } else {
+        //weekHeader.appendChild(document.createElement("br"));
+          weekHeader.appendChild(newPlayerWeek);
+          weekHeader.appendChild(newPlayerWeekGoals);
+       }
+
       }
 
 
@@ -712,7 +738,7 @@ function addPlayerListToTab(tabName) {
     // check which weekEdit button is active
     for (var i = 0; i < mondaysDates.length; i ++) {
       var weekEditButton = document.getElementById("week" + i + "Edit" + ATTENDANCE); 
-      if (weekEditButton.innerHTML == "s") {
+      if (weekEditButton.getAttribute("toggleStatus") == "save") {
         // button toggled as Save, so call editWeek(weekNumber) to save and toggle it back
         editWeek(i);
         return;
@@ -724,10 +750,10 @@ function addPlayerListToTab(tabName) {
     var tabName = ATTENDANCE;
     var tabPlayerCount = playerCount[tabName];
     weekEditButton = document.getElementById("week" + weekNumber + "Edit" + tabName); 
-    if (weekEditButton.innerHTML == "s") {
+    if (weekEditButton.getAttribute("toggleStatus") == "save") {
       // button toggled as Save, so save and put back to Edit move
       saveAttendance(weekNumber);
-      weekEditButton.innerHTML = "e";
+      weekEditButton.setAttribute("toggleStatus", "edit");
       // re-enable every player's player-status button
       for (var i = 0; i < tabPlayerCount; i++) {
         document.getElementById("player" + i + "Week" + weekNumber + tabName).setAttribute("class", "checkmark");
@@ -789,7 +815,7 @@ function addPlayerListToTab(tabName) {
     }
 
     // button currently as Edit, so toggle to "save" mode
-    weekEditButton.innerHTML = "s";
+    weekEditButton.setAttribute("toggleStatus", "save"); 
     document.getElementById("saveAttendanceButton").disabled = false; 
     document.getElementById("cancelAttendanceEditButton").disabled = false;
   }

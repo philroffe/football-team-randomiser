@@ -312,6 +312,53 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.json({'result': err})
   }
 })
+.post('/services/goal-scorers', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT GOAL-SCORERS POST FROM EMAIL:', ip, req.body);
+
+  try {
+    var gameDate = new Date(req.body.gameDate);
+    //scorerMap = scorers: { "Phil R": 1, "Rich M": 2 }
+    var scorerMap = req.body.scorers;
+
+    var currentGameWeekIndex = getGameWeekMonthIndex(gameDate);
+    var gameMonth = monthDateNumericFormat.format(gameDate);
+    var gameYear = gameDate.getFullYear();
+    var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
+    console.log("gamesCollectionId", gamesCollectionId)
+
+    // allow cron to be disabled by setting app preferences
+    var attendanceDoc = await firestore.collection(gamesCollectionId).doc("_attendance").get();
+    var attendanceData = attendanceDoc.data();
+    if (!attendanceData) { attendanceData = {}; }
+    //console.log("PRE attendanceData", attendanceData);
+
+    var scorerMapTeam1 = {};
+    var scorerMapTeam2 = {};
+
+    for (const player in scorerMap) {
+      var noOfGoals = scorerMap[player];
+      var teamNumber = attendanceData[currentGameWeekIndex][player];
+      if (teamNumber == 1) {
+        scorerMapTeam1[player] = noOfGoals;
+      } else {
+        scorerMapTeam2[player] = noOfGoals;
+      }
+      console.log("scorer", player, noOfGoals, teamNumber);
+    }
+    attendanceData[currentGameWeekIndex]["scores"]["team1scorers"] = scorerMapTeam1; 
+    attendanceData[currentGameWeekIndex]["scores"]["team2scorers"] = scorerMapTeam2;
+    //console.log("POST attendanceData", attendanceData);
+
+    // now save the updated data
+    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
+    await docRef.set(attendanceData, { merge: true });
+    res.json({'result': 'OK'})
+  } catch (err) {
+    console.error(err);
+    res.sendStatus(400);
+  }
+})
 .post('/services/teams', async (req, res) => {
   // DEPRECATED - endpoint for mailparser, now replaced by google appengine inbound email capability
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
@@ -450,7 +497,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     emailDocname = "TEAMS_EMAIL_2023-11-25T07:11:07.659Z";
     var emailDoc = await firestore.collection("INBOUND_EMAILS").doc(emailDocname).get();
     body = emailDoc.data().data;
-    console.log(body);
+    //console.log(body);
   } else {
     try {
       // read the data from the request
@@ -524,26 +571,26 @@ app.use(express.static(path.join(__dirname, 'public')))
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
 
     // assumes REDS first, BLUES second!
-    var cleanRedTeamPlayers = [];
-    var cleanBlueTeamPlayers = [];
+    var redGoalScorers = {};
+    var blueGoalScorers = {};
     var gameDate;
     for (i=0; i<emailLines.length; i++) {
       //console.log("Testing", i, emailLines[i]);
       var currentUpperCaseText = emailLines[i].replace(/^>+/g, '').trim().toUpperCase();
-      if (currentUpperCaseText.startsWith("REDS")) {
+      if (currentUpperCaseText.startsWith("RED")) {
         // found the reds team, now parse it
         var redsIndex = i;
-        if (cleanRedTeamPlayers.length == 0) {
-          cleanRedTeamPlayers = parsePlayerTeamNames(emailLines, i, aliasToPlayerMap);
+        if (Object.keys(redGoalScorers).length == 0) {
+          redGoalScorers = parsePlayerTeamNames(emailLines, i, aliasToPlayerMap);
         }
       } else if (currentUpperCaseText.startsWith("BLUE")) {
         var blueIndex = i;
-        if (cleanBlueTeamPlayers.length == 0) {
-          cleanBlueTeamPlayers = parsePlayerTeamNames(emailLines, i, aliasToPlayerMap);
+        if (Object.keys(blueGoalScorers).length == 0) {
+          blueGoalScorers = parsePlayerTeamNames(emailLines, i, aliasToPlayerMap);
         }
       } else if (currentUpperCaseText.startsWith("DATE:")) {
         // update the date until the REDS players are found
-        if (cleanRedTeamPlayers.length == 0) {
+        if (Object.keys(redGoalScorers).length == 0) {
           // clean the date ready for parsing
           var dateText = currentUpperCaseText.split(" AT")[0];
           var emailDate = new Date(dateText.split("DATE: ")[1]);
@@ -553,13 +600,13 @@ app.use(express.static(path.join(__dirname, 'public')))
         }
       }
     }
-    console.log("REDS", redsIndex, cleanRedTeamPlayers);
-    console.log("BLUES", blueIndex, cleanBlueTeamPlayers);
     console.log("DATE", dateText, emailDate);
     console.log("SCORES", scores);
+    console.log("RED-GOAL-SCORERS", redGoalScorers);
+    console.log("BLUE-GOAL-SCORERS", blueGoalScorers);
 
     // save the details
-    var saveSuccess = saveTeamsAttendance(gameDate, cleanRedTeamPlayers, cleanBlueTeamPlayers, scores);
+    var saveSuccess = saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, scores);
     if (saveSuccess) {
       console.log("SUCCESS: Saved teams from email:", emailDocname);
     } else {
@@ -1611,11 +1658,14 @@ function sendEmailToList(mailOptions, hostname) {
 }
 
 // save players that played for each team
-async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, scores = undefined) {
+async function saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, scores = undefined) {
  try {
    var gameDateString = gameDate.toISOString().split('T')[0]; //2023-11-27
    var gameMonth = gameDateString.slice(0, -3); //2023-11
    var gamesCollectionId = "games_" + gameMonth + "-01";
+
+   var redTeamPlayers = Object.keys(redGoalScorers)
+   var blueTeamPlayers = Object.keys(blueGoalScorers)
 
    // find the index for the week
    var mondaysDates = teamUtils.mondaysInMonth(gameDate.getMonth()+1, gameDate.getFullYear());  //=> [ 7,14,21,28 ]
@@ -1657,6 +1707,8 @@ async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, sc
    if (scores) {
      attendanceDetails[weekNumber].scores = scores;
    }
+   attendanceDetails[weekNumber].scores.team1scorers = redGoalScorers;
+   attendanceDetails[weekNumber].scores.team2scorers = blueGoalScorers;
 
    console.log('Inserting DB data:', gamesCollectionId, JSON.stringify(attendanceDetails));
    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
@@ -1693,7 +1745,7 @@ async function saveTeamsAttendance(gameDate, redTeamPlayers, blueTeamPlayers, sc
 
 // parse a list (array) of text containing the teams and extracts the player names
 function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
-  var nameArray = [];
+  var nameGoalMap = {};
   var blankLines = 0;
   var currentLineCount = 0;
   // parse max 100 rows (some may be blank)
@@ -1712,17 +1764,28 @@ function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
       //console.log("Exiting loop here:", j, cleanName);
       break;
     } else if (cleanName) {
-      //console.log("Adding player to team", j, cleanName);
+      var cleanNameArray = cleanName.split(" ");
+      console.log("Adding player to team", j, cleanName,cleanNameArray);
+
+      var noOfGoals = 0;
+      //var noOfGoals = cleanNameArray[cleanNameArray.length];
+      //if (Number.isInteger(noOfGoals)) {
+      var hasGoals = cleanName.match(/(\d+)/);
+      if (hasGoals && hasGoals.length > 0) {
+        noOfGoals = hasGoals[0];
+        cleanName = cleanName.replace(noOfGoals, '').trim();
+        console.log("-----CLEANED Adding player to team", j, cleanName, noOfGoals, hasGoals);
+      }
       var officialPlayerName = teamUtils.getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
       if (officialPlayerName) {
-        nameArray.push(officialPlayerName);
+        nameGoalMap[officialPlayerName] = noOfGoals;
         blankLines = 0;
       } else {
         console.error("ERROR. Skipping adding player to attendance list - error parsing player name:", cleanName);
       }
     }
   }
-  return nameArray;
+  return nameGoalMap;
 }
 
 // record a payment transaction

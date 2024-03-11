@@ -49,16 +49,18 @@ pre {
 }
 .rotated {
   background: url(/icons8-edit-32-enabled.png) no-repeat;
-  background-size: 22px;
+  background-size: 16px;
+  background-position: center;
   width: 24px;
-  height: 30px;
+  height: 20px;
   border: 1px solid grey;
 }
 .rotated:disabled {
   background: url(/icons8-edit-32-disabled.png) no-repeat;
-  background-size: 22px;
+  background-size: 16px;
+  background-position: center;
   width: 24px;
-  height: 30px;
+  height: 20px;
   border: 1px solid grey;
 }
 
@@ -308,4 +310,27 @@ table td {
   background-size: 14px;
   background-position-y: 5px;
   padding:0px 4px 0px 20px;
+}
+
+/* section for overlay of # goals scored onto shirts */
+.image_wrapper_goals {
+  position: relative;
+}
+.img_goals {
+  display: block;
+  object-fit: cover;
+  width: 100%;
+  height: auto;
+}
+.overlay_goals {
+  position: absolute; 
+}
+.overlay_0_goals {
+  left: 0;
+  top: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 90%;
+  font-weight: bold;
+  color: white;
 }
