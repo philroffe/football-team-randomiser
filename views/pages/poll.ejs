@@ -262,7 +262,7 @@
 
     // check if all scores are in (enables close month and gen payments button)
     var allScoresCompleted = true;
-    console.log(scoresMap)
+    //console.log(scoresMap)
     if (scoresMap.status == "closed") {
       document.getElementById("closeMonthGeneratePaymentsButton").innerHTML = "Month already closed"
       document.getElementById("closeMonthGeneratePaymentsButton").disabled = true; 
@@ -578,7 +578,7 @@ function addPlayerListToTab(tabName) {
       // Determine whether input should be editable
       if (playerName) {
         newPlayerName.setAttribute("value", playerName); 
-        newPlayerName.setAttribute("disabled", true); 
+        newPlayerName.readOnly = true;
       } else {
         newPlayerName.setAttribute("placeholder", "Your Name?"); 
         newPlayerName.focus();
@@ -602,10 +602,21 @@ function addPlayerListToTab(tabName) {
 
         if (scoresMap[i] && scoresMap[i].team1scorers) {
           //console.log("_____ " + playerName, scoresMap[i].team1scorers);
-          if (scoresMap[i].team1scorers[playerName]) {
-            newPlayerWeekGoals.innerHTML = scoresMap[i].team1scorers[playerName];
-          } else if (scoresMap[i].team2scorers[playerName]) {
-            newPlayerWeekGoals.innerHTML = scoresMap[i].team2scorers[playerName];
+          var goalsScored = 0;
+          if (typeof scoresMap[i].team1scorers[playerName] === 'number') {
+            goalsScored += scoresMap[i].team1scorers[playerName];
+          } else if (typeof scoresMap[i].team2scorers[playerName] === 'number') {
+            goalsScored += scoresMap[i].team2scorers[playerName];
+          }
+          if (goalsScored > 0) {
+            newPlayerWeekGoals.innerHTML = goalsScored;
+            newPlayerWeekGoals.style.backgroundImage = "url('/football2.png')";
+            newPlayerWeekGoals.style.backgroundRepeat = "no-repeat";
+            newPlayerWeekGoals.style.backgroundSize = "8px 8px";
+            newPlayerWeekGoals.style.backgroundPosition = "center 0px";
+            newPlayerWeekGoals.style.margin = "0px";
+            newPlayerWeekGoals.style.padding = "5px 7px";
+            newPlayerWeekGoals.style.border = "none";
           }
         }
 
@@ -628,12 +639,30 @@ function addPlayerListToTab(tabName) {
                   updateTeamShirt(newPlayerWeek, 0);
                 }
             }
-            newPlayerWeek.onclick = function() {
-              var nextValue = Number(this.getAttribute("teamValue")) + 1;
-              if (nextValue > 2) {
-                nextValue = 0;
+            newPlayerWeek.onclick = function(e) {toggleTeamShirt(e)};
+            newPlayerWeekGoals.onclick = function(e) {toggleTeamShirt(e)};
+          }
+
+          // add ability to increase # of goals
+          newPlayerName.onclick = function(e) {
+            // check which weekEdit button is active
+            var currentWeekId = -1;
+            for (var i = 0; i < mondaysDates.length; i ++) {
+              var weekEditButton = document.getElementById("week" + i + "Edit" + ATTENDANCE); 
+              if (weekEditButton.getAttribute("toggleStatus") == "save") {
+                // button toggled as Save so record editing week number
+                currentWeekId = i;
               }
-              updateTeamShirt(this, nextValue);
+            }
+            if (currentWeekId > -1) {
+              // get the currentEditElement
+              var playerIdPrefix = e.srcElement.id.replace(ATTENDANCE, "");
+              var currentEditElement = document.getElementById(playerIdPrefix + "Week" + currentWeekId + ATTENDANCE + "Goals");
+              var goalsScored = Number(currentEditElement.innerHTML);
+              goalsScored++;
+              if (goalsScored > 0) {
+                currentEditElement.innerHTML = goalsScored;
+              }
             };
           }
         }
@@ -712,6 +741,21 @@ function addPlayerListToTab(tabName) {
       //calcWeeklyTotals(tabName);
       var minHeight = Math.max(600, 350 + (currentPlayerNumber * 35));
       document.getElementById("panels").style.minHeight = minHeight + "px";
+  }
+
+  function toggleTeamShirt(e) {
+    // element could be the shirt or the goals
+    var elementPrefix = e.srcElement.id.replace("Goals", "");
+    // toggle the shirt
+    var shirtElement = document.getElementById(elementPrefix);
+    var nextValue = Number(shirtElement.getAttribute("teamValue")) + 1;
+    if (nextValue > 2) {
+      nextValue = 0;
+    }
+    updateTeamShirt(shirtElement, nextValue);
+    // reset # of goals to 0
+    var goalsElement = document.getElementById(elementPrefix + "Goals");
+    goalsElement.innerHTML = "";
   }
 
   function updateTeamShirt(checkboxElement, newValue) {
@@ -876,12 +920,13 @@ function addPlayerListToTab(tabName) {
       var tabName = "attendance";
 
       var playersAttended = {};
+      var scorers = {1: {}, 2:{}};
       playersAttended[weekNumber] = {};
       var saveType = "ATTENDANCE"
       for (var i = 0; i < 999; i++) {
         var playerElement = document.getElementById("player" + i + tabName); 
         if (!playerElement) {
-          console.log("GOT NULL!");
+          //console.log("GOT NULL!");
           break;
         }
         var officialPlayerName = playerElement.getAttribute("title");
@@ -891,8 +936,14 @@ function addPlayerListToTab(tabName) {
           playerName = playerElement.value;
         }
         var playerAttended = Number(document.getElementById("player" + i + "Week" + weekNumber + tabName).getAttribute("teamValue"));
+
+        var goalsScored = Number(document.getElementById("player" + i + "Week" + weekNumber + tabName + "Goals").innerHTML);
+        if (goalsScored > 0) {
+          scorers[playerAttended][playerName] = goalsScored;
+        }
+
         playersAttended[weekNumber][playerName] = playerAttended;
-        console.log("PLAYER DETAILS: " + i + " " + officialPlayerName + " " + playerAttended);
+        //console.log("PLAYER DETAILS: " + i + " " + officialPlayerName + " " + playerAttended);
       }
 
       // get the score for the game week
@@ -907,7 +958,7 @@ function addPlayerListToTab(tabName) {
         calcWinner = 2; // team2 won
       }
       var scores = {};
-      scores[weekNumber] = {"winner": calcWinner, "team1goals": goals1, "team2goals": goals2}
+      scores[weekNumber] = {"winner": calcWinner, "team1goals": goals1, "team2goals": goals2, "team1scorers": scorers[1], "team2scorers": scorers[2]}
 
       var attendanceDetails = { "gameYear": gameYear, "gameMonth": gameMonth, "gameWeek": weekNumber, "playersAttended": playersAttended, "scores": scores, "saveType": saveType, };
 

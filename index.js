@@ -340,9 +340,9 @@ app.use(express.static(path.join(__dirname, 'public')))
       var noOfGoals = scorerMap[player];
       var teamNumber = attendanceData[currentGameWeekIndex][player];
       if (teamNumber == 1) {
-        scorerMapTeam1[player] = noOfGoals;
+        scorerMapTeam1[player] = Number(noOfGoals);
       } else {
-        scorerMapTeam2[player] = noOfGoals;
+        scorerMapTeam2[player] = Number(noOfGoals);
       }
       console.log("scorer", player, noOfGoals, teamNumber);
     }
@@ -1720,7 +1720,7 @@ async function saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, sc
      // copy the existing doc to preserve a history
      var existingDocData = existingDoc.data();
      existingDocData.saveType = "ATTENDANCE_BACKUP"
-     if (!existingDocData[weekNumber] || !existingDocData[weekNumber].scores) {
+     if (true || !existingDocData[weekNumber] || !existingDocData[weekNumber].scores) {
        console.log('UPDATING:', JSON.stringify(attendanceDetails));
        const backupDocRef = firestore.collection(gamesCollectionId).doc("_attendance_" + existingDocData.timestamp);
        backupDocRef.set(existingDocData)
@@ -1772,7 +1772,7 @@ function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
       //if (Number.isInteger(noOfGoals)) {
       var hasGoals = cleanName.match(/(\d+)/);
       if (hasGoals && hasGoals.length > 0) {
-        noOfGoals = hasGoals[0];
+        noOfGoals = Number(hasGoals[0]);
         cleanName = cleanName.replace(noOfGoals, '').trim();
         console.log("-----CLEANED Adding player to team", j, cleanName, noOfGoals, hasGoals);
       }
