@@ -813,7 +813,7 @@ function addPlayerListToTab(tabName) {
         // re-enable all of the other elements
         for (var j = 0; j < tabPlayerCount; j++) {
           document.getElementById("player" + j + "Week" + i + tabName).hidden = false;
-
+          document.getElementById("player" + j + "Week" + i + tabName + "Goals").hidden = false;
           document.getElementById("week" + i + "Score1" + tabName).hidden = false;
           document.getElementById("week" + i + "ScoreSeparator" + tabName).hidden = false;
           document.getElementById("week" + i + "Score2" + tabName).hidden = false;
@@ -851,6 +851,7 @@ function addPlayerListToTab(tabName) {
         // hide all of the other elements
         for (var j = 0; j < tabPlayerCount; j++) {
           document.getElementById("player" + j + "Week" + i + tabName).hidden = true;
+          document.getElementById("player" + j + "Week" + i + tabName + "Goals").hidden = true;
           document.getElementById("week" + i + "Score1" + tabName).hidden = true;
           document.getElementById("week" + i + "ScoreSeparator" + tabName).hidden = true;
           document.getElementById("week" + i + "Score2" + tabName).hidden = true;
