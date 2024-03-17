@@ -836,7 +836,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": ip };
 
     var eventDetails = convertAvailibilityToDates(gameMonth, gameYear, playerAvailability);
-    sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Player Change Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
+    sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[Player Change Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
 
     console.log('Inserting DB game data:', JSON.stringify(gamedetails_new));
     try {
@@ -962,6 +962,8 @@ app.use(express.static(path.join(__dirname, 'public')))
     Object.keys(scores).forEach(function(weekNumber) {
       attendanceDetails[weekNumber].scores = scores[weekNumber];
     });
+
+    sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Week Attendance Change] " + gameYear + "-" + gameMonth + " (" + gameWeek + ")", JSON.stringify(attendanceDetails));
 
     console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
     try {
