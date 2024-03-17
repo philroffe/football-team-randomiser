@@ -18,7 +18,14 @@
     
 
   <div id="padding" style="height: 40px"></div>
-  <h3 id="alltimegames">Stats since Jan 2023 </div>
+  <h3 id="alltimegames">Stats since: 
+    <select name="dateRange" id="dateRange" checked onchange="changeDateRange(this.value)">
+      <option value="12">12 Months</option>
+      <option value="6">6 Months</option>
+      <option value="3">3 Months</option>
+      <option value="9999">Since Jan23</option>
+    </select>
+  </h3>
 
   <input class="radio" id="one" name="group" type="radio" onclick="changeTab('one');" checked>
   <input class="radio" id="two" name="group" type="radio" onclick="changeTab('two');">
@@ -28,6 +35,7 @@
   <input class="radio" id="six" name="group" type="radio" onclick="changeTab('six');">
   <input class="radio" id="seven" name="group" type="radio" onclick="changeTab('seven');">
   <input class="radio" id="eight" name="group" type="radio" onclick="changeTab('eight');">
+  <input class="radio" id="nine" name="group" type="radio" onclick="changeTab('nine');">
   <div class="tabs">
   <label class="tab" id="one-tab" for="one">Week-by-Week</label>
   <label class="tab" id="two-tab" for="two">Total Red/Blue</label>
@@ -35,8 +43,9 @@
   <label class="tab" id="four-tab" for="four">Player Stack</label>
   <label class="tab" id="five-tab" for="five">Player Colour</label>
   <label class="tab" id="six-tab" for="six">Player Win</label>
-  <label class="tab" id="seven-tab" for="seven">All Player Charts</label>
-  <label class="tab" id="eight-tab" for="eight">Since 2019!</label>
+  <label class="tab" id="seven-tab" for="seven">Goal Scorers</label>
+  <label class="tab" id="eight-tab" for="eight">All Player Charts</label>
+  <label class="tab" id="nine-tab" for="nine">Since 2019!</label>
   </div>
 
   <div id="panels" class="panels">
@@ -54,7 +63,8 @@
             <option id="statChartSelect4">Total Games</option>
             <option id="statChartSelect5">Total Red</option>
             <option id="statChartSelect6">Total Blue</option>
-            <option id="statChartSelect6">Win Ratio</option>
+            <option id="statChartSelect7">Win Ratio</option>
+            <option id="statChartSelect8">Total Goals</option>
           </select>
         </div>
         <div style="clear:both;"></div>
@@ -101,6 +111,20 @@
     <div class="panel" id="seven-panel">
       <div class="content">
         <div id="blank" style="height: 40px"></div>
+        <h3>Goals Scored</h3>
+        <div id="goalScorersBarChartDiv" style="height: 800px; max-width: 100%"></div>
+      </div>
+    </div>
+    <div class="panel" id="nine-panel">
+      <div class="content">
+        <div id="blank" style="height: 40px"></div>
+        <h3>Total Games Played Since 2019</h3>
+        <div id="playerTickerDiv" style="height: 800px; max-width: 100%"></div>
+      </div>
+    </div>
+    <div class="panel" id="eight-panel">
+      <div class="content">
+        <div id="blank" style="height: 40px"></div>
         <div class="panelcontentouter">
           <div class="panelcontentinnerleft" style="width: 50%">
           <label for="playerSelect" style="width: 100%">Choose Player(s):</label>
@@ -114,13 +138,6 @@
         </div>
         <div id="blank" style="height: 40px"></div>
         <div id="playerChartsDiv"  style="height: 800px; max-width: 100%"></div>
-      </div>
-    </div>
-    <div class="panel" id="eight-panel">
-      <div class="content">
-        <div id="blank" style="height: 40px"></div>
-        <h3>Total Games Played Since 2019</h3>
-        <div id="playerTickerDiv" style="height: 800px; max-width: 100%"></div>
       </div>
     </div>
   </div>
@@ -142,6 +159,7 @@
     if (!players) { players = {}; }
     var allCollectionDocs = pagedata.data.allCollectionDocs;
     if (!allCollectionDocs) { allCollectionDocs = {}; }
+    var filteredAllCollectionDocs = allCollectionDocs;
     //var attendanceByYearMap = pagedata.data.attendanceByYear;
     //if (!attendanceByYearMap) { attendanceByYearMap = {}; }
     //var paydetailsMap = pagedata.data.paydetails;
@@ -185,8 +203,11 @@
           calcWinLoseBarChart('playerWinBarChartDiv');
           break;
         case 'seven':
+          createGoalScorersBarChart("goalScorersBarChartDiv");
           break;
         case 'eight':
+          break;
+        case 'nine':
           createPlayerTicker("playerTickerDiv");
           break;
         default:
@@ -264,17 +285,19 @@
     var winData = [];
     var loseData = [];
     var drawData = [];
+    var goalsData = [];
     allPlayerData.sort(function(a, b) { return b[1].win - a[1].win; });
     for (var i = 0; i < allPlayerData.length; i++) {
       var playerName = allPlayerData[i][0];
       var playerData = allPlayerData[i][1];
       //console.log("i", playerName, playerData)
-      if (playerData.games > 5) {
+      if (playerData.games > 1) {
         // add data to the start (unshift) of each array to keep it in alphabetical order
         playerNamesData.unshift(playerName);
         winData.unshift(playerData.win);
         loseData.unshift(playerData.lose);
         drawData.unshift(playerData.draws);
+        goalsData.unshift(playerData.goals);
       }
     }
     //console.log(playerNamesData, winData, loseData, drawData)
@@ -310,6 +333,40 @@
     }
 
     ///////////////////
+    function createGoalScorersBarChart(elementId) {
+      var stackChartDom = document.getElementById(elementId);
+      var stackChart = echarts.init(stackChartDom);
+      var stackOption;
+
+      var playerNamesData = [];
+      var goalsData = [];
+      allPlayerData.sort(function(a, b) { return b[1].goals - a[1].goals; });
+      for (var i = 0; i < allPlayerData.length; i++) {
+        var playerName = allPlayerData[i][0];
+        var playerData = allPlayerData[i][1];
+        if (playerData.games > 1) {
+          // add data to the start (unshift) of each array to keep it in alphabetical order
+          playerNamesData.unshift(playerName);
+          goalsData.unshift(playerData.goals);
+        }
+      }
+
+      stackOption = {
+        color: [ 'lightgreen' ],
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: {},
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: playerNamesData, },
+        series: [
+          {
+            name: '# Goals', type: 'bar', stack: 'total', label: { show: true }, emphasis: { focus: 'series' },
+            data: goalsData
+          },
+        ],
+      };
+      stackOption && stackChart.setOption(stackOption);
+    }
 
     
 
@@ -501,15 +558,15 @@
       var totalDraws = 0;
       var totalRedGoals = 0;
       var totalBlueGoals = 0;
-      for (const collectionId in allCollectionDocs) {
-        if (collectionId.startsWith("games_2023")) {
-          var currentAttendance = allCollectionDocs[collectionId];
+      for (const collectionId in filteredAllCollectionDocs) {
+        if (collectionId.startsWith("games_")) {
+          var currentAttendance = filteredAllCollectionDocs[collectionId];
           //console.log("--", collectionId, currentAttendance);
           // loop through all docs
-          for (const docId in allCollectionDocs[collectionId]) {
-            var docName = allCollectionDocs[collectionId][docId].id;
+          for (const docId in filteredAllCollectionDocs[collectionId]) {
+            var docName = filteredAllCollectionDocs[collectionId][docId].id;
             if (docName == "_attendance") {
-              var docData = allCollectionDocs[collectionId][docId].data;
+              var docData = filteredAllCollectionDocs[collectionId][docId].data;
               // loop through scores of each week
               for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
                 var playerList = docData[weekNumber];
@@ -595,6 +652,7 @@
       totals.win = 0;
       totals.lose = 0;
       totals.draws = 0;
+      totals.goals = 0;
       totals.redTeam = {};
       totals.redTeam.win = 0;
       totals.redTeam.lose = 0;
@@ -605,15 +663,15 @@
       totals.blueTeam.lose = 0;
       totals.blueTeam.draws = 0;
       totals.blueTeam.games = 0;
-      for (const collectionId in allCollectionDocs) {
-        if (collectionId.startsWith("games_2023")) {
-          var currentAttendance = allCollectionDocs[collectionId];
+      for (const collectionId in filteredAllCollectionDocs) {
+        if (collectionId.startsWith("games_")) {
+          var currentAttendance = filteredAllCollectionDocs[collectionId];
           //console.log("--", collectionId, currentAttendance);
           // loop through all docs
-          for (const docId in allCollectionDocs[collectionId]) {
-            var docName = allCollectionDocs[collectionId][docId].id;
+          for (const docId in filteredAllCollectionDocs[collectionId]) {
+            var docName = filteredAllCollectionDocs[collectionId][docId].id;
             if (docName == "_attendance") {
-              var docData = allCollectionDocs[collectionId][docId].data;
+              var docData = filteredAllCollectionDocs[collectionId][docId].data;
               // loop through scores of each week
               for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
                 var playerList = docData[weekNumber];
@@ -622,6 +680,10 @@
                     if (weekPlayerName == playerName) {
                       var playerTeamNumber = playerList[weekPlayerName];
                       if (playerTeamNumber > 0) {
+                        var goalsAttr = "team" + playerTeamNumber + "scorers";
+                        if (playerList.scores[goalsAttr] && playerList.scores[goalsAttr][playerName]) {
+                          totals.goals += playerList.scores[goalsAttr][playerName];
+                        }
                         // this player played so record totals of win/lose/draw
                         if (playerList.scores.winner == playerTeamNumber) {
                           totals.win++;
@@ -727,23 +789,24 @@
     //var optionData = calcRedBlueWinnersOptionData("totalRedBlueWinsContainer");
     //
     
-    var lineRaceHeader = ["Won", "Lost", "Drawn", "Total Games", "Total Red", "Total Blue", "Player Name", "Week No", "Win Ratio"];
+    var lineRaceHeader = ["Won", "Lost", "Drawn", "Total Games", "Total Red", "Total Blue", "Player Name", "Week No", "Win Ratio", "Total Goals"];
     //createPlayerWinsLineRace("statsChartsDiv");
     function createPlayerWinsLineRace(elementId) {
       var jsonData = [lineRaceHeader];
       jsonData.push();
       var weekCount = 0;
       var playerCountMap = {};
+
       // loop through all of the costs and payments for this year
-      for (const collectionId in allCollectionDocs) {
-        if (collectionId.startsWith("games_2023")) {
-          var currentAttendance = allCollectionDocs[collectionId];
+      for (const collectionId in filteredAllCollectionDocs) {
+        if (collectionId.startsWith("games_")) {
+          var currentAttendance = filteredAllCollectionDocs[collectionId];
           //console.log("--", collectionId, currentAttendance);
           // loop through all docs
-          for (const docId in allCollectionDocs[collectionId]) {
-            var docName = allCollectionDocs[collectionId][docId].id;
+          for (const docId in filteredAllCollectionDocs[collectionId]) {
+            var docName = filteredAllCollectionDocs[collectionId][docId].id;
             if (docName == "_attendance") {
-              var docData = allCollectionDocs[collectionId][docId].data;
+              var docData = filteredAllCollectionDocs[collectionId][docId].data;
               // loop through scores of each week
               for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
                 var playerList = docData[weekNumber];
@@ -765,9 +828,14 @@
                           playerMap.playerName = officialName;
                           playerMap.weekNo = 0;
                           playerMap.winRatio = 0.5;
+                          playerMap.totalGoals = 0;
                         }
                         var playerTeamNumber = playerList[weekPlayerName];
                         if (playerTeamNumber > 0) {
+                          var goalsAttr = "team" + playerTeamNumber + "scorers";
+                          if (playerList.scores[goalsAttr] && playerList.scores[goalsAttr][weekPlayerName]) {
+                            playerMap.totalGoals = playerMap.totalGoals + Number(playerList.scores[goalsAttr][officialName]);
+                          }
                           // this player played so co
                           if (playerList.scores.winner == playerTeamNumber) {
                             playerMap.won = playerMap.won + 1;
@@ -786,14 +854,14 @@
                           playerMap.winRatio = Number(((playerMap.won + (playerMap.drawn/2)) / (playerMap.won + playerMap.lost + playerMap.drawn)).toFixed(2));
 
                           playerMap.weekNo = weekCount;
-                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo, playerMap.winRatio];
+                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo, playerMap.winRatio, playerMap.totalGoals];
                           playerCountMap[officialName] = playerMap;
                           
                           jsonData.push(data);
                         } else {
                           // didn't play so just add the data for the player unchanged
                           playerMap.weekNo = weekCount;
-                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo, playerMap.winRatio];
+                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo, playerMap.winRatio, playerMap.totalGoals];
                           jsonData.push(data);
                         }
                       }
@@ -938,15 +1006,15 @@
       totals.sameTeam.wins = 0;
       totals.sameTeam.loses = 0;
       totals.sameTeam.draws = 0;
-      for (const collectionId in allCollectionDocs) {
-        if (collectionId.startsWith("games_2023")) {
-          var currentAttendance = allCollectionDocs[collectionId];
+      for (const collectionId in filteredAllCollectionDocs) {
+        if (collectionId.startsWith("games_")) {
+          var currentAttendance = filteredAllCollectionDocs[collectionId];
           //console.log("--", collectionId, currentAttendance);
           // loop through all docs
-          for (const docId in allCollectionDocs[collectionId]) {
-            var docName = allCollectionDocs[collectionId][docId].id;
+          for (const docId in filteredAllCollectionDocs[collectionId]) {
+            var docName = filteredAllCollectionDocs[collectionId][docId].id;
             if (docName == "_attendance") {
-              var docData = allCollectionDocs[collectionId][docId].data;
+              var docData = filteredAllCollectionDocs[collectionId][docId].data;
               // loop through scores of each week
               for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
                 var playerList = docData[weekNumber];
@@ -1117,7 +1185,25 @@
     if (!tabName) { tabName = "one" };
     if (document.getElementById(tabName)) {
       document.getElementById(tabName).checked = true;
-      changeTab(tabName);
+      changeDateRange(document.getElementById("dateRange").value);
+    }
+
+    function changeDateRange(value) {
+      //console.log("Changing Date Range", value, pagedata.selectTab)
+      statsDateRange = value;
+      // apply the collection filter
+      filteredAllCollectionDocs = {};
+      var endDate = new Date();
+      var startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - statsDateRange);
+      for (const collectionId in allCollectionDocs) {
+        var currentMonth = new Date(collectionId.replace("games_", ""));
+        //console.log("--", collectionId.replace("games_", ""), currentMonth);
+        if (currentMonth.getTime() > startDate.getTime() && currentMonth.getTime() < endDate.getTime()) {
+          filteredAllCollectionDocs[collectionId] = allCollectionDocs[collectionId];
+        }
+      }
+      changeTab(pagedata.selectTab);
     }
 
     </script>

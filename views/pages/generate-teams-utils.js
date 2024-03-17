@@ -138,7 +138,8 @@
     //console.log("allPlayersCombined", allPlayersCombined);
     Object.values(allPlayersCombined).forEach(function(currentPlayer) {
       //console.log("XXX", currentPlayer)
-      playersGamesPlayedRatio[currentPlayer] = {'algorithm4':0, 'won':0, 'lost':0, 'drawn':0, 'didnotplay':0, 'thisWeekPlayer': false};
+      playersGamesPlayedRatio[currentPlayer] = {'algorithm4':0, 'won':0, 'lost':0, 'drawn':0
+      , 'goalsScored':0, 'didnotplay':0, 'thisWeekPlayer': false};
       
       // loop through all of the attendance data, lookup current player
       Object.keys(allAttendanceData).forEach(function(gamesCollectionId) {
@@ -172,6 +173,12 @@
                   //console.log("PLAYED, LOST", currentPlayer, goalsFor, goalsAgainst);
                   playersGamesPlayedRatio[currentPlayer].lost += 1;
                   playersGamesPlayedRatio[currentPlayer].algorithm4 += 1;
+                }
+
+                // now get the number of goals scored
+                var goalsScorers = weekScores['team' + playerWeekTeamNumber + 'scorers'];
+                if (goalsScorers && goalsScorers[currentPlayer]) {
+                  playersGamesPlayedRatio[currentPlayer].goalsScored += goalsScorers[currentPlayer];
                 }
               } else {
                 // did not play
@@ -217,6 +224,9 @@
         // algorithm5 = most played
         playersGamesPlayedRatio[playerName].algorithm5ratio = totalGamesPlayed;
 
+        // algorithm6 = goals scored
+        playersGamesPlayedRatio[playerName].algorithm6ratio = playerStats.goalsScored;
+
         // algorithm6 = sort by algorithm3 and pick teams by alternating between the top 3 and the bottom 3
 
         // algorithm7 = sort by algorithm (1, 2, 3 or 4) and pick teams by randomising the top 3 and the bottom 3
@@ -228,6 +238,7 @@
         playersGamesPlayedRatio[playerName].algorithm3ratio = 0.5;
         playersGamesPlayedRatio[playerName].algorithm4ratio = 2;
         playersGamesPlayedRatio[playerName].algorithm5ratio = 0;
+        playersGamesPlayedRatio[playerName].algorithm6ratio = 0;
       }
     });
 
@@ -296,7 +307,6 @@
     
     playersGamesPlayedRatio.sortedPlayers = sortedPlayers;
     playersGamesPlayedRatio.totalPossibleGames = totalPossibleGames;
-
     return playersGamesPlayedRatio;
   }
 

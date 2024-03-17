@@ -44,6 +44,7 @@
           <option value="algorithm1">Win Ratio</option>
           <option value="algorithm4">Total Score Per Game</option>
           <option value="algorithm5">Most Played</option>
+          <option value="algorithm6">Goals Scored</option>
         </select>
       </div>
       <div id="chooseOptionAlgorithm" style="display:inline;">
@@ -123,7 +124,7 @@
       if (!allAttendanceData) { allAttendanceData = {}; }
 
       // change the algorithm for all players and regenerate teams
-      var algorithmType = "algorithm3"; //default
+      var algorithmType = "algorithm6"; //default
       var algorithmRange = 12; //default
       document.getElementById("algorithmChoice").value = algorithmType;
       var nextMondayOptionIndex = 2;

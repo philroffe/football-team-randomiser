@@ -2035,7 +2035,7 @@ async function addRemoveEmailSubscription(details, hostname) {
 
 async function calculateNextGameTeams() {
     // choose the algorithm to us to select the teams
-    var algorithmType = "algorithm3";
+    var algorithmType = "algorithm6";
     var nextMonday = getDateNextMonday(new Date());
     var gameYear = nextMonday.getFullYear();
     var gameMonth = nextMonday.toISOString().split('-')[1];
