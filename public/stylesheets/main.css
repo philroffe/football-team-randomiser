@@ -24,6 +24,17 @@ pre {
   height: 30px;
   margin: 0px;
 }
+#footer {
+  position: fixed;
+  z-index:10;
+  padding: 0px 0px 0px 0px;
+  bottom: 0;
+  width: 100%;
+  font-size: 80%;
+  background: black;
+  color: white;
+  text-align: center;
+}
 /* Create a custom checkbox */
 .checkmark {
   top: 0px;
@@ -334,3 +345,4 @@ table td {
   font-weight: bold;
   color: white;
 }
+

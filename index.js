@@ -128,6 +128,7 @@ app.use(express.static(path.join(__dirname, 'public')))
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 .get('/', (req, res) => res.render('pages/index', { pageData: JSON.stringify({"environment": environment})} ))
+.get('/privacy-policy', (req, res) => res.render('pages/privacy-policy', { pageData: JSON.stringify({"environment": environment})} ))
 .get('/login', (req, res) => res.render('pages/auth', { pageData: JSON.stringify({"environment": environment})} ))
 .get('/error', (req, res) => res.send("error logging in - invalid account for this site", { pageData: JSON.stringify({"environment": environment})} ))
 .get('/logout', function(req, res, next){
