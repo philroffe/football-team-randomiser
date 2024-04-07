@@ -642,6 +642,24 @@ function mondaysInMonth(m,y) {
   return mondays;
 }
 
+
+function checkIfBankHoliday(bankHolidaysJson, pollDate) {
+  // check whether a bank holiday
+  var isBankHoliday = false;
+
+  Object.keys(bankHolidaysJson).forEach(function(key) {
+    if (key == "england-and-wales") {
+      for (var j = 0; j < bankHolidaysJson[key].events.length; j++) {
+        var bankHolDate = new Date(bankHolidaysJson[key].events[j].date);
+        if (bankHolDate.toISOString().split('T')[0] == pollDate.toISOString().split('T')[0]) {
+          isBankHoliday = true;
+        }
+      }
+    }
+  });
+  return isBankHoliday;
+}
+
 // workaround check as this file is included serverside as a module
 if (typeof module != "undefined") {
   module.exports = {
@@ -650,7 +668,8 @@ if (typeof module != "undefined") {
     generateTeamsEmailText,
     getOfficialNameFromAlias,
     mondaysInMonth,
-    datesAreOnSameDay
+    datesAreOnSameDay,
+    checkIfBankHoliday
   };
 }
 
