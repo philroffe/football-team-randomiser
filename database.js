@@ -2,7 +2,6 @@ const express = require('express')
 const path = require('path')
 const PORT = process.env.PORT || 5000
 const https = require('https')
-const request = require('request');
 const session = require('express-session');
 const fs = require('fs');
 const jsdom = require('jsdom');

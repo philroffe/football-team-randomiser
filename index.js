@@ -3,8 +3,6 @@ const path = require('path')
 const PORT = process.env.PORT || 5000
 const https = require('https')
 const compression = require('compression');
-const ical = require('node-ical');
-const request = require('request');
 const session = require('express-session');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
@@ -771,10 +769,8 @@ app.use(express.static(path.join(__dirname, 'public')))
 
     // get the latest bank holidays if not already cached
     if (bankHolidaysCache && Object.keys(bankHolidaysCache).length === 0) {
-      var bankHolidaysFile;
       try {
-        bankHolidaysFile = await downloadPage("https://www.gov.uk/bank-holidays.json")
-        bankHolidaysCache = JSON.parse(bankHolidaysFile);
+        bankHolidaysCache = await downloadPage("https://www.gov.uk/bank-holidays.json");
         console.log("Got NEW bank holidays: " + Object.keys(bankHolidaysCache).length)
       } catch (err) {
         bankHolidaysCache = {};
@@ -1198,6 +1194,14 @@ app.use(express.static(path.join(__dirname, 'public')))
       playersPreviewData = playersGamesPlayedRatio.generatedTeams;
     }
 
+    var totalPlayers = playersPreviewData.redPlayers.length + playersPreviewData.bluePlayers.length;
+    if (totalPlayers < 6) {
+      // not enough players so send email to admin ONLY
+      sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[NOT ENOUGH PLAYERS] " + totalPlayers + EMAIL_TITLE_POSTFIX, playersPreviewData.redPlayers + "\n" + playersPreviewData.bluePlayers);
+      res.json({'result': 'OK'});
+      return;
+    }
+
     // get the list of people on the email list
     var playerAliasMaps = await getDefinedPlayerAliasMaps();
     var emailTo = Object.values(playerAliasMaps.activeEmailList);
@@ -1294,17 +1298,11 @@ function getDateNextMonday(fromDate = new Date()) {
   return nextMonday;
 }
 
-// wrap a request in an promise
-function downloadPage(url) {
-  return new Promise((resolve, reject) => {
-    request(url, (error, response, body) => {
-      if (error) reject(error);
-      if (response && response.statusCode != 200) {
-        reject('Invalid status code <' + response.statusCode + '>');
-      }
-      resolve(body);
-    });
-  });
+// download the url requested and return the json respose
+async function downloadPage(url) {
+    return fetch(url)
+        .then((response)=>response.json())
+        .then((responseJson)=>{return responseJson});
 }
 
 // calculate no of months between two dates
@@ -2183,10 +2181,8 @@ async function getBankHolidayJson() {
 
   // get the latest bank holidays if not already cached
   if (bankHolidaysCache && Object.keys(bankHolidaysCache).length === 0) {
-    var bankHolidaysFile;
     try {
-      bankHolidaysFile = await downloadPage("https://www.gov.uk/bank-holidays.json")
-      bankHolidaysCache = JSON.parse(bankHolidaysFile);
+      bankHolidaysCache = await downloadPage("https://www.gov.uk/bank-holidays.json");
       console.log("Got NEW bank holidays: " + Object.keys(bankHolidaysCache).length)
     } catch (err) {
       bankHolidaysCache = {};

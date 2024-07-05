@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "description": "A simple app to manage 5-a-side football games.  A poll each month allows players to add their weekly availability, and the ability to randomise the teams and generate an email.",
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   },
   "main": "index.js",
   "scripts": {
@@ -13,26 +13,24 @@
     "backup": "node database.js backup"
   },
   "dependencies": {
-    "@google-cloud/firestore": "^6.2.0",
+    "@google-cloud/firestore": "^7.9.0",
     "axios": "^1.6.7",
     "compression": "^1.7.4",
     "ejs": "^3.1.9",
     "express": "^4.15.2",
     "express-session": "^1.17.3",
     "html-to-text": "^9.0.5",
-    "jsdom": "^22.1.0",
+    "jsdom": "^24.1.0",
     "mailparser": "^3.6.5",
     "mimelib": "^0.3.1",
-    "node-ical": "^0.13.0",
     "nodemailer": "^6.9.4",
-    "passport": "^0.6.0",
-    "passport-google-oauth": "^2.0.0",
-    "request": "^2.88.2"
+    "passport": "^0.7.0",
+    "passport-google-oauth": "^2.0.0"
   },
   "devDependencies": {
     "depcheck": "^1.4.7",
     "got": "^11.8.5",
-    "tape": "^4.7.0"
+    "tape": "^5.8.1"
   },
   "repository": {
     "type": "git",
