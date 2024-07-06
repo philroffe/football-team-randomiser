@@ -111,7 +111,7 @@
     <div class="panel" id="seven-panel">
       <div class="content">
         <div id="blank" style="height: 40px"></div>
-        <h3>Goals Scored</h3>
+        <h3>Goals Scored per Game</h3>
         <div id="goalScorersBarChartDiv" style="height: 800px; max-width: 100%"></div>
       </div>
     </div>
@@ -220,7 +220,7 @@
     for (var i = 0; i < playerNameSuggestions.length; i++) {
       var playerName = playerNameSuggestions[i];
       var playerData = calcPlayerWinsOptionData(playerName);
-      if (playerData.games > 5) {
+      if (playerData.games > 1) {
         allPlayerData.push([playerName, playerData]);
       }
     }
@@ -388,7 +388,7 @@
         var playerName = allPlayerData[i][0];
         var playerData = allPlayerData[i][1];
         //console.log("i", playerName, playerData)
-        if (playerData.games > 5) {
+        if (playerData.games > 1) {
           // add data to the start (unshift) of each array to keep it in alphabetical order
           playerNamesData.unshift(playerName);
           redTeamGames.unshift((playerData.redTeam.games/(playerData.redTeam.games + playerData.blueTeam.games)*100).toFixed(0));
@@ -453,7 +453,7 @@
         var playerName = allPlayerData[i][0];
         var playerData = allPlayerData[i][1];
         //console.log("i", playerName, playerData)
-        if (playerData.games > 5) {
+        if (playerData.games > 1) {
           // add data to the start (unshift) of each array to keep it in alphabetical order
           playerNamesData.unshift(playerName);
           redTeamGames.unshift((playerData.redTeam.games/(playerData.redTeam.games + playerData.blueTeam.games)*100).toFixed(0));

@@ -58,7 +58,7 @@
           <option value="algorithm3">Avg Score Per Game</option>
           <option value="algorithm4">Total Score Per Game</option>
           <option value="algorithm5">Most Played</option>
-          <option value="algorithm6">Goals Scored</option>
+          <option value="algorithm6">Goals Per Game</option>
         </select>
         <button class="linkborder" onclick=";changeAlgorithm('algorithm0')" id="randomiseAgain">Randomise Players Again!</button>
       </div>
@@ -136,7 +136,7 @@
                          "algorithm3": "Average generated score per game\n(5 for win, 3 for draw, 1 for loss,\n 0 for not-played)", 
                          "algorithm4": "Total generated score per game\n(5 for win, 3 for draw, 1 for loss,\n 0 for not-played)",
                          "algorithm5": "Most Played (W|D|L)",
-                         "algorithm6": "Total Goals Scored"}
+                         "algorithm6": "Goals Per Game"}
   var algorithmRange = 12; //default
 
     var players = pagedata.data.players;
@@ -312,7 +312,7 @@
         if (algorithmType == "algorithm6") {
           wonLostDrawnString = "";
           wonLostDrawnString = wonLostDrawnString.padEnd(3);
-          playerAlgorithmScoreString = Number(playerAlgorithmScore).toFixed(0);
+          playerAlgorithmScoreString = Number(playerAlgorithmScore).toFixed(2);
         }
 
         playerStringList += "<div style='" + cssStyle + "'>" + playerAlgorithmScoreString + " " + wonLostDrawnString  + playerNameClean + "\n</div>";

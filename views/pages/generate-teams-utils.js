@@ -224,8 +224,8 @@
         // algorithm5 = most played
         playersGamesPlayedRatio[playerName].algorithm5ratio = totalGamesPlayed;
 
-        // algorithm6 = goals scored
-        playersGamesPlayedRatio[playerName].algorithm6ratio = playerStats.goalsScored;
+        // algorithm6 = goals scored per game
+        playersGamesPlayedRatio[playerName].algorithm6ratio = (playerStats.goalsScored / totalGamesPlayed).toFixed(2);
 
         // algorithm6 = sort by algorithm3 and pick teams by alternating between the top 3 and the bottom 3
 
