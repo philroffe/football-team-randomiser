@@ -34,6 +34,9 @@ Install the gcloud CLI as described here: https://cloud.google.com/sdk/docs/inst
 
 ```
 gcloud app deploy .app-prod.yaml
+# if you get a build error (e.g. after deleting old files from storage), run with --no-cache 
+#ERROR: failed to initialize analyzer: getting previous image: getting config file for image... unexpected status code 404 Not Found:
+gcloud app deploy .app-prod.yaml--no-cache
 
 # if you want a weekly scheduled task then deploy the cron too...
 gcloud app deploy cron.yaml

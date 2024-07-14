@@ -9,8 +9,8 @@ const fs = require('fs');
 const mimelib = require("mimelib");
 const { convert } = require('html-to-text');
 const simpleParser = require('mailparser').simpleParser;
-const messageHelper = require("./messageHelper");
 const teamUtils = require("./views/pages/generate-teams-utils.js");
+const passport = require('passport');
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -52,27 +52,6 @@ const EMAIL_TYPE_ALL_PLAYERS = 0;
 const EMAIL_TYPE_ADMIN_ONLY = 1;
 const EMAIL_TYPE_TEAMS_ADMIN = 2;
 
-const app = express();
-app.use(compression());
-app.use(session({
-  resave: false,
-  saveUninitialized: true,
-  secret: 'SECRET' 
-}));
-/*  PASSPORT SETUP (for OAuth) */
-const passport = require('passport');
-var userProfile;
-app.use(passport.initialize());
-app.use(passport.session());
-passport.serializeUser(function(user, cb) { cb(null, user); });
-passport.deserializeUser(function(obj, cb) { cb(null, obj); });
-/*  Google AUTH  */
-const GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_CALLBACK_URL = (process.env.GOOGLE_CALLBACK_URL) ? process.env.GOOGLE_CALLBACK_URL : "http://localhost:5000/auth/google/callback";
-const ALLOWED_ADMIN_EMAIL_ADDRS = (process.env.ALLOWED_ADMIN_EMAIL_ADDRS) ? process.env.ALLOWED_ADMIN_EMAIL_ADDRS : "philroffe@gmail.com";
-
 /* Email functionality */
 const GOOGLE_MAIL_FROM_NAME = (process.env.GOOGLE_MAIL_FROM_NAME) ? process.env.GOOGLE_MAIL_FROM_NAME : "Phil Roffe <philroffe@gmail.com>";
 const GOOGLE_MAIL_USERNAME = (process.env.GOOGLE_MAIL_USERNAME) ? process.env.GOOGLE_MAIL_USERNAME : "NOT_SET";
@@ -85,58 +64,50 @@ var transporter = nodemailer.createTransport({
   }
 });
 
-const SYSTEM_ADMIN_EMAIL_ADDRS = (process.env.SYSTEM_ADMIN_EMAIL_ADDRS) ? process.env.SYSTEM_ADMIN_EMAIL_ADDRS : "Phil Roffe <philroffe@gmail.com>";
-const TEAMS_ADMIN_EMAIL_ADDRS = (process.env.TEAMS_ADMIN_EMAIL_ADDRS) ? process.env.TEAMS_ADMIN_EMAIL_ADDRS : SYSTEM_ADMIN_EMAIL_ADDRS;
-const ATTENDANCE_ADMIN_EMAIL_ADDRS = (process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS) ? process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS : TEAMS_ADMIN_EMAIL_ADDRS;
-const MAILING_LIST_ADMIN_EMAIL_ADDRS = (process.env.MAILING_LIST_ADMIN_EMAIL_ADDRS) ? process.env.MAILING_LIST_ADMIN_EMAIL_ADDRS : SYSTEM_ADMIN_EMAIL_ADDRS;
+const app = express();
+app.use(compression());
 
-const ENABLE_WHATSAPP = (process.env.ENABLE_WHATSAPP) ? (process.env.ENABLE_WHATSAPP.toUpperCase() === "ENABLED") : false;
-const ENABLE_TEST_EMAILS = (process.env.ENABLE_TEST_EMAILS) ? (process.env.ENABLE_TEST_EMAILS.toUpperCase() === "ENABLED") : false;
-
-passport.use(new GoogleStrategy({
-    clientID: GOOGLE_CLIENT_ID,
-    clientSecret: GOOGLE_CLIENT_SECRET,
-    callbackURL: GOOGLE_CALLBACK_URL
-  },
-  function(accessToken, refreshToken, profile, done) {
-    var allowedUsers = ALLOWED_ADMIN_EMAIL_ADDRS.split(",");
-    if (profile) {
-      if (allowedUsers.includes(profile["_json"].email)) {
-        userProfile = profile;
-      } else {
-        userProfile = undefined;
-        console.warn("WARNING: Denied attempt to login from unknown user: " + profile["_json"].email);
-      }
-    }
-    return done(null, userProfile);
-  }
-));
-app.get('/auth/google', passport.authenticate('google', { scope : ['profile', 'email'] }));
-app.get('/auth/google/callback', 
-  passport.authenticate('google', { failureRedirect: '/error' }),
-  function(req, res) {
-    // Successful authentication, redirect success.
-    res.redirect('/poll');
-});
-
-
+// enable google auth
+var authRouter = require('./routes/auth');
+var lastLocationBeforeLogin = '/';
 
 app.use(express.static(path.join(__dirname, 'public')))
 .use(express.urlencoded({ extended: true }))
 .use(express.json())
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
-.get('/', (req, res) => res.render('pages/index', { pageData: JSON.stringify({"environment": environment})} ))
-.get('/privacy-policy', (req, res) => res.render('pages/privacy-policy', { pageData: JSON.stringify({"environment": environment})} ))
-.get('/login', (req, res) => res.render('pages/auth', { pageData: JSON.stringify({"environment": environment})} ))
-.get('/error', (req, res) => res.send("error logging in - invalid account for this site", { pageData: JSON.stringify({"environment": environment})} ))
-.get('/logout', function(req, res, next){
-  req.logout(function(err) {
-    if (err) { return next(err); }
-    userProfile = undefined;
-    res.redirect('/poll');
-  });
+
+.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false, // don't save session if unmodified
+  saveUninitialized: false // don't create session until something stored
+}))
+.use(passport.authenticate('session'))
+.use(function(req, res, next) {
+  var msgs = req.session.messages || [];
+  res.locals.messages = msgs;
+  res.locals.hasMessages = !! msgs.length;
+  req.session.messages = [];
+  next();
 })
+.use('/', authRouter)
+.get('/login', function(req, res, next) {
+  // a hack that won't scale past a single user logging in at a time
+  // store the referer on login attempt, to allow redirect after successful login
+  lastLocationBeforeLogin = (req.headers.referer) ? req.headers.referer : '/';
+  res.redirect(302, "/login/federated/google");
+})
+.get('/loggedin', function(req, res, next) {
+  // a hack that won't scale past a single user logging in at a time
+  res.redirect(302, lastLocationBeforeLogin);
+})
+.get('/error', function(req, res, next) {
+  teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "WARNING: Denied attempt to login from unknown user:", JSON.stringify(req.user));
+  res.redirect(301, '/');
+})
+
+.get('/', (req, res) => res.render('pages/index', { pageData: JSON.stringify({"environment": environment, "user": req.user})} ))
+.get('/privacy-policy', (req, res) => res.render('pages/privacy-policy', { pageData: JSON.stringify({"environment": environment})} ))
 .post('/create-payments-for-month', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log('Got /create-payments-for-month POST:', ip, JSON.stringify(req.body));
@@ -241,9 +212,10 @@ app.use(express.static(path.join(__dirname, 'public')))
     // combine database data with supplimentary game data and render the page
     var nextMonday = getDateNextMonday();
     var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString(), "environment": environment };
-    if (userProfile) {
-      //console.log(userProfile["_json"]);
-      pageData.user = userProfile["_json"];
+    
+    if (req.isAuthenticated()) {
+      console.log("User is logged in: ", req.user);
+      pageData.user = req.user;
     }
 
     // render the page and pass some json with stringified value
@@ -274,6 +246,15 @@ app.use(express.static(path.join(__dirname, 'public')))
 .post('/services/payment-manual', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT PAYMENT-MANUAL POST:', ip, req.body);
+
+  if (req.isAuthenticated()) {
+    console.log("User is logged in: ", req.user);
+  } else {
+    console.log("User NOT logged in - rejecting");
+    res.sendStatus(400);
+    return;
+  }
+
   try {
     // validate the details
     var action = req.body.action;
@@ -440,7 +421,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
         var title = "[Mailing List CONFIRMED] " + playerAliasMap[playerConfirmedKey].email + " [Footie, Goodwin, 6pm Mondays]";
         var subject = playerAliasMap[playerConfirmedKey].email + "\n" + playerAliasMap[playerConfirmedKey].subscriptionStatus;
-        sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, title, subject);
+        teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, title, subject);
       }
       if (!playerAliasData) {
         console.log("ERROR FINDING MAILING LIST CODE:", code);
@@ -650,9 +631,9 @@ app.use(express.static(path.join(__dirname, 'public')))
         
         // combine database data with supplimentary game data and render the page
         var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString(), "environment": environment };
-        if (userProfile) {
-          //console.log(userProfile["_json"]);
-          pageData.user = userProfile["_json"];
+        if (req.isAuthenticated()) {
+          console.log("User is logged in: ", req.user);
+          pageData.user = req.user;
         }
         res.render('pages/poll-generate-teams', { pageData: JSON.stringify(pageData) });
       } catch (err) {
@@ -781,13 +762,11 @@ app.use(express.static(path.join(__dirname, 'public')))
     }
     // combine database data with any additional page data
     var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, selectTab: tabName, "environment": environment  };
-    if (userProfile) {
-      //console.log(userProfile["_json"]);
-      pageData.user = userProfile["_json"];
-    }
 
     var playerAliasData = {};
-    if (userProfile) {
+    if (req.isAuthenticated()) {
+      console.log("User is logged in: ", req.user);
+      pageData.user = req.user;
       //console.log('Generating ALIASES page with data');
       var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
       playerAliasData = playerAliasDoc.data();
@@ -834,7 +813,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     "saveType": saveType, "originalPlayerName": originalPlayerName, "source_ip": ip };
 
     var eventDetails = convertAvailibilityToDates(gameMonth, gameYear, playerAvailability);
-    sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[Player Change Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
+    teamUtils.sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[Player Change Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
 
     console.log('Inserting DB game data:', JSON.stringify(gamedetails_new));
     try {
@@ -922,7 +901,7 @@ app.use(express.static(path.join(__dirname, 'public')))
           // save updated teams
           await firestore.collection("ADMIN").doc("GameWeekPreview").set(playersPreviewData);
           // send an admin email to inform that draft teams need updating
-          //sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[DRAFT TEAMS UPDATE NEEDED Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
+          //teamUtils.sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[DRAFT TEAMS UPDATE NEEDED Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
           var emailPrefix = playerName + " - Playing?: " + playerAvailableThisWeek;
           sendTeamsPreviewEmail(playersPreviewData, emailPrefix);
         }
@@ -938,7 +917,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
     console.log('Got /save-week-attendance POST:', ip, JSON.stringify(req.body));
     
-    if (!userProfile) {
+    if (!req.isAuthenticated) {
       console.warn('WARNING: attempting to save WEEK ATTENDANCE but user not logged in.  Denied.');
       res.status(401).send({'result': 'Denied. User not logged in...'});
       return;
@@ -961,7 +940,7 @@ app.use(express.static(path.join(__dirname, 'public')))
       attendanceDetails[weekNumber].scores = scores[weekNumber];
     });
 
-    sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Week Attendance Change] " + gameYear + "-" + gameMonth + " (" + gameWeek + ")", JSON.stringify(attendanceDetails));
+    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Week Attendance Change] " + gameYear + "-" + gameMonth + " (" + gameWeek + ")", JSON.stringify(attendanceDetails));
 
     console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
     try {
@@ -989,7 +968,7 @@ app.use(express.static(path.join(__dirname, 'public')))
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
   console.log('Got /save-payment POST:', ip, JSON.stringify(req.body));
 
-  if (!userProfile) {
+  if (!req.isAuthenticated) {
     console.warn('WARNING: attempting to save PAYMENT but user not logged in.  Denied.');
     res.status(401).send({'result': 'Denied. User not logged in...'});
     return;
@@ -1015,7 +994,7 @@ app.use(express.static(path.join(__dirname, 'public')))
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
   console.log('Got /payment-email-admin POST:', ip, JSON.stringify(req.body));
 
-  if (!userProfile) {
+  if (!req.isAuthenticated) {
     console.warn('WARNING: attempting to save PAYMENT but user not logged in.  Denied.');
     res.status(401).send({'result': 'Denied. User not logged in...'});
     return;
@@ -1043,7 +1022,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
     console.log('Got /admin-save-aliases POST:', ip, JSON.stringify(req.body));
 
-    if (!userProfile) {
+    if (!req.isAuthenticated) {
       console.warn('WARNING: attempting to save ALIASES but user not logged in.  Denied.');
       res.status(401).send({'result': 'Denied. User not logged in...'});
       return;
@@ -1066,7 +1045,7 @@ app.use(express.static(path.join(__dirname, 'public')))
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
   console.log('Got /send-email POST:', ip, JSON.stringify(req.body));
   
-  if (!userProfile) {
+  if (!req.isAuthenticated) {
     console.warn('WARNING: attempting to SEND EMAIL but user not logged in.  Denied.');
     res.status(401).send({'result': 'Denied. User not logged in...'});
     return;
@@ -1090,7 +1069,7 @@ app.use(express.static(path.join(__dirname, 'public')))
   };
 
   // now send the email
-  var emailResult = sendEmailToList(mailOptions, req.hostname);
+  var emailResult = teamUtils.sendEmailToList(mailOptions, req.hostname);
 
   if (emailResult) {
     res.json({'result': 'OK'})
@@ -1197,7 +1176,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     var totalPlayers = playersPreviewData.redPlayers.length + playersPreviewData.bluePlayers.length;
     if (totalPlayers < 6) {
       // not enough players so send email to admin ONLY
-      sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[NOT ENOUGH PLAYERS] " + totalPlayers + EMAIL_TITLE_POSTFIX, playersPreviewData.redPlayers + "\n" + playersPreviewData.bluePlayers);
+      teamUtils.sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[NOT ENOUGH PLAYERS] " + totalPlayers + EMAIL_TITLE_POSTFIX, playersPreviewData.redPlayers + "\n" + playersPreviewData.bluePlayers);
       res.json({'result': 'OK'});
       return;
     }
@@ -1215,7 +1194,7 @@ app.use(express.static(path.join(__dirname, 'public')))
       text: emailDetails.emailBody
     };
     console.log(mailOptions);
-    var emailResult = sendEmailToList(mailOptions, req.hostname);
+    var emailResult = teamUtils.sendEmailToList(mailOptions, req.hostname);
 
     // finally delete the old gameweek preview - email has been sent
     await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
@@ -1598,83 +1577,6 @@ function convertAvailibilityToDates(gameMonth, gameYear, availabilityMap) {
   return returnString;
 }
 
-// send an email to the admins to notify of certain events (such as a player availability change)
-// type determines list of people in the TO address - see EMAIL_TYPE_* constants
-function sendAdminEvent(type, title, details) {
-  var emailTo = 'Phil R Test1 <philroffe+Test1@gmail.com>';
-  switch (type) {
-    case EMAIL_TYPE_ADMIN_ONLY:
-      emailTo = SYSTEM_ADMIN_EMAIL_ADDRS;
-      break;
-    case EMAIL_TYPE_TEAMS_ADMIN:
-      emailTo = TEAMS_ADMIN_EMAIL_ADDRS; 
-      break;
-    default:
-      console.log('WARN - Skipping sending admin email:' + title + ' Unknown admin event type:' + type);
-      return;
-  }
-
-  var mailOptions = {
-    from: "philroffe+footie@gmail.com",
-    to: emailTo,
-    subject: title,
-    html: "<pre>" + details + "</pre>"
-  };
-
-  // if a test env, check whether to send and update to/from accordingly
-  if (environment != "PRODUCTION") {
-    if (ENABLE_TEST_EMAILS) {
-      // if localhost then force testing emails only
-      mailOptions.to = ['Phil R Test1 <philroffe+Test1@gmail.com>'];
-      mailOptions.from = ['Phil R TestEnv <philroffe+TestEnv@gmail.com>'];
-      console.log('FORCING SENDING _TEST_ ADMIN MSG BECAUSE RUNNING LOCALLY');
-    } else {
-      console.log('EMAIL-LOG - test env so not sending admin email: ', mailOptions);
-      return;
-    }
-  }
-
-  // now send the email
-  transporter.sendMail(mailOptions, function(error, info){
-    console.log('Trying to send admin email: ', mailOptions);
-    if (error) {
-      console.log(error);
-      return false;
-    } else {
-      console.log('Admin email sent: ' + info.response);
-      return true;
-    }
-  });
-}
-
-
-// send an email to the admins to notify of certain events (such as a player availability change)
-function sendEmailToList(mailOptions, hostname) {
-  // if a test env, check whether to send and update to/from accordingly
-  if (environment != "PRODUCTION") {
-    if (ENABLE_TEST_EMAILS) {
-      // if localhost then force testing emails only
-      mailOptions.to = ['Phil R Test1 <philroffe+Test1@gmail.com>'];
-      mailOptions.from = ['Phil R TestEnv <philroffe+TestEnv@gmail.com>'];
-      console.log('FORCING SENDING _TEST_ ADMIN MSG BECAUSE RUNNING LOCALLY');
-    } else {
-      console.log('EMAIL-LOG - test env so not sending admin email: ', mailOptions);
-      return;
-    }
-  }
-
-  transporter.sendMail(mailOptions, function(error, info){
-    console.log('Trying to send admin email: ', mailOptions);
-    if (error) {
-      console.log(error);
-      return false;
-    } else {
-      console.log('Admin email sent: ' + info.response);
-      return true;
-    }
-  });
-}
-
 // save players that played for each team
 async function saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, scores = undefined) {
  try {
@@ -2038,11 +1940,11 @@ async function addRemoveEmailSubscription(details, hostname) {
       text: emailText
     };
     //console.log(mailOptions); 
-    var emailResult = sendEmailToList(mailOptions, hostname);
+    var emailResult = teamUtils.sendEmailToList(mailOptions, hostname);
   }
   if (mailinglistChanged) {
     console.log("UPDATED LIST SO SAVING", playerAliasMap[playerKey]);
-    sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Mailing List Change Event] " + email + EMAIL_TITLE_POSTFIX, email + "\n" + playerAliasMap[playerKey].subscriptionStatus);
+    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Mailing List Change Event] " + email + EMAIL_TITLE_POSTFIX, email + "\n" + playerAliasMap[playerKey].subscriptionStatus);
     await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
   }
   return true;
@@ -2163,10 +2065,7 @@ function sendTeamsPreviewEmail(playersPreviewData, emailPrefix) {
   for (var i = 0; i < playersPreviewData.standbyPlayers.length; i ++) {
     emailBody += "\n" + playersPreviewData.standbyPlayers[i];
   }
-  sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, emailSubject, emailBody);
-  if (ENABLE_WHATSAPP) {
-    messageHelper.sendWhatsappEvent(EMAIL_TYPE_TEAMS_ADMIN, emailSubject, playersPreviewData);
-  }
+  teamUtils.sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, emailSubject, emailBody);
 }
 
 

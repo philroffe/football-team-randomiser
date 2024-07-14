@@ -172,11 +172,6 @@
 
     var user = pagedata.user;
     if (user) {
-      document.getElementById("authHeaderSmall").innerHTML = user.given_name + " (logout)";
-      document.getElementById("authHeaderSmall").href = "/logout";
-      document.getElementById("authHeaderLarge").innerHTML = user.given_name + " (logout)";
-      document.getElementById("authHeaderLarge").href = "/logout";
-      console.log("Logged in User:", user);
       document.getElementById("sendEmailDiv").style.visibility = "visible";
 
       // set the collapsed email

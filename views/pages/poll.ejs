@@ -167,16 +167,6 @@
       var selectedDate = document.getElementById("gameMonthInput").value
       document.location.href = '/poll?date=' + selectedDate + '-01'
     });
-
-
-    var user = pagedata.user;
-    if (user) {
-      document.getElementById("authHeaderSmall").innerHTML = user.given_name + " (logout)";
-      document.getElementById("authHeaderSmall").href = "/logout";
-      document.getElementById("authHeaderLarge").innerHTML = user.given_name + " (logout)";
-      document.getElementById("authHeaderLarge").href = "/logout";
-      console.log("Logged in User:", user);
-    }
     
 
     //console.log("pagedata", pagedata);

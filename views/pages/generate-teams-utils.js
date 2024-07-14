@@ -1,3 +1,14 @@
+if (typeof module != "undefined") {
+  const EMAIL_TYPE_ALL_PLAYERS = 0;
+  const EMAIL_TYPE_ADMIN_ONLY = 1;
+  const EMAIL_TYPE_TEAMS_ADMIN = 2;
+  const SYSTEM_ADMIN_EMAIL_ADDRS = (process.env.SYSTEM_ADMIN_EMAIL_ADDRS) ? process.env.SYSTEM_ADMIN_EMAIL_ADDRS : "Phil Roffe <philroffe@gmail.com>";
+  const TEAMS_ADMIN_EMAIL_ADDRS = (process.env.TEAMS_ADMIN_EMAIL_ADDRS) ? process.env.TEAMS_ADMIN_EMAIL_ADDRS : SYSTEM_ADMIN_EMAIL_ADDRS;
+  const ATTENDANCE_ADMIN_EMAIL_ADDRS = (process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS) ? process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS : TEAMS_ADMIN_EMAIL_ADDRS;
+  const MAILING_LIST_ADMIN_EMAIL_ADDRS = (process.env.MAILING_LIST_ADMIN_EMAIL_ADDRS) ? process.env.MAILING_LIST_ADMIN_EMAIL_ADDRS : SYSTEM_ADMIN_EMAIL_ADDRS;
+  const ENABLE_TEST_EMAILS = (process.env.ENABLE_TEST_EMAILS) ? (process.env.ENABLE_TEST_EMAILS.toUpperCase() === "ENABLED") : false;
+}
+
   function getNextMondayIndex(options, nextMondayDate) {
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
     var monthDateLongFormat = new Intl.DateTimeFormat('en', { month: 'long' });
@@ -660,6 +671,83 @@ function checkIfBankHoliday(bankHolidaysJson, pollDate) {
   return isBankHoliday;
 }
 
+// send an email to the admins to notify of certain events (such as a player availability change)
+// type determines list of people in the TO address - see EMAIL_TYPE_* constants
+function sendAdminEvent(type, title, details) {
+  var emailTo = 'Phil R Test1 <philroffe+Test1@gmail.com>';
+  switch (type) {
+    case EMAIL_TYPE_ADMIN_ONLY:
+      emailTo = SYSTEM_ADMIN_EMAIL_ADDRS;
+      break;
+    case EMAIL_TYPE_TEAMS_ADMIN:
+      emailTo = TEAMS_ADMIN_EMAIL_ADDRS; 
+      break;
+    default:
+      console.log('WARN - Skipping sending admin email:' + title + ' Unknown admin event type:' + type);
+      return;
+  }
+
+  var mailOptions = {
+    from: "philroffe+footie@gmail.com",
+    to: emailTo,
+    subject: title,
+    html: "<pre>" + details + "</pre>"
+  };
+
+  // if a test env, check whether to send and update to/from accordingly
+  if (process.env.ENVIRONMENT != "PRODUCTION") {
+    if (ENABLE_TEST_EMAILS) {
+      // if localhost then force testing emails only
+      mailOptions.to = ['Phil R Test1 <philroffe+Test1@gmail.com>'];
+      mailOptions.from = ['Phil R TestEnv <philroffe+TestEnv@gmail.com>'];
+      console.log('FORCING SENDING _TEST_ ADMIN MSG BECAUSE RUNNING LOCALLY');
+    } else {
+      console.log('EMAIL-LOG - test env so not sending admin email: ', mailOptions);
+      return;
+    }
+  }
+
+  // now send the email
+  transporter.sendMail(mailOptions, function(error, info){
+    console.log('Trying to send admin email: ', mailOptions);
+    if (error) {
+      console.log(error);
+      return false;
+    } else {
+      console.log('Admin email sent: ' + info.response);
+      return true;
+    }
+  });
+}
+
+
+// send an email to the admins to notify of certain events (such as a player availability change)
+function sendEmailToList(mailOptions, hostname) {
+  // if a test env, check whether to send and update to/from accordingly
+  if (process.env.ENVIRONMENT != "PRODUCTION") {
+    if (ENABLE_TEST_EMAILS) {
+      // if localhost then force testing emails only
+      mailOptions.to = ['Phil R Test1 <philroffe+Test1@gmail.com>'];
+      mailOptions.from = ['Phil R TestEnv <philroffe+TestEnv@gmail.com>'];
+      console.log('FORCING SENDING _TEST_ ADMIN MSG BECAUSE RUNNING LOCALLY');
+    } else {
+      console.log('EMAIL-LOG - test env so not sending admin email: ', mailOptions);
+      return;
+    }
+  }
+
+  transporter.sendMail(mailOptions, function(error, info){
+    console.log('Trying to send admin email: ', mailOptions);
+    if (error) {
+      console.log(error);
+      return false;
+    } else {
+      console.log('Admin email sent: ' + info.response);
+      return true;
+    }
+  });
+}
+
 // workaround check as this file is included serverside as a module
 if (typeof module != "undefined") {
   module.exports = {
@@ -669,7 +757,9 @@ if (typeof module != "undefined") {
     getOfficialNameFromAlias,
     mondaysInMonth,
     datesAreOnSameDay,
-    checkIfBankHoliday
+    checkIfBankHoliday,
+    sendAdminEvent,
+    sendEmailToList
   };
 }
 

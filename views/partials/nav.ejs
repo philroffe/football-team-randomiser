@@ -7,7 +7,7 @@
     <a href="/stats" class="w3-bar-item w3-button w3-padding-large w3-hide-small">View Stats and Charts</a>
     <a href="/mailing-list" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Mailing List</a>
     <a href="/teams" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Generate Teams</a>
-    <a href="/auth/google" id="authHeaderLarge" class="w3-bar-item w3-button w3-padding-large w3-hide-small btn-danger"><span class="fa fa-google"></span> Admin</a>
+    <a href="/login?redirect=/teams" id="authHeaderLarge" class="w3-bar-item w3-button w3-padding-large w3-hide-small btn-danger"><span class="fa fa-google"></span> Admin</a>
   </div>
 </div>
 
@@ -17,7 +17,7 @@
   <a href="/teams" class="w3-bar-item w3-button w3-padding-large">Generate Teams</a>
   <a href="/stats" class="w3-bar-item w3-button w3-padding-large">View Stats and Charts</a>
   <a href="/mailing-list" class="w3-bar-item w3-button w3-padding-large">Mailing List</a>
-  <a href="/auth/google" id="authHeaderSmall" class="w3-bar-item w3-button w3-padding-large btn-danger"><span class="fa fa-google"></span> Admin</a>
+  <a href="/login?redirect=/teams" id="authHeaderSmall" class="w3-bar-item w3-button w3-padding-large btn-danger"><span class="fa fa-google"></span> Admin</a>
 </div>
 
 <script>
@@ -58,5 +58,15 @@ if (headerPageData.environment != "PRODUCTION") {
   // also set footer
   var footer = document.getElementById("footer")
   footer.style.backgroundColor = "#f44336";
+}
+
+
+var user = headerPageData.user;
+if (user) {
+  document.getElementById("authHeaderSmall").innerHTML = user.name + " (logout)";
+  document.getElementById("authHeaderSmall").href = "/logout";
+  document.getElementById("authHeaderLarge").innerHTML = user.name + " (logout)";
+  document.getElementById("authHeaderLarge").href = "/logout";
+  console.log("Logged in User:", user);
 }
 </script>
