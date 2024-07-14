@@ -674,7 +674,7 @@ function checkIfBankHoliday(bankHolidaysJson, pollDate) {
 // send an email to the admins to notify of certain events (such as a player availability change)
 // type determines list of people in the TO address - see EMAIL_TYPE_* constants
 function sendAdminEvent(type, title, details) {
-  var emailTo = 'Phil R Test1 <philroffe+Test1@gmail.com>';
+  var emailTo = SYSTEM_ADMIN_EMAIL_ADDRS;
   switch (type) {
     case EMAIL_TYPE_ADMIN_ONLY:
       emailTo = SYSTEM_ADMIN_EMAIL_ADDRS;
@@ -688,7 +688,7 @@ function sendAdminEvent(type, title, details) {
   }
 
   var mailOptions = {
-    from: "philroffe+footie@gmail.com",
+    from: SYSTEM_ADMIN_EMAIL_ADDRS,
     to: emailTo,
     subject: title,
     html: "<pre>" + details + "</pre>"
@@ -698,8 +698,8 @@ function sendAdminEvent(type, title, details) {
   if (process.env.ENVIRONMENT != "PRODUCTION") {
     if (ENABLE_TEST_EMAILS) {
       // if localhost then force testing emails only
-      mailOptions.to = ['Phil R Test1 <philroffe+Test1@gmail.com>'];
-      mailOptions.from = ['Phil R TestEnv <philroffe+TestEnv@gmail.com>'];
+      mailOptions.to = [SYSTEM_ADMIN_EMAIL_ADDRS];
+      mailOptions.from = [SYSTEM_ADMIN_EMAIL_ADDRS];
       console.log('FORCING SENDING _TEST_ ADMIN MSG BECAUSE RUNNING LOCALLY');
     } else {
       console.log('EMAIL-LOG - test env so not sending admin email: ', mailOptions);
@@ -727,8 +727,8 @@ function sendEmailToList(mailOptions, hostname) {
   if (process.env.ENVIRONMENT != "PRODUCTION") {
     if (ENABLE_TEST_EMAILS) {
       // if localhost then force testing emails only
-      mailOptions.to = ['Phil R Test1 <philroffe+Test1@gmail.com>'];
-      mailOptions.from = ['Phil R TestEnv <philroffe+TestEnv@gmail.com>'];
+      mailOptions.to = [SYSTEM_ADMIN_EMAIL_ADDRS];
+      mailOptions.from = [SYSTEM_ADMIN_EMAIL_ADDRS];
       console.log('FORCING SENDING _TEST_ ADMIN MSG BECAUSE RUNNING LOCALLY');
     } else {
       console.log('EMAIL-LOG - test env so not sending admin email: ', mailOptions);
