@@ -46,6 +46,7 @@
       
                       var title = mondaysDates[weekNumber] + "-" + monthString + "-" + yearString + "  # Games:" + weekCount;
                       dataTicker.push([playerCumulativeGames, 0, 0, officialName, title]);
+                      //console.log("------", playerCumulativeGames, officialName, title);
                     }
                   }
                 }

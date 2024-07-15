@@ -19,9 +19,9 @@
 
   <div id="padding" style="height: 40px"></div>
   <h3 id="alltimegames">Stats since: 
-    <select name="dateRange" id="dateRange" checked onchange="changeDateRange(this.value)">
+    <select name="dateRange" id="dateRange" onchange="changeDateRange(this.value)">
       <option value="12">12 Months</option>
-      <option value="6">6 Months</option>
+      <option value="6" selected>6 Months</option>
       <option value="3">3 Months</option>
       <option value="9999">Since Jan23</option>
     </select>
@@ -51,7 +51,7 @@
   <div id="panels" class="panels">
     <div class="panel" id="one-panel">
       <div class="content">
-        <div id="blank" style="height: 40px"></div>
+        <div id="blank1" style="height: 40px"></div>
         <div class="panelcontentinnerleft" style="width: 50%; text-align:right">
           <label for="statChartSelect" style="width: 100%; margin-rightr: 10px"><b>Choose Statistic: </b></label>
         </div>
@@ -73,7 +73,7 @@
     </div>
     <div class="panel" id="two-panel">
       <div class="content">
-        <div id="blank" style="height: 40px"></div>
+        <div id="blank2" style="height: 40px"></div>
         <div id="totalRedBlueWinsContainer" style="height: 800px; max-width: 100%"></div>
       </div>
     </div>
@@ -86,45 +86,38 @@
           Player 2:
           <select id="player2HeadToHeadSelect" onchange="createHeadToHead(document.getElementById('player1HeadToHeadSelect').value, this.value, 'playerHeadToHeadDiv')" ></select>
         </div>
-        <div id="blank" style="height: 80px"></div>
+        <div id="blank3" style="height: 80px"></div>
         <div id="playerHeadToHeadDiv" style="height: 1000px; max-width: 100%"></div>
       </div>
     </div>
     <div class="panel" id="four-panel">
       <div class="content">
-        <div id="blank" style="height: 40px"></div>
+        <div id="blank4" style="height: 40px"></div>
         <div id="playerStackChartDiv" style="height: 800px; max-width: 100%"></div>
       </div>
     </div>
     <div class="panel" id="five-panel">
       <div class="content">
-        <div id="blank" style="height: 40px"></div>
+        <div id="blank5" style="height: 40px"></div>
         <div id="playerColourBarChartDiv" style="height: 800px; max-width: 100%"></div>
       </div>
     </div>
     <div class="panel" id="six-panel">
       <div class="content">
-        <div id="blank" style="height: 40px"></div>
+        <div id="blank6" style="height: 40px"></div>
         <div id="playerWinBarChartDiv" style="height: 800px; max-width: 100%"></div>
       </div>
     </div>
     <div class="panel" id="seven-panel">
       <div class="content">
-        <div id="blank" style="height: 40px"></div>
+        <div id="blank7" style="height: 40px"></div>
         <h3>Goals Scored per Game</h3>
         <div id="goalScorersBarChartDiv" style="height: 800px; max-width: 100%"></div>
       </div>
     </div>
-    <div class="panel" id="nine-panel">
-      <div class="content">
-        <div id="blank" style="height: 40px"></div>
-        <h3>Total Games Played Since 2019</h3>
-        <div id="playerTickerDiv" style="height: 800px; max-width: 100%"></div>
-      </div>
-    </div>
     <div class="panel" id="eight-panel">
       <div class="content">
-        <div id="blank" style="height: 40px"></div>
+        <div id="blank8" style="height: 40px"></div>
         <div class="panelcontentouter">
           <div class="panelcontentinnerleft" style="width: 50%">
           <label for="playerSelect" style="width: 100%">Choose Player(s):</label>
@@ -136,11 +129,19 @@
           </div>
           <div style="clear:both;"></div>
         </div>
-        <div id="blank" style="height: 40px"></div>
+        <div id="blank8a" style="height: 40px"></div>
         <div id="playerChartsDiv"  style="height: 800px; max-width: 100%"></div>
       </div>
     </div>
+    <div class="panel" id="nine-panel">
+      <div class="content">
+        <div id="blank9" style="height: 40px"></div>
+        <h3>Total Games Played Since 2019</h3>
+        <div id="playerTickerDiv" style="height: 800px; max-width: 100%"></div>
+      </div>
+    </div>
   </div>
+  <!-- check main.css to ensure tab numbers are added -->
   </div>
 
   <%- include ("./stats-utils.js") %>
@@ -171,6 +172,8 @@
     var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap).sort());
     //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
 
+    if (!pagedata.selectTab) { pagedata.selectTab = 'one'; }
+
     function changeTab(tabName) {
       // calculate updated URL
       var newURL = window.location.href;
@@ -182,6 +185,7 @@
       }
       // update the URL (without refreshing) to reflect tab change
       window.history.pushState({}, 'unused', newURL);
+      pagedata.selectTab = tabName;
 
       switch(tabName) {
         case 'one':
@@ -1208,6 +1212,5 @@
 
     </script>
 
-  </div>
 </body>
 </html>

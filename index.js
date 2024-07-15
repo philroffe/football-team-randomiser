@@ -704,6 +704,12 @@ app.use(express.static(path.join(__dirname, 'public')))
     rowdata.allCollectionDocs = await getAllDataFromDB();
     //console.log('rowdata', JSON.stringify(rowdata));
 
+    // discard some uneccesary data
+    delete rowdata.allCollectionDocs.INBOUND_EMAILS;
+    delete rowdata.allCollectionDocs.OPEN_LEDGER;
+    delete rowdata.allCollectionDocs.CLOSED_LEDGER;
+    delete rowdata.allCollectionDocs.MAILING_LIST_AUDIT;
+
     var tabName = "";
     if (req.query.tab) {
       tabName = req.query.tab;

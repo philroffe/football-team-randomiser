@@ -364,7 +364,7 @@ function addPlayerListToTab(tabName) {
 
       const weekDateHeader = document.createElement("i");
       if (isBankHoliday) {
-        currentDateHeader = "<strike>" + currentDateHeader + "</strike>";
+        currentDateHeader = "<s>" + currentDateHeader + "</s>";
         newWeekHeader.setAttribute("bankHoliday", true);
       }
       weekDateHeader.innerHTML = currentDateHeader;
