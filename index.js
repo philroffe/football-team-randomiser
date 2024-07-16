@@ -54,15 +54,6 @@ const EMAIL_TYPE_TEAMS_ADMIN = 2;
 
 /* Email functionality */
 const GOOGLE_MAIL_FROM_NAME = (process.env.GOOGLE_MAIL_FROM_NAME) ? process.env.GOOGLE_MAIL_FROM_NAME : "Phil Roffe <philroffe@gmail.com>";
-const GOOGLE_MAIL_USERNAME = (process.env.GOOGLE_MAIL_USERNAME) ? process.env.GOOGLE_MAIL_USERNAME : "NOT_SET";
-const GOOGLE_MAIL_APP_PASSWORD = (process.env.GOOGLE_MAIL_APP_PASSWORD) ? process.env.GOOGLE_MAIL_APP_PASSWORD : "NOT_SET";
-var transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: GOOGLE_MAIL_USERNAME,
-    pass: GOOGLE_MAIL_APP_PASSWORD
-  }
-});
 
 const app = express();
 app.use(compression());

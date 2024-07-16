@@ -6,12 +6,24 @@ var TEAMS_ADMIN_EMAIL_ADDRS = SYSTEM_ADMIN_EMAIL_ADDRS;
 var ATTENDANCE_ADMIN_EMAIL_ADDRS = TEAMS_ADMIN_EMAIL_ADDRS;
 var MAILING_LIST_ADMIN_EMAIL_ADDRS =  SYSTEM_ADMIN_EMAIL_ADDRS;
 var ENABLE_TEST_EMAILS =  false;
+var transporter;
 if (typeof module != "undefined") {
   SYSTEM_ADMIN_EMAIL_ADDRS = (process.env.SYSTEM_ADMIN_EMAIL_ADDRS) ? process.env.SYSTEM_ADMIN_EMAIL_ADDRS : "Phil Roffe <philroffe@gmail.com>";
   TEAMS_ADMIN_EMAIL_ADDRS = (process.env.TEAMS_ADMIN_EMAIL_ADDRS) ? process.env.TEAMS_ADMIN_EMAIL_ADDRS : SYSTEM_ADMIN_EMAIL_ADDRS;
   ATTENDANCE_ADMIN_EMAIL_ADDRS = (process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS) ? process.env.ATTENDANCE_ADMIN_EMAIL_ADDRS : TEAMS_ADMIN_EMAIL_ADDRS;
   MAILING_LIST_ADMIN_EMAIL_ADDRS = (process.env.MAILING_LIST_ADMIN_EMAIL_ADDRS) ? process.env.MAILING_LIST_ADMIN_EMAIL_ADDRS : SYSTEM_ADMIN_EMAIL_ADDRS;
   ENABLE_TEST_EMAILS = (process.env.ENABLE_TEST_EMAILS) ? (process.env.ENABLE_TEST_EMAILS.toUpperCase() === "ENABLED") : false;
+  /* Email functionality */
+  const nodemailer = require('nodemailer');
+  const GOOGLE_MAIL_USERNAME = (process.env.GOOGLE_MAIL_USERNAME) ? process.env.GOOGLE_MAIL_USERNAME : "NOT_SET";
+  const GOOGLE_MAIL_APP_PASSWORD = (process.env.GOOGLE_MAIL_APP_PASSWORD) ? process.env.GOOGLE_MAIL_APP_PASSWORD : "NOT_SET";
+  var transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: GOOGLE_MAIL_USERNAME,
+      pass: GOOGLE_MAIL_APP_PASSWORD
+    }
+  });
 }
 
   function getNextMondayIndex(options, nextMondayDate) {
