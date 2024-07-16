@@ -4,7 +4,6 @@ const PORT = process.env.PORT || 5000
 const https = require('https')
 const compression = require('compression');
 const session = require('express-session');
-const nodemailer = require('nodemailer');
 const fs = require('fs');
 const mimelib = require("mimelib");
 const { convert } = require('html-to-text');
