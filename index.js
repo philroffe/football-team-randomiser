@@ -1260,6 +1260,16 @@ app.use(express.static(path.join(__dirname, 'public')))
 })
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
 
+// catch any unexpected exception and try to send an email alert before exiting
+process.on('uncaughtException', function(err) {
+  teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "SERVER ERROR: Caught catastrophic exception. Check server logs", err);
+  console.log('ERROR: Caught catastrophic exception: ' + err);
+
+  // Intentionally cause an exception by calling undefined function, but don't catch it.
+  forceQuit();
+  console.log('This will not run.');
+});
+
 function getDateNextMonday(fromDate = new Date()) {
   // Get the date next Monday
   nextMonday = fromDate;
