@@ -17,7 +17,7 @@ if (typeof module != "undefined") {
   const nodemailer = require('nodemailer');
   const GOOGLE_MAIL_USERNAME = (process.env.GOOGLE_MAIL_USERNAME) ? process.env.GOOGLE_MAIL_USERNAME : "NOT_SET";
   const GOOGLE_MAIL_APP_PASSWORD = (process.env.GOOGLE_MAIL_APP_PASSWORD) ? process.env.GOOGLE_MAIL_APP_PASSWORD : "NOT_SET";
-  var transporter = nodemailer.createTransport({
+  transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: GOOGLE_MAIL_USERNAME,
@@ -568,7 +568,7 @@ function parsePaypalEmail(bodyText) {
   return parsedData;
 }
 
-//parse inbound paypal email and extract the relevant data
+//parse inbound pitch email and extract the relevant data
 function parsePitchEmail(bodyText) {
   //console.log("bodyText email:", bodyText);
   // now loop through and extract the relevant text
@@ -593,7 +593,7 @@ function parsePitchEmail(bodyText) {
       } else if (thisString.match("John Hawley Bb")) {
         var orderDate = thisString.replace(/John Hawley Bb \(/g, '').replace(/\)/g, '');
         var orderAmount = bodyTextArray[i+1].trim().replace(/Amount NET: /g, '').replace(/\(.*/g, '');
-        orders[orderDate] = Number(orderAmount.replace(/Amount NET: /g, ''));
+        orders[orderDate] = Number(orderAmount.replace(/Amount NET: /g, '')) * -1;
         bodyTextArray[i+1].trim();
         transactionDate = new Date(bodyTextArray[i+1].trim());
       }
@@ -620,8 +620,8 @@ function parsePitchEmail(bodyText) {
   var parsedData = { "payeeName": payeeName, "amount": orders[orderDate], "gameDate": orderDate,
     "transactionId": transactionId, "transactionDate": orderDate};
 
-  console.log("Parsed paypal email:", parsedDataMap);
-  return parsedData;
+  //console.log("Parsed pitch email:", parsedDataMap);
+  return parsedDataMap;
 }
 
 

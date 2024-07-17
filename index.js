@@ -283,6 +283,74 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.json({'result': err})
   }
 })
+
+.post('/services/payment-admin-cost', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT PAYMENT-MANUAL POST:', ip, req.body);
+
+  if (req.isAuthenticated()) {
+    console.log("User is logged in: ", req.user);
+  } else {
+    console.log("User NOT logged in - rejecting");
+    res.sendStatus(400);
+    return;
+  }
+
+  try {
+    // validate the details
+    var saveSuccess = true;
+    var errorMessage = [];
+    for (i=0; i<req.body.length; i++) {
+      var payeeName = req.body[i].payeeName;
+      var amount = Number(req.body[i].amount);
+      var transactionId = req.body[i].transactionId;
+      var transactionDate = new Date(req.body[i].transactionDate);
+
+      if (transactionDate && transactionId && payeeName && amount) {
+
+        try {
+          var dayString = "" + transactionDate.getDate();
+          if (dayString.length == 1) {
+            dayString = "0" + dayString;
+          }
+          var monthString = "" + (transactionDate.getMonth()+1);
+          if (monthString.length == 1) {
+            monthString = "0" + monthString;
+          }
+          // read list of outstanding payments for the player
+          const playerClosedLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc(payeeName);
+          var thisDate = transactionDate.getFullYear() + "-" + monthString + "-" + dayString;
+          var playerTransactionName = "charge_pitch_" + thisDate + "_" + transactionId;
+          var playerClosedLedgerDoc = await playerClosedLedgerDocRef.get();
+          if (playerClosedLedgerDoc.data() && playerClosedLedgerDoc.data()[playerTransactionName]) {
+            console.warn("transaction already exists, skipping to avoid double counting...", playerTransactionName);
+            errorMessage[i] = req.body[i];
+            saveSuccess = false;
+          }
+          var playerTransactionSavedata = {};
+          playerTransactionSavedata[playerTransactionName] = req.body[i];
+          console.log('Adding PAYMENTS:', payeeName, thisDate, JSON.stringify(playerTransactionSavedata));
+          playerClosedLedgerDocRef.set(playerTransactionSavedata, { merge: true });
+        } catch (err) {
+          console.error(err);
+          errorMessage[i] = req.body[i];
+          saveSuccess = false;
+        }
+      }
+    }
+
+    if (saveSuccess) {
+      res.json({'result': 'OK'})
+    } else {
+      console.error("ERROR: Failed to save manual admin cost - discarding", errorMessage);
+      res.sendStatus(400);
+    }
+
+  } catch (err) {
+    console.error(err);
+    res.json({'result': err})
+  }
+})
 .post('/services/goal-scorers', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT GOAL-SCORERS POST FROM EMAIL:', ip, req.body);

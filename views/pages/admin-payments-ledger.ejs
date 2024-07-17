@@ -72,6 +72,7 @@
         <select id="paymentsSelect" onchange="updateEmailText(this.value)" >
         <option> ---Select Failed Email--- </option>  
         </select>
+        <button id="addAdminCost" style="background-color: #90EE90;" type="button" onclick="addAdminCost();">Add Admin Cost</button><br>
         <button id="parseEmail" style="background-color: #90EE90;" type="button" onclick="parseEmail();">Parse Email</button><br>
         <button id="deleteEmail" style="background-color: #90EE90;" type="button" onclick="deleteEmail();">Delete</button><br>
         <p id="htmlEmail" rows="30" style="width:95%;font-size: 100%;margin-top:10px" >Not Yet Available</textarea>
@@ -136,7 +137,19 @@
         x.add(option);
 
         if (inboundEmails[key].type == "PAYMENT_PITCH_EMAIL") {
-
+          //var playerTransactionName = "charge_pitch_" + thisDate + "_" + transactionId;
+          updateEmailText(option.text);
+          var parsedData = parsePitchEmail(document.getElementById('htmlEmail').innerText);
+          var dateTime = key.replace(EMAIL_DOC_PREFIX, "").replace(/T(\d\d:\d\d).*/, " $1");
+          var pitchChargeAlreadyRegistered = false;
+          for (const paymentId in closedLedgers["Admin"]) {
+            if (paymentId.startsWith("charge_pitch_") && closedLedgers["Admin"][paymentId].transactionId == parsedData[0].transactionId) {
+              pitchChargeAlreadyRegistered = true;
+            }
+          }
+          if (!pitchChargeAlreadyRegistered) {
+            option.text += " (NEW)";
+          }
         } else { //if (inboundEmails[key].type == "PAYMENT_PAYPAL_EMAIL") {
           // identify NEW emails - parse the email and check if the payment is already added
           updateEmailText(option.text);
@@ -355,8 +368,10 @@
       var htmlCode = "";
       if (inboundEmails[EMAIL_DOC_PREFIX + text].type == "PAYMENT_PITCH_EMAIL") {
         htmlCode = emailBody.substring(emailBody.indexOf("Payment Date"), emailBody.indexOf("Please make a note"));
-        var parsedData = parsePitchEmail(htmlCode)
-        console.log("Pitch parsedData", parsedData);
+        var parsedData = parsePitchEmail(htmlCode);
+        //console.log("Pitch parsedData", parsedData);
+        // display text summary
+        htmlCode = "<pre>" + emailBody.substring(emailBody.indexOf("Thank"), emailBody.indexOf("Please")) + "</pre>";
       } else {
         var startOfHTML = emailBody.indexOf("<html");
         var firstTable = emailBody.indexOf("<table cell", startOfHTML + 1);
@@ -412,6 +427,39 @@
         }
       };
       xmlhttp.open("POST", "/services/payment-manual");
+      xmlhttp.setRequestHeader("Content-Type", "application/json");
+      xmlhttp.send(JSON.stringify(details));
+    }
+
+    function addAdminCost() {
+      var text = document.getElementById("paymentsSelect").value;
+      var emailBody = inboundEmails[EMAIL_DOC_PREFIX + text].data;
+      document.getElementById("emailBody").value = emailBody;
+
+      //if (inboundEmails[EMAIL_DOC_PREFIX + text].type == "PAYMENT_PITCH_EMAIL") {
+      var htmlCode = emailBody.substring(emailBody.indexOf("Payment Date"), emailBody.indexOf("Please make a note"));
+      var parsedData = parsePitchEmail(htmlCode);
+      console.log("Adding admin cost parsedData", parsedData);
+        
+      //var details = {};
+      var details = parsedData;
+      details.action = "ADD";
+      details.amount = details.amount;
+      details.transactionType = "Charge"; //document.querySelector('input[name="transactionType"]:checked').value;
+
+      // now send the POST request with the data
+      var xmlhttp = new XMLHttpRequest();
+      xmlhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          console.log("Saved response", this.responseText);
+          //location.reload(true);
+          document.getElementById("response").innerHTML = "Success!";
+          //document.getElementById("submit").disabled = true;
+        } else if (this.readyState == 4) {
+          document.getElementById("response").innerHTML = "Error!  Something went wrong - check logs to see why it failed";
+        }
+      };
+      xmlhttp.open("POST", "/services/payment-admin-cost");
       xmlhttp.setRequestHeader("Content-Type", "application/json");
       xmlhttp.send(JSON.stringify(details));
     }
