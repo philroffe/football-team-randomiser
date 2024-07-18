@@ -156,6 +156,13 @@ app.use(express.static(path.join(__dirname, 'public')))
     //console.log('Generating TEAMS page with data for date: ', req.query.date);
     //var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
     var rowdata = {};
+    var openFinancialYear = 0; // 0 gets all games, overridden in preferences DB
+    // allow cron to be disabled by setting app preferences
+    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+    var preferences = preferencesDoc.data();
+    if (preferences && preferences.openFinancialYear) {
+      openFinancialYear = preferences.openFinancialYear;
+    }
 
     const inboundEmailsCollection = firestore.collection("INBOUND_EMAILS");
     const allInboundEmailsDocs = await inboundEmailsCollection.get();
@@ -176,6 +183,15 @@ app.use(express.static(path.join(__dirname, 'public')))
     // get all daata - used to generate the costs and kitty
     rowdata.allCollectionDocs = await getAllDataFromDB();
     //console.log(rowdata.allCollectionDocs);
+    // filter the data for the active accounting period
+    var filterData = { ...rowdata.allCollectionDocs }
+    for (const thisDataId in filterData) {
+      if (!thisDataId.includes(openFinancialYear)) {
+        delete filterData[thisDataId];
+      }
+    }
+    rowdata.allCollectionDocs = filterData;
+
 
     // read the completed payments ledger
     const closedLedgerCollection = firestore.collection("CLOSED_LEDGER");
@@ -184,7 +200,25 @@ app.use(express.static(path.join(__dirname, 'public')))
     allClosedLedgerDocs.forEach(doc => {
       var key = doc.id;
       var data = doc.data();
-      closedLedgers[key] = data;
+      // filter the data for the active accounting period
+      var filterData = { ...data }
+      for (const thisDataId in filterData) {
+        if (thisDataId.startsWith("charge_")) {
+          if (!thisDataId.includes(openFinancialYear)) {
+            delete filterData[thisDataId];
+          }
+        }
+        if (thisDataId.startsWith("payment_")) {
+          if (filterData[thisDataId].chargeId && filterData[thisDataId].chargeId.length > 0) {
+            var firstChargeId = filterData[thisDataId].chargeId[0];
+            if (!firstChargeId.includes(openFinancialYear)) {
+              //console.log(thisDataId);
+              delete filterData[thisDataId];
+            }
+          }
+        }
+      }
+      closedLedgers[key] = filterData;
     })
     rowdata.closedLedgers = closedLedgers;
 
@@ -195,7 +229,14 @@ app.use(express.static(path.join(__dirname, 'public')))
     allOpenLedgerDocs.forEach(doc => {
       var key = doc.id;
       var data = doc.data();
-      openLedgers[key] = data;
+      // filter the data for the active accounting period
+      var filterData = { ...data }
+      for (const thisDataId in filterData) {
+        if (!thisDataId.includes(openFinancialYear)) {
+          delete filterData[thisDataId];
+        }
+      }
+      openLedgers[key] = filterData;
     })
     rowdata.openLedgers = openLedgers;
     
