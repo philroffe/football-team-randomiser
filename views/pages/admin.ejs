@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+    <div id="blank" style="height: 40px"></div>
+    <p><h3>Admin Screens:</h3>
+    <p><a href="/teams">Admin - Generate teams</a>
+    <p><a href="/admin-team-preview">Admin - Team Preview</a>
+    <p><a href="/poll?tab=four">Admin - Aliases</a>
+    <p><a href="/admin-payments-ledger">Admin - Payments and Ledger</a>
+    <p><a href="/admin-preferences">Admin - Preferences</a>
+    <br><br>
+    <p><a href="/logout">Logout</a>
+
+      <script type="text/javascript">
+        // restringify and then parse the json to get the page
+        var pageData = JSON.parse(JSON.stringify(<%- pageData %>));
+        //console.log('pageData=', pageData);
+      </script>
+  </div>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+    <div id="blank" style="height: 40px"></div>
+    <p><h3>Admin Preferences</h3>
+
+    <div class="borderdiv">
+      <p>enableCronEmail: <input type="checkbox" id="enableCronEmail" data-lpignore=true>
+      <br>openFinancialYear: <input type="number" id="openFinancialYear" data-lpignore=true>
+      <br><br><button id="submit" style="background-color: #90EE90;float:left;" type="button" onclick="savePreferences();">Submit</button><br><br>
+    </div>
+
+      <script type="text/javascript">
+        // restringify and then parse the json to get the page
+        var pageData = JSON.parse(JSON.stringify(<%- pageData %>));
+        console.log('pageData=', pageData);
+
+        var preferences = pageData.preferences;
+        if (!preferences) { preferences = {}; }
+
+        // loop through preferences and populate input fields
+        for (const key in preferences) {
+          var value = preferences[key];
+          //console.log('Preference', key, value);
+          if (typeof value == "boolean") {
+            document.getElementById(key).checked = preferences[key];
+          } else {
+            document.getElementById(key).value = preferences[key];
+          }
+        }
+
+        function savePreferences() {
+          // now send the POST request with the data
+          var updatedPreferences = { ...preferences };
+
+          // loop through preferences and get new values
+          for (const key in updatedPreferences) {
+            var originalValue = updatedPreferences[key];
+            if (typeof originalValue == "boolean") {
+              updatedPreferences[key] = document.getElementById(key).checked;
+            } else if (typeof originalValue == "number") {
+              updatedPreferences[key] = Number(document.getElementById(key).value);
+            } else {
+              updatedPreferences[key] = document.getElementById(key).value;
+            }
+            //console.log('Updated Preference', key, updatedPreferences[key], typeof updatedPreferences[key]);
+          }
+
+          console.log("SAVING PREFERENCES:" + JSON.stringify(updatedPreferences));
+          var xmlhttp = new XMLHttpRequest();
+          xmlhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+              console.log("Saved response", this.responseText);
+              location.reload(true);
+            }
+          };
+          xmlhttp.open("POST", "/services/save-preferences");
+          xmlhttp.setRequestHeader("Content-Type", "application/json");
+          xmlhttp.send(JSON.stringify(updatedPreferences));
+        }
+      </script>
+  </div>
+</body>
+</html>

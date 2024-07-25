@@ -14,7 +14,7 @@
     <a href="/stats" class="w3-bar-item w3-button w3-padding-large w3-hide-small">View Stats and Charts</a>
     <a href="/mailing-list" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Mailing List</a>
     <a href="/teams" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Generate Teams</a>
-    <a href="/login?redirect=/teams" id="authHeaderLarge" class="w3-bar-item w3-button w3-padding-large w3-hide-small btn-danger"> Admin</a>
+    <a href="/admin?redirect=/admin" id="authHeaderLarge" class="w3-bar-item w3-button w3-padding-large w3-hide-small btn-danger"> Admin</a>
   </div>
 </div>
 
@@ -24,7 +24,7 @@
   <a href="/teams" class="w3-bar-item w3-button w3-padding-large">Generate Teams</a>
   <a href="/stats" class="w3-bar-item w3-button w3-padding-large">View Stats and Charts</a>
   <a href="/mailing-list" class="w3-bar-item w3-button w3-padding-large">Mailing List</a>
-  <a href="/login?redirect=/teams" id="authHeaderSmall" class="w3-bar-item w3-button w3-padding-large btn-danger"><span class="fa fa-google"></span> Admin</a>
+  <a href="/admin?redirect=/admin" id="authHeaderSmall" class="w3-bar-item w3-button w3-padding-large btn-danger"><span class="fa fa-google"></span> Admin</a>
 </div>
 
 <script>
@@ -70,10 +70,10 @@ if (headerPageData.environment != "PRODUCTION") {
 
 var user = headerPageData.user;
 if (user) {
-  document.getElementById("authHeaderSmall").innerHTML = user.name + " (logout)";
-  document.getElementById("authHeaderSmall").href = "/logout";
-  document.getElementById("authHeaderLarge").innerHTML = user.name + " (logout)";
-  document.getElementById("authHeaderLarge").href = "/logout";
+  document.getElementById("authHeaderSmall").innerHTML = user.name + " (Admin)";
+  document.getElementById("authHeaderSmall").href = "/admin";
+  document.getElementById("authHeaderLarge").innerHTML = user.name + " (Admin)";
+  document.getElementById("authHeaderLarge").href = "/admin";
   console.log("Logged in User:", user);
 }
 </script>

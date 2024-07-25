@@ -21,6 +21,8 @@ const firestore = new Firestore({
   projectId: 'tensile-spirit-360708',
   keyFilename: './keyfile.json',
 });
+// Create express session store to persist sessions in a Firestore collection "express-sessions"
+const {FirestoreStore} = require('@google-cloud/connect-firestore');
 
 // this happens automatically, but add a message in the log as a reminder
 var environment = process.env.ENVIRONMENT;
@@ -68,9 +70,17 @@ app.use(express.static(path.join(__dirname, 'public')))
 .set('view engine', 'ejs')
 
 .use(session({
+  store: new FirestoreStore({
+    dataset: new Firestore(),
+    kind: 'express-sessions',
+  }),
   secret: process.env.SESSION_SECRET,
   resave: false, // don't save session if unmodified
-  saveUninitialized: false // don't create session until something stored
+  saveUninitialized: false, // don't create session until something stored
+  cookie: {
+    // Session expires after 8 hrs of inactivity.
+    expires: 8*60*60*1000
+  }
 }))
 .use(passport.authenticate('session'))
 .use(function(req, res, next) {
@@ -84,7 +94,9 @@ app.use(express.static(path.join(__dirname, 'public')))
 .get('/login', function(req, res, next) {
   // a hack that won't scale past a single user logging in at a time
   // store the referer on login attempt, to allow redirect after successful login
-  lastLocationBeforeLogin = (req.headers.referer) ? req.headers.referer : '/';
+  lastLocationBeforeLogin = (req.headers.referer) ? req.headers.referer : '/admin';
+  //override if the url contains a place to redirect
+  lastLocationBeforeLogin = (req.query.redirect) ? req.query.redirect : lastLocationBeforeLogin;
   res.redirect(302, "/login/federated/google");
 })
 .get('/loggedin', function(req, res, next) {
@@ -163,6 +175,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     if (preferences && preferences.openFinancialYear) {
       openFinancialYear = preferences.openFinancialYear;
     }
+    console.log("openFinancialYear", openFinancialYear)
 
     const inboundEmailsCollection = firestore.collection("INBOUND_EMAILS");
     const allInboundEmailsDocs = await inboundEmailsCollection.get();
@@ -254,6 +267,22 @@ app.use(express.static(path.join(__dirname, 'public')))
   } catch (err) {
     console.error(err);
     res.send("Error " + err);
+  }
+})
+.post('/services/save-preferences', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT SAVE-PREFERENCES POST FROM EMAIL:', ip, req.body);
+
+  try {
+    // now save the updated data
+    var updatedPreferences = req.body;
+    // TODO - validate and sanitise the preferences before saving
+    const preferencesDocRef = firestore.collection("ADMIN").doc("_preferences");
+    await preferencesDocRef.set(updatedPreferences, { merge: true });
+    res.json({'result': 'OK'})
+  } catch (err) {
+    console.error(err);
+    res.sendStatus(400);
   }
 })
 .post('/services/payment', async (req, res) => {
@@ -605,10 +634,13 @@ app.use(express.static(path.join(__dirname, 'public')))
       // done so convert from quoted-printable mime type
       body = mimelib.decodeQuotedPrintable(receivedBody);
       //console.log(body);
+
+      /** Disabled - no longer needed
       // store the data for future processing
       var emailDetails = { "parsed_status": "NEW", "data": body}
       const docRef = firestore.collection("INBOUND_EMAILS").doc(emailDocname);
       docRef.set(emailDetails);
+      */
     } catch (err) {
       console.error(err);
       res.json({'result': err})
@@ -926,12 +958,14 @@ app.use(express.static(path.join(__dirname, 'public')))
       const docRef = firestore.collection(gamesCollectionId).doc(playerName + "_" + timestamp.toISOString());
       await docRef.set(gamedetails_new);
 
+      /* _aliases and _summary stored per game have never been users, removing
       var playerSummary = await queryDatabaseAndBuildPlayerList(gameId);
       // store the current alias maps separately to the rest of the summary
       await firestore.collection(gamesCollectionId).doc("_aliases").set(playerSummary.playerAliasMaps);
       delete playerSummary.playerAliasMaps; // exclude the transient alias maps in the summary
       console.log('Inserting DB summary data:', JSON.stringify(playerSummary));
       await firestore.collection(gamesCollectionId).doc("_summary").set(playerSummary);
+      */
 
       // check if preview of teams has already been generated
       var nextMonday = getDateNextMonday(new Date());
@@ -1302,7 +1336,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     var emailResult = teamUtils.sendEmailToList(mailOptions, req.hostname);
 
     // finally delete the old gameweek preview - email has been sent
-    await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
+    //await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
 
     res.json({'result': 'OK'});
   } else {
@@ -1362,6 +1396,58 @@ app.use(express.static(path.join(__dirname, 'public')))
     pageData.players = rowdata;
     
     res.render('pages/admin-team-preview', { pageData: JSON.stringify(pageData)} );
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
+.get('/admin', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+  console.log('Got /admin GET:', ip, JSON.stringify(req.body));
+  try {
+    var pageData = { "environment": environment };
+
+    if (req.isAuthenticated()) {
+      console.log("User is logged in: ", req.user);
+      pageData.user = req.user;
+    } else {
+      res.redirect(302, "/login?redirect=/admin");
+      return;
+    }
+
+    // lookup preferences from database
+    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+    var preferences = preferencesDoc.data();
+    if (!preferences) { preferences = {}; }
+    pageData.preferences = preferences;
+
+    res.render('pages/admin', { pageData: JSON.stringify(pageData)} );
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
+.get('/admin-preferences', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+  console.log('Got /admin-preferences GET:', ip, JSON.stringify(req.body));
+  try {
+    var pageData = { "environment": environment };
+
+    if (req.isAuthenticated()) {
+      console.log("User is logged in: ", req.user);
+      pageData.user = req.user;
+    } else {
+      res.redirect(302, "/login?redirect=/admin");
+      return;
+    }
+
+    // lookup preferences from database
+    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+    var preferences = preferencesDoc.data();
+    if (!preferences) { preferences = {}; }
+    pageData.preferences = preferences;
+
+    res.render('pages/admin-preferences', { pageData: JSON.stringify(pageData)} );
   } catch (err) {
     console.error(err);
     res.send("Error " + err);
@@ -1757,8 +1843,8 @@ async function saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, sc
      existingDocData.saveType = "ATTENDANCE_BACKUP"
      if (true || !existingDocData[weekNumber] || !existingDocData[weekNumber].scores) {
        console.log('UPDATING:', JSON.stringify(attendanceDetails));
-       const backupDocRef = firestore.collection(gamesCollectionId).doc("_attendance_" + existingDocData.timestamp);
-       backupDocRef.set(existingDocData)
+       //const backupDocRef = firestore.collection(gamesCollectionId).doc("_attendance_" + existingDocData.timestamp);
+       //backupDocRef.set(existingDocData)
        // now update with the new data
        await docRef.update(attendanceDetails);
      } else {
