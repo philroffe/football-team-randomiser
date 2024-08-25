@@ -867,18 +867,36 @@ app.use(express.static(path.join(__dirname, 'public')))
   }
 
   try {
-    console.log('Rendering POLL page with data' + req.query.date);
-    var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
-    console.log('SCORES POLL page with data' + JSON.stringify(rowdata.scores));
+    var overriddenDate = new Date();
+    var overrideDefaultDateString;
+    // allow date to be overridden in preferences
+    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+    var preferences = preferencesDoc.data();
+    if (preferences && preferences.overrideDefaultDate) {
+      overrideDefaultDateString = preferences.overrideDefaultDate
+      overriddenDate = new Date(overrideDefaultDateString);
+    }
 
-    var nextMonday = getDateNextMonday();
-    var calcPaymentsFromDate = nextMonday;
     if (req.query.date) {
-      calcPaymentsFromDate = req.query.date;
+      overrideDefaultDateString = req.query.date;
+      overriddenDate = new Date(overrideDefaultDateString);
+    }
+    //var gameId = gameYear + "-" + gameMonth + "-01";
+    console.log("Using Overridden dates:", overrideDefaultDateString, overriddenDate, req.query.date, preferences.overrideDefaultDate)
+
+    console.log('Rendering POLL page with data', overrideDefaultDateString);
+    var rowdata = await queryDatabaseAndBuildPlayerList(overrideDefaultDateString);
+    console.log('SCORES POLL page with data', JSON.stringify(rowdata.scores));
+
+
+    var nextMonday = getDateNextMonday(overriddenDate);
+    var calcPaymentsFromDate = nextMonday;
+    if (overrideDefaultDateString) {
+      calcPaymentsFromDate = overrideDefaultDateString;
     }
     var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments(calcPaymentsFromDate);
     rowdata.outstandingPayments = outstandingPayments;
-    console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
+    console.log('OUTSTANDING PAYMENTS data', JSON.stringify(outstandingPayments));
 
     var tabName = "";
     if (req.query.tab) {

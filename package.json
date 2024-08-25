@@ -30,8 +30,7 @@
   },
   "devDependencies": {
     "depcheck": "^1.4.7",
-    "got": "^14.4.1",
-    "tape": "^5.8.1"
+    "got": "^14.4.1"
   },
   "repository": {
     "type": "git",
