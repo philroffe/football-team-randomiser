@@ -17,7 +17,56 @@ Make sure you have [Node.js](http://nodejs.org/) and the [Heroku CLI](https://cl
 $ git clone https://github.com/philroffe/football-team-randomiser.git # or clone your own fork
 $ cd football-team-randomiser
 $ npm install
+$ . .env-local
+$ npm run restore
 $ npm start
+```
+
+## Setting up for the very first time
+Install node using nvm as described here https://github.com/nvm-sh/nvm
+
+```sh
+# if using Ubuntu, remove any old version of node
+sudo apt remove nodejs
+# install the new version
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+. ~/.bashrc  # because get nvm on the PATH
+nvm -v       # should say 0.40.1
+nvm list-remote # gives a list of packages
+# install the version you need (as shown is latest v20 at time of writing)
+nvm install 20.18.1
+```
+
+Install the gcloud CLI as described here: https://cloud.google.com/sdk/docs/install#deb
+```sh
+sudo apt-get install apt-transport-https ca-certificates gnupg curl
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+sudo apt-get update && sudo apt-get install google-cloud-cli
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+sudo apt-get update && sudo apt-get install google-cloud-cli
+sudo apt install google-cloud-cli-firestore-emulator default-jre
+```
+
+```
+# if this is the first time you've setup/run the google cloud tools, initialise it with...
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project tensile-spirit-360708
+
+# start the emulator (ideally in another terminal)
+gcloud beta emulators firestore start --host-port="0.0.0.0:5678"
+
+# restore config and backup files
+# (or setup .env-local and .env-local-prod from scratch using the included .env file)
+cp ~/football-team-randomiser-backup/.env-local .
+cp ~/football-team-randomiser-backup/.env-local-prod .
+cp ~/football-team-randomiser-backup/keyfile.json .
+cp ~/football-team-randomiser-backup/backups/ .
+
+# now restore the database locally and start the app
+. .env-local
+npm run restore
+npm start
 ```
 
 Your app should now be running on [localhost:5000](http://localhost:5000/).
@@ -30,8 +79,9 @@ https://support.google.com/accounts/answer/185833?hl=en
 
 ## Deploying to Google Cloud App Engine
 
-Install the gcloud CLI as described here: https://cloud.google.com/sdk/docs/install#deb
 
+
+Now deploy the app...
 ```
 gcloud app deploy .app-prod.yaml
 # if you get a build error (e.g. after deleting old files from storage), run with --no-cache 
