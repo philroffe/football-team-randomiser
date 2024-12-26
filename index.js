@@ -10,6 +10,7 @@ const { convert } = require('html-to-text');
 const simpleParser = require('mailparser').simpleParser;
 const teamUtils = require("./views/pages/generate-teams-utils.js");
 const passport = require('passport');
+const prettier = require("prettier");
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -114,6 +115,15 @@ app.use(express.static(path.join(__dirname, 'public')))
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log('Got /create-payments-for-month POST:', ip, JSON.stringify(req.body));
 
+
+  var openFinancialYear = 0; 
+  var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+  var preferences = preferencesDoc.data();
+  if (preferences && preferences.openFinancialYear) {
+    openFinancialYear = preferences.openFinancialYear;
+  }
+  console.log("openFinancialYear", openFinancialYear)
+
   var gameMonth = req.body.gameMonth;
   var gameYear = req.body.gameYear;
   var gameId = gameYear + "-" + gameMonth + "-01";
@@ -132,6 +142,11 @@ app.use(express.static(path.join(__dirname, 'public')))
     var mondaysDates = teamUtils.mondaysInMonth(Number(gameMonth), Number(gameYear));  //=> [ 7,14,21,28 ]
     for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
       console.log("week", weekNumber)
+      var gameDay = mondaysDates[weekNumber];
+      if (gameDay < 10) {
+        gameDay = "0" + gameDay;
+      }
+      var thisDate = gameYear + "-" + gameMonth + "-" + gameDay;
       var playerList = attendanceData[weekNumber];
       if (playerList) {
         Object.keys(playerList).forEach(await function(playerName) {
@@ -141,17 +156,19 @@ app.use(express.static(path.join(__dirname, 'public')))
 
             //const playerLedgerDocRef = firestore.collection("PAYMENTS").doc(playerName);
             const playerLedgerDocRef = firestore.collection("OPEN_LEDGER").doc(playerName);
-            var gameDay = mondaysDates[weekNumber];
-            if (gameDay < 10) {
-              gameDay = "0" + gameDay;
-            }
-            var thisDate = gameYear + "-" + gameMonth + "-" + gameDay;
             var playerTransactionSavedata = {};
-            playerTransactionSavedata["charge_" + thisDate] = { "amount": (COST_PER_GAME * -1) };
+            playerTransactionSavedata["charge_" + thisDate] = { "amount": (COST_PER_GAME * -1), "financialYear": openFinancialYear };
             console.log('Adding game cost:', playerName, thisDate, JSON.stringify(playerTransactionSavedata));
             playerLedgerDocRef.set(playerTransactionSavedata, { merge: true });
           }
         });
+        // now also store the pitch charge
+        const playerClosedLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc("Admin - Pitch Costs");
+        var playerTransactionName = "charge_pitch_" + thisDate;
+        var pitchTransactionSavedata = {};
+        pitchTransactionSavedata[playerTransactionName] = { "amount": preferences.costOfPitch, "gameDate": thisDate, "payeeName": "Admin Pitch Organiser"};
+        //console.log('Adding PITCH CHARGE:', thisDate, JSON.stringify(pitchTransactionSavedata));
+        playerClosedLedgerDocRef.set(pitchTransactionSavedata, { merge: true });
       }
     }
     res.json({'result': 'OK'})
@@ -163,7 +180,7 @@ app.use(express.static(path.join(__dirname, 'public')))
 .get('/admin-payments-ledger', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT FOOTIE-ADMIN GET FROM:', ip, req.body);
-  
+
   try {
     //console.log('Generating TEAMS page with data for date: ', req.query.date);
     //var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
@@ -175,6 +192,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     if (preferences && preferences.openFinancialYear) {
       openFinancialYear = preferences.openFinancialYear;
     }
+    //openFinancialYear = 2024;
     console.log("openFinancialYear", openFinancialYear)
 
     const inboundEmailsCollection = firestore.collection("INBOUND_EMAILS");
@@ -199,7 +217,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     // filter the data for the active accounting period
     var filterData = { ...rowdata.allCollectionDocs }
     for (const thisDataId in filterData) {
-      if (!thisDataId.includes(openFinancialYear)) {
+      if (thisDataId.startsWith("games_") && !thisDataId.includes(openFinancialYear)) {
         delete filterData[thisDataId];
       }
     }
@@ -217,17 +235,13 @@ app.use(express.static(path.join(__dirname, 'public')))
       var filterData = { ...data }
       for (const thisDataId in filterData) {
         if (thisDataId.startsWith("charge_")) {
-          if (!thisDataId.includes(openFinancialYear)) {
+          if (filterData[thisDataId].financialYear != openFinancialYear) {
             delete filterData[thisDataId];
           }
         }
         if (thisDataId.startsWith("payment_")) {
-          if (filterData[thisDataId].chargeId && filterData[thisDataId].chargeId.length > 0) {
-            var firstChargeId = filterData[thisDataId].chargeId[0];
-            if (!firstChargeId.includes(openFinancialYear)) {
-              //console.log(thisDataId);
-              delete filterData[thisDataId];
-            }
+          if (filterData[thisDataId].financialYear != openFinancialYear && filterData[thisDataId].chargeId.length > 0) {
+            delete filterData[thisDataId];
           }
         }
       }
@@ -245,13 +259,15 @@ app.use(express.static(path.join(__dirname, 'public')))
       // filter the data for the active accounting period
       var filterData = { ...data }
       for (const thisDataId in filterData) {
-        if (!thisDataId.includes(openFinancialYear)) {
+        if (filterData[thisDataId].financialYear != openFinancialYear) {
           delete filterData[thisDataId];
         }
       }
       openLedgers[key] = filterData;
     })
     rowdata.openLedgers = openLedgers;
+
+
     
     // combine database data with supplimentary game data and render the page
     var nextMonday = getDateNextMonday();
@@ -579,7 +595,7 @@ app.use(express.static(path.join(__dirname, 'public')))
       body = mimelib.decodeQuotedPrintable(streamData);
       // store the data for future processing
       var docNamePrefix = "PAYMENT_ERROR_EMAIL";
-      if (body.includes("noreply@sheffield.ac.uk")) {
+      if (body.includes("no-reply@sheffield.ac.uk")) {
         docNamePrefix = "PAYMENT_PITCH_EMAIL";
       } else if (body.includes("service@paypal.co.uk")) {
         docNamePrefix = "PAYMENT_PAYPAL_EMAIL";
@@ -867,36 +883,18 @@ app.use(express.static(path.join(__dirname, 'public')))
   }
 
   try {
-    var overriddenDate = new Date();
-    var overrideDefaultDateString;
-    // allow date to be overridden in preferences
-    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
-    var preferences = preferencesDoc.data();
-    if (preferences && preferences.overrideDefaultDate) {
-      overrideDefaultDateString = preferences.overrideDefaultDate
-      overriddenDate = new Date(overrideDefaultDateString);
-    }
+    console.log('Rendering POLL page with data' + req.query.date);
+    var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
+    console.log('SCORES POLL page with data' + JSON.stringify(rowdata.scores));
 
-    if (req.query.date) {
-      overrideDefaultDateString = req.query.date;
-      overriddenDate = new Date(overrideDefaultDateString);
-    }
-    //var gameId = gameYear + "-" + gameMonth + "-01";
-    console.log("Using Overridden dates:", overrideDefaultDateString, overriddenDate, req.query.date, preferences.overrideDefaultDate)
-
-    console.log('Rendering POLL page with data', overrideDefaultDateString);
-    var rowdata = await queryDatabaseAndBuildPlayerList(overrideDefaultDateString);
-    console.log('SCORES POLL page with data', JSON.stringify(rowdata.scores));
-
-
-    var nextMonday = getDateNextMonday(overriddenDate);
+    var nextMonday = getDateNextMonday();
     var calcPaymentsFromDate = nextMonday;
-    if (overrideDefaultDateString) {
-      calcPaymentsFromDate = overrideDefaultDateString;
+    if (req.query.date) {
+      calcPaymentsFromDate = req.query.date;
     }
     var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments(calcPaymentsFromDate);
     rowdata.outstandingPayments = outstandingPayments;
-    console.log('OUTSTANDING PAYMENTS data', JSON.stringify(outstandingPayments));
+    console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
 
     var tabName = "";
     if (req.query.tab) {
@@ -1938,6 +1936,14 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
     monthString = "0" + monthString;
   }
 
+  var openFinancialYear = 0; 
+  var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+  var preferences = preferencesDoc.data();
+  if (preferences && preferences.openFinancialYear) {
+    openFinancialYear = preferences.openFinancialYear;
+  }
+  console.log("openFinancialYear", openFinancialYear)
+
   // read the list of players and aliases
   var playerAliasMaps = {};
   playerAliasMaps = await getDefinedPlayerAliasMaps();
@@ -1956,7 +1962,7 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
       return true;
     }
     var playerTransactionSavedata = {};
-    playerTransactionSavedata[playerTransactionName] = { "amount": amount, "paypalTransactionId": transactionId };
+    playerTransactionSavedata[playerTransactionName] = { "amount": amount, "paypalTransactionId": transactionId, "financialYear": openFinancialYear };
     console.log('Adding PAYMENTS:', officialPlayerName, thisDate, JSON.stringify(playerTransactionSavedata));
     playerClosedLedgerDocRef.set(playerTransactionSavedata, { merge: true });
 

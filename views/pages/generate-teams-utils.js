@@ -63,6 +63,34 @@ if (typeof module != "undefined") {
       first.getDate() === second.getDate();
   }
 
+  // get exact Monday date for a given month (2024-07-01) and index (3 = fourth Monday)
+  function getExactDateFromMonthAndIndex(monthDate, mondayIndex) {
+    // ensure it's a date
+    var monthDate = new Date(monthDate);
+    // find the first Monday
+    var thisDate = new Date(monthDate);
+    var firstMonday = 1;
+    for (var i = 1; i <= 7; i ++) {
+      thisDate.setDate(i);
+      // check if a Monday
+      if (thisDate.getDay() == 1) {
+        firstMonday = i;
+        break;
+      }
+    }
+    var indexDate = firstMonday + (7 * (mondayIndex));
+    thisDate.setDate(indexDate);
+
+    // check still within current moth
+    if ((monthDate.getMonth() == thisDate.getMonth()) && (monthDate.getFullYear() == thisDate.getFullYear())) {
+      //console.log("index" + mondayIndex + " Monday of month is:", thisDate);
+      return thisDate;
+    } else {
+      // mondayIndex is out of bounds for current Month
+      return null;
+    }
+  }
+
   /**
   * algorithmType - "algorithm[0-5]" - name of the algorithm to sort players by 
   * players - a map of players availability for selection this month
@@ -582,20 +610,35 @@ function parsePitchEmail(bodyText) {
   for (i=0; i<bodyTextArray.length; i++) {
     var thisString = bodyTextArray[i].trim();
     if (thisString) {
-      //console.log("Line:", thisString)
+      console.log("Line:", thisString)
       payeeName = "Admin";
-      if (thisString.match(/Payment Date: /)) {
-        transactionDate = thisString.replace(/Payment Date: /g, '');
+      //if (thisString.match(/Payment Date: /)) {
+      //  transactionDate = thisString.replace(/Payment Date: /g, '');
+      //} else if (thisString.match(/Your Order Number is /)) {
+      //  transactionId = thisString.replace(/Your Order Number is /g, '');
+      //} else if (thisString.match(/The University receipt number for this transaction is /)) {
+      //  receiptNo = thisString.replace(/The University receipt number for this transaction is /g, '');
+      //} else if (thisString.match("John Hawley Bb")) {
+      //  var orderDate = thisString.replace(/John Hawley Bb \(/g, '').replace(/\)/g, '');
+      //  var orderAmount = bodyTextArray[i+1].trim().replace(/Amount NET: /g, '').replace(/\(.*/g, '');
+      //  orders[orderDate] = Number(orderAmount.replace(/Amount NET: /g, '')) * -1;
+      //  bodyTextArray[i+1].trim();
+      //  transactionDate = new Date(bodyTextArray[i+1].trim());
+      //}
+      if (thisString.match(/^Date: /)) {
+        transactionDate = thisString.replace(/Date: /g, '');
+      console.log("transactionDate:", transactionDate);
       } else if (thisString.match(/Your Order Number is /)) {
         transactionId = thisString.replace(/Your Order Number is /g, '');
       } else if (thisString.match(/The University receipt number for this transaction is /)) {
         receiptNo = thisString.replace(/The University receipt number for this transaction is /g, '');
       } else if (thisString.match("John Hawley Bb")) {
-        var orderDate = thisString.replace(/John Hawley Bb \(/g, '').replace(/\)/g, '');
-        var orderAmount = bodyTextArray[i+1].trim().replace(/Amount NET: /g, '').replace(/\(.*/g, '');
-        orders[orderDate] = Number(orderAmount.replace(/Amount NET: /g, '')) * -1;
+        var orderDate = thisString.split('*')[3].split(' -')[0];
+        var orderAmount = "35";
+        orders[orderDate] = Number(orderAmount) * -1;
         bodyTextArray[i+1].trim();
-        transactionDate = new Date(bodyTextArray[i+1].trim());
+        //transactionDate = new Date(bodyTextArray[i+1].trim());
+      console.log("orderAmount:", orderDate);
       }
     }
   }
@@ -607,7 +650,7 @@ function parsePitchEmail(bodyText) {
   var allTransationDates = "";
   for (const orderDate in orders) {
     var parsedData = { "payeeName": payeeName, "amount": orders[orderDate], "gameDate": orderDate,
-    "transactionId": transactionId, "transactionDate": orderDate};
+    "transactionId": transactionId, "transactionDate": transactionDate};
     parsedDataMap.push(parsedData);
 
     allPayeeNames += "," + payeeName;
@@ -618,9 +661,9 @@ function parsePitchEmail(bodyText) {
 
   }
   var parsedData = { "payeeName": payeeName, "amount": orders[orderDate], "gameDate": orderDate,
-    "transactionId": transactionId, "transactionDate": orderDate};
+    "transactionId": transactionId, "transactionDate": transactionDate};
 
-  //console.log("Parsed pitch email:", parsedDataMap);
+  console.log("Parsed pitch email:", parsedDataMap);
   return parsedDataMap;
 }
 
