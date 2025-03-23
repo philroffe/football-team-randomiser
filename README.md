@@ -77,6 +77,11 @@ https://support.google.com/accounts/answer/185833?hl=en
  - set env vars GOOGLE_MAIL_USERNAME and GOOGLE_MAIL_APP_PASSWORDs
 
 
+## Running the JEST tests
+```
+ npm test
+```
+
 ## Deploying to Google Cloud App Engine
 
 
