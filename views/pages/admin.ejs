@@ -9,12 +9,31 @@
   <!-- Page content -->
   <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
     <div id="blank" style="height: 40px"></div>
-    <p><h3>Admin Screens:</h3>
-    <p><a href="/teams">Admin - Generate teams</a>
-    <p><a href="/admin-team-preview">Admin - Team Preview</a>
-    <p><a href="/poll?tab=four">Admin - Aliases</a>
-    <p><a href="/admin-payments-ledger">Admin - Payments and Ledger</a>
-    <p><a href="/admin-preferences">Admin - Preferences</a>
+      <p><h3>Admin Screens:</h3>
+    </div>
+    <div id="attendance" style="margin: 10px"><h4>Attendance / Scorers:</h4>
+      <li><a href="/poll?tab=two">Attendance and Goal Scorers</a></li>
+    </div>
+    <p>
+    <div id="teams" style="margin: 10px"><h4>Teams</h4>
+      <li><a href="/poll?tab=four">Mailing List Admin</a></li>
+      <li><a href="/teams">Friday teams email (everyone)</a></li>
+      <li><a href="/admin-team-preview">Thursday Team Preview (admins only)</a></li>
+    </div>
+    <p>
+    <div id="payments" style="margin: 10px"><p><h4>Payments / Preferences:</h4>
+      <li><a href="/admin-payments-ledger">Admin - Payments and Ledger</a></li>
+      <li><a href="/admin-preferences">Admin - Preferences</a></li>
+      <br><br>
+    </div>
+    <div id="hosting" style="margin: 10px"><h4>Hosting:</h4>
+      <li><a href="/admin-database">Admin - Local Database View</a></li>
+      <li><a href="https://console.cloud.google.com/firestore/databases/-default-/">Google Cloud Console - Database</a></li>
+      <li><a href="https://console.cloud.google.com/monitoring?project=tensile-spirit-360708">Google Cloud Console - Logs</a></li>
+    </div>
+    <div id="pitch" style="margin: 10px"><h4>Pitch Booking</h4>
+      <li><a href="https://sport.sheffield.ac.uk/member">Sport Sheffield - Pitch Booking and Payments</a></li>
+    </div>
     <br><br>
     <p><a href="/logout">Logout</a>
 
@@ -22,6 +41,12 @@
         // restringify and then parse the json to get the page
         var pageData = JSON.parse(JSON.stringify(<%- pageData %>));
         //console.log('pageData=', pageData);
+
+        // show/hide preferences depending on user roles
+        if (pageData.user.roles != "fulladmin") {
+          document.getElementById("payments").hidden = true;
+          document.getElementById("hosting").hidden = true;
+        }
       </script>
   </div>
 </body>

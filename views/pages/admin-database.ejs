@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+    <div id="blank" style="height: 40px"></div>
+    <p><h3>Database Preview</h3>
+
+
+    <div style="width:100%;display:flex;">
+      <div id="databaseDiv" style="display:inline;width:20%">Collection<br><select name="dbCollections" id="dbCollections" multiple onclick="clickCollection(this.value);" style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></select></div>
+      <div id="databaseDiv" style="display:inline;width:35%">Document<br><select name="dbDocuments" id="dbDocuments" multiple onclick="clickDocument(this.value);" style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></select></div>
+      <div id="databaseDiv" style="display:inline;width:45%">Fields<br><textarea name="dbFields" id="dbFields" multiple style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></textarea></div>
+    </div> 
+    <input id="cacheCheckbox" type="checkbox" name="cacheCheckbox" onclick="toggleCache(this.value);"/>
+    <label for="cacheCheckbox">Use Cache?</label>
+
+
+    <script type="text/javascript">
+      // restringify and then parse the json to get the page
+      var pageData = JSON.parse(JSON.stringify(<%- pageData %>));
+      console.log('pageData=', pageData);
+
+      var database = pageData.database;
+      if (!database) { database = {}; }
+      var useCache = false;
+
+      var dbCollectionsElement = document.getElementById('dbCollections');
+      var dbDocumentsElement = document.getElementById('dbDocuments'); 
+      var dbFieldsElement = document.getElementById('dbFields');
+
+      var collectionList = Object.keys(database);
+      //console.log('collectionList=', collectionList);
+      collectionList.forEach(function(collectionId) {
+        var opt = document.createElement('option');
+        opt.value = collectionId;
+        opt.innerHTML = collectionId;
+        dbCollectionsElement.appendChild(opt);
+      });
+
+      // pre-select collection/document if passed as URL param
+      const urlParams = new URLSearchParams(window.location.search);
+      const collectionParam = urlParams.get('collection')
+      if (collectionParam) { 
+        dbCollectionsElement.value = collectionParam;
+        clickCollection(collectionParam); 
+
+        const documentParam = urlParams.get('document')
+        dbDocumentsElement.value = documentParam;
+        if (documentParam) { 
+          clickDocument(documentParam);
+        }
+      }
+
+      // functions
+      function clickCollection(collectionId) {
+        //console.log('Collection click', collectionId);
+        var documentList = Object.keys(database[collectionId]);
+        // clear previous field details
+        while (dbDocumentsElement.lastElementChild) {
+          dbDocumentsElement.removeChild(dbDocumentsElement.lastElementChild);
+        }
+        documentList.forEach(function(key) {
+          var opt = document.createElement('option');
+          var documentId = database[collectionId][key].id;
+          opt.value = key;
+          opt.innerHTML = documentId;
+          dbDocumentsElement.appendChild(opt);
+        });
+        dbFieldsElement.value = "";
+        updateHref();
+      }
+
+      function clickDocument(documentKey) {
+        //console.log('Document click', element.value);
+        var collectionId = dbCollectionsElement.value;
+        // update field details with new selection
+        var fieldDetailsId = database[collectionId][documentKey].id;
+        var fieldDetailsData = database[collectionId][documentKey].data;
+        var fieldDetails = JSON.stringify(fieldDetailsData, null, "\t");
+        dbFieldsElement.value = fieldDetails;
+        updateHref();
+        getUpdatedData();
+      }
+
+      function updateHref() {
+        var newURL = window.location.href;
+        if (newURL.includes("collection=")) {
+          newURL = newURL.replace(/(collection=.*)/g, 'collection=' + dbCollectionsElement.value + "&document=" + dbDocumentsElement.value);
+        } else {
+          newURL += "?collection=" + dbCollectionsElement.value + "&document=" + dbDocumentsElement.value;
+        }
+        //console.log("newURL", newURL);
+        window.history.pushState({}, 'unused', newURL);
+      }
+
+      function toggleCache(checkboxValue) {
+        useCache = checkboxValue;
+      }
+
+
+      function getUpdatedData() {
+        if (useCache) {
+          updateHref();
+        } else {
+          // now send the POST request with the data
+          var collectionId = dbCollectionsElement.value;
+          var documentKey = dbDocumentsElement.value;
+          var documentName = dbDocumentsElement.options[dbDocumentsElement.selectedIndex].innerHTML;
+          var body = { "collectionId": collectionId, "documentId": documentName };
+
+          console.log("GETTING DOC:" + JSON.stringify(body));
+          var xmlhttp = new XMLHttpRequest();
+          xmlhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+              console.log("Saved response", this.responseText);
+              // now update the dable with the data
+              var updatedData = JSON.parse(this.responseText);
+              database[collectionId][documentKey].data = updatedData;
+              dbFieldsElement.value = "Showing document: " + documentName + "...\n" + JSON.stringify(updatedData, null, "\t");
+              //location.reload(true);
+            }
+          };
+          xmlhttp.open("POST", "/services/get-database-doc");
+          xmlhttp.setRequestHeader("Content-Type", "application/json");
+          xmlhttp.send(JSON.stringify(body));
+        }
+      }
+
+    </script>
+  </div>
+</body>
+</html>

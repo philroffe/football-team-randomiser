@@ -6,6 +6,7 @@ const session = require('express-session');
 const fs = require('fs');
 const jsdom = require('jsdom');
 const util = require('util')
+const teamUtils = require("./views/pages/generate-teams-utils.js");
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -49,12 +50,16 @@ if (process.argv[2]) {
       console.log('Viewing DB...');
       viewDatabase();
       break;
+    case 'datafix':
+      console.log('Running datafix...');
+      // change this to call the specific datafix you need
+      migrateAttendanceData_2025_03_23();
+      break;
     default:
-      console.log('Usage: npm run [backup|restore|addCharges|viewDatabase]');
+      console.log('Usage: npm run [backup|restore|addCharges|viewDatabase|datafix]');
   }
 } else { 
-  // npm run restore
-  console.log('Usage: node database [restore|backup|view|addCharges]'); 
+  console.log('Usage: node database [restore|backup|view|addCharges|viewDatabase|datafix]'); 
 } 
 
 ////////////////////////
@@ -365,3 +370,52 @@ async function addCharges() {
 ////////////////////////
 ////////////////////////
 
+
+async function migrateAttendanceData_2025_03_23() {
+  for (var gameYear = 2019; gameYear < 2026; gameYear ++) {
+    for (var gameMonth = 1; gameMonth < 13; gameMonth ++) {
+      if (gameMonth < 10) { gameMonth = "0" + gameMonth;}
+      //var gameMonth = "02";
+      //var gameYear = "2025";
+      var gameId = gameYear + "-" + gameMonth + "-01";
+      var gamesCollectionId = "games_" + gameId;
+//      console.log('Getting attendance for month:', gamesCollectionId);
+      const gameMonthAttendanceDocRef = firestore.collection(gamesCollectionId).doc("_attendance");
+
+      var existingDoc = await gameMonthAttendanceDocRef.get();
+      var attendanceData = existingDoc.data();
+      if (attendanceData) {
+        // now move all names into a new "players" map, and also create a new "status" map
+        var mondaysDates = teamUtils.mondaysInMonth(Number(gameMonth), Number(gameYear));  //=> [ 7,14,21,28 ]
+        for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
+//          console.log("week", weekNumber)
+          // calculate full date
+          var gameDay = mondaysDates[weekNumber];
+          if (gameDay < 10) { gameDay = "0" + gameDay;}
+          var thisDate = gameYear + "-" + gameMonth + "-" + gameDay;
+
+          // get list of players
+          var playerList = attendanceData[weekNumber];
+          var newStatusList = {"status": "PLAYED", "date": thisDate};
+          var newPlayerList = {};
+          if (playerList && !playerList.status) {
+            Object.keys(playerList).forEach(await function(playerName) {
+              // check a real player (not the scores) and that the player actually played
+              if (playerName && (playerName != "undefined") && (playerName != "scores") && (playerName != "players") && (playerName != "status")) {
+                var gameWeek = gameId + "_" + weekNumber;
+                console.log("Moving Game week:", weekNumber, " Player:", playerName, "data:", attendanceData[weekNumber][playerName]);
+                newPlayerList[playerName] = playerList[playerName];
+                delete attendanceData[weekNumber][playerName];
+              }
+            });
+            attendanceData[weekNumber].players = newPlayerList;
+            attendanceData[weekNumber].status = newStatusList;
+          }
+          //console.log("Game week:", weekNumber, " Players:", newPlayerList);
+        }
+        console.log("GameId", gameId, " Attendance:", attendanceData);
+        await gameMonthAttendanceDocRef.set(attendanceData, { merge: false });
+      }
+    }
+  }
+}

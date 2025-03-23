@@ -78,7 +78,14 @@
 
         <div id="tempPasswordOKDiv" hidden>
           <div id="scoreHeader" class="gameheader"></div>
-          <button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled>Save</button>
+
+          <div id="cancelCheckboxDiv">
+            <label id="cancelCheckboxLabel" for="cancelCheckbox">Cancel</label>
+            <input id="cancelCheckbox" type="checkbox" name="cancelType" onclick="cancelCurrentEdittingWeek();"/>
+            <input type="input" id="cancelWeekDescription" placeholder="Reason: e.g. Snow" data-lpignore=true hidden>
+          </div>
+
+          <p><button id="saveAttendanceButton" style="background-color: #90EE90;" type="button" onclick="saveCurrentEdittingWeek();" disabled>Save</button>
           <button id="cancelAttendanceEditButton" onclick="location.reload()" disabled>Cancel</button>
           <p><button id="closeMonthGeneratePaymentsButton" style="background-color: #90EE90;" type="button" onclick="closeMonthGeneratePayments();">Close Month & Copy Availability</button>
 
@@ -121,6 +128,8 @@
 <%- include ("./admin-payments.ejs") %>
 
   <script>
+    document.getElementById("cancelCheckboxDiv").hidden = true;
+
     const AVAILABILITY = "availability";
     const ATTENDANCE = "attendance";
     const PAYMENT = "payment";
@@ -139,7 +148,7 @@
     var saving = true;
     // restringify and then parse the json to get the page
     var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
-    //console.log('Data=', pagedata);
+    console.log('Data=', pagedata);
 
     //var isAdmin = pagedata.isAdmin;
 
@@ -173,8 +182,11 @@
     var players = pagedata.data.players;
     if (!players) { players = {}; }
     var attendanceMap = pagedata.data.attendance;
-    var scoresMap = pagedata.data.scores;
     if (!attendanceMap) { attendanceMap = {}; }
+    var scoresMap = pagedata.data.scores;
+    if (!scoresMap) { scoresMap = {}; }
+    var cancelledMap = pagedata.data.cancelled;
+    if (!cancelledMap) { cancelledMap = {}; }
     var paydetailsMap = pagedata.data.paydetails;
     if (!paydetailsMap) { paydetailsMap = {}; }
     var outstandingPaymentsMap = pagedata.data.outstandingPayments;
@@ -367,6 +379,9 @@ function addPlayerListToTab(tabName) {
         currentDateHeader = "<s>" + currentDateHeader + "</s>";
         newWeekHeader.setAttribute("bankHoliday", true);
       }
+      if (cancelledMap[i]) {
+        currentDateHeader = "<s>" + currentDateHeader + "</s>";
+      }
       weekDateHeader.innerHTML = currentDateHeader;
       newWeekHeader.appendChild(weekDateHeader);
       divElementToAppendTo.appendChild(newWeekHeader);  
@@ -387,13 +402,17 @@ function addPlayerListToTab(tabName) {
           weekEditButton.setAttribute("hidden", true); 
         }
 
+        if (cancelledMap[i]) {
+          weekEditButton.style.backgroundColor = "LightCoral";
+        }
+
         if (tabName == ATTENDANCE) {
           // create the score items
           var team1Spinner = document.createElement("input");
           team1Spinner.setAttribute("type", "number"); 
           team1Spinner.setAttribute("id", "week" + i + "Score1" + tabName); 
           (scoresMap[i]) ? team1Spinner.value = scoresMap[i].team1goals : team1Spinner.value = "";
-          team1Spinner.style.width = (team1Spinner.value.length*10) + "px";
+          team1Spinner.style.width = Math.max(team1Spinner.value.length*10, 7) + "px";
           team1Spinner.style.maxWidth = "26px";
           team1Spinner.style.maxHeight = "24px";
           team1Spinner.style.textAlign = "right";
@@ -406,7 +425,7 @@ function addPlayerListToTab(tabName) {
           team2Spinner.setAttribute("type", "number"); 
           team2Spinner.setAttribute("id", "week" + i + "Score2" + tabName); 
           (scoresMap[i]) ? team2Spinner.value = scoresMap[i].team2goals : team2Spinner.value = "";
-          team2Spinner.style.width = (team2Spinner.value.length*9) + "px";
+          team2Spinner.style.width = Math.max(team2Spinner.value.length*9, 7) + "px";
           team2Spinner.style.maxWidth = "26px";
           team2Spinner.style.maxHeight = "24px";
           team2Spinner.disabled = true;
@@ -414,6 +433,9 @@ function addPlayerListToTab(tabName) {
           var teamSeparator = document.createElement("text");
           teamSeparator.setAttribute("id", "week" + i + "ScoreSeparator" + tabName); 
           teamSeparator.innerHTML = "-";
+          if (cancelledMap[i]) {
+            teamSeparator.innerHTML = "X"
+          }
           teamSeparator.style.padding = "2px 0px 4px 0px";
           newWeekHeader.appendChild(teamSeparator);
           //newWeekHeader.appendChild(document.createElement("br"));
@@ -811,6 +833,8 @@ function addPlayerListToTab(tabName) {
       }
       document.getElementById("saveAttendanceButton").disabled = true;
       document.getElementById("cancelAttendanceEditButton").disabled = true;
+      document.getElementById("closeMonthGeneratePaymentsButton").disabled = false;
+      document.getElementById("cancelCheckboxDiv").hidden = true;
       return;
     }
 
@@ -848,11 +872,24 @@ function addPlayerListToTab(tabName) {
         }
       }
     }
+    document.getElementById("cancelCheckboxDiv").hidden = false;
 
     // button currently as Edit, so toggle to "save" mode
     weekEditButton.setAttribute("toggleStatus", "save"); 
     document.getElementById("saveAttendanceButton").disabled = false; 
     document.getElementById("cancelAttendanceEditButton").disabled = false;
+    document.getElementById("closeMonthGeneratePaymentsButton").disabled = true;
+    document.getElementById("closeMonthGeneratePaymentsButton").setAttribute("weekNumber", weekNumber);
+
+    if (cancelledMap[weekNumber]) {
+      document.getElementById("cancelCheckbox").checked = true;
+      document.getElementById("cancelWeekDescription").hidden = false;
+      document.getElementById("cancelWeekDescription").value = cancelledMap[weekNumber].description;
+    } else {
+      document.getElementById("cancelCheckbox").checked = false;
+      document.getElementById("cancelWeekDescription").hidden = true;
+      document.getElementById("cancelWeekDescription").value = "";
+    }
   }
 
     function editPlayer(playerName, newPlayerEditButton) {
@@ -905,53 +942,70 @@ function addPlayerListToTab(tabName) {
       return new Promise(resolve => setTimeout(resolve, time));
     }
 
+    function cancelCurrentEdittingWeek() {
+      var cancelDescElement = document.getElementById("cancelWeekDescription");
+      cancelDescElement.hidden = !cancelDescElement.hidden;
+      cancelDescElement.focus();
+      cancelDescElement.select();
+    }
+
     function saveAttendance(weekNumber) {
       // Save the data (using XMLHttpRequest)
       console.log("SAVING attendance for week: " + weekNumber);
       var tabName = "attendance";
+      var gameDay = String(mondaysDates[weekNumber]).padStart(2, '0')
+      var gameDateString = gameYear + "-" + gameMonth + "-" + gameDay;
 
       var playersAttended = {};
-      var scorers = {1: {}, 2:{}};
-      playersAttended[weekNumber] = {};
-      var saveType = "ATTENDANCE"
-      for (var i = 0; i < 999; i++) {
-        var playerElement = document.getElementById("player" + i + tabName); 
-        if (!playerElement) {
-          //console.log("GOT NULL!");
-          break;
-        }
-        var officialPlayerName = playerElement.getAttribute("title");
-        var playerName = officialPlayerName;
-        if (!officialPlayerName) {
-          // new player - no official name yet so use the current value
-          playerName = playerElement.value;
-        }
-        var playerAttended = Number(document.getElementById("player" + i + "Week" + weekNumber + tabName).getAttribute("teamValue"));
-
-        var goalsScored = Number(document.getElementById("player" + i + "Week" + weekNumber + tabName + "Goals").innerHTML);
-        if (goalsScored > 0) {
-          scorers[playerAttended][playerName] = goalsScored;
-        }
-
-        playersAttended[weekNumber][playerName] = playerAttended;
-        //console.log("PLAYER DETAILS: " + i + " " + officialPlayerName + " " + playerAttended);
-      }
-
-      // get the score for the game week
-      var goals1 = Number(document.getElementById("week" + weekNumber + "Score1" + tabName).value); 
-      var goals2 = Number(document.getElementById("week" + weekNumber + "Score2" + tabName).value); 
-      var calcWinner = -1;
-      if (goals1 == goals2) {
-        calcWinner = 0; // draw
-      } else if (goals1 > goals2) {
-        calcWinner = 1; // team1 won
-      } else if (goals1 < goals2) {
-        calcWinner = 2; // team2 won
-      }
       var scores = {};
-      scores[weekNumber] = {"winner": calcWinner, "team1goals": goals1, "team2goals": goals2, "team1scorers": scorers[1], "team2scorers": scorers[2]}
+      var scorers = {1: {}, 2:{}};
+      var status = {"status": "PLAYED", "date": gameDateString};;
+      var saveType = "ATTENDANCE"
 
-      var attendanceDetails = { "gameYear": gameYear, "gameMonth": gameMonth, "gameWeek": weekNumber, "playersAttended": playersAttended, "scores": scores, "saveType": saveType, };
+      if (document.getElementById("cancelCheckbox").checked) {
+        //if (!confirm('This will mark the week as cancelled.\nAre you sure?')) return;
+        // cancelling
+        var description = document.getElementById("cancelWeekDescription").value;
+        status = {"status": "CANCELLED", "description": description, "date": gameDateString};
+      } else {
+        // saving
+        for (var i = 0; i < 999; i++) {
+          var playerElement = document.getElementById("player" + i + tabName); 
+          if (!playerElement) {
+            //console.log("GOT NULL!");
+            break;
+          }
+          var officialPlayerName = playerElement.getAttribute("title");
+          var playerName = officialPlayerName;
+          if (!officialPlayerName) {
+            // new player - no official name yet so use the current value
+            playerName = playerElement.value;
+          }
+          var playerAttended = Number(document.getElementById("player" + i + "Week" + weekNumber + tabName).getAttribute("teamValue"));
+
+          var goalsScored = Number(document.getElementById("player" + i + "Week" + weekNumber + tabName + "Goals").innerHTML);
+          if (goalsScored > 0) {
+            scorers[playerAttended][playerName] = goalsScored;
+          }
+
+          playersAttended[playerName] = playerAttended;
+          //console.log("PLAYER DETAILS: " + i + " " + officialPlayerName + " " + playerAttended);
+        }
+
+        // get the score for the game week
+        var goals1 = Number(document.getElementById("week" + weekNumber + "Score1" + tabName).value); 
+        var goals2 = Number(document.getElementById("week" + weekNumber + "Score2" + tabName).value); 
+        var calcWinner = -1;
+        if (goals1 == goals2) {
+          calcWinner = 0; // draw
+        } else if (goals1 > goals2) {
+          calcWinner = 1; // team1 won
+        } else if (goals1 < goals2) {
+          calcWinner = 2; // team2 won
+        }
+        scores = {"winner": calcWinner, "team1goals": goals1, "team2goals": goals2, "team1scorers": scorers[1], "team2scorers": scorers[2]}
+      }
+      var attendanceDetails = { "gameYear": gameYear, "gameMonth": gameMonth, "gameDay": gameDay, "weekNumber": weekNumber, "playersAttended": playersAttended, "scores": scores, "status": status, "saveType": saveType };
 
       console.log("SAVING ATTENDANCE:" + JSON.stringify(attendanceDetails));
 

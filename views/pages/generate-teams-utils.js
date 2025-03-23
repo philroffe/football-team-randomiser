@@ -126,6 +126,7 @@ if (typeof module != "undefined") {
     /////////////////////
     /////////////////////
     /////////////////////
+    //console.log("WOOOSOOOO:", playerList);
 
     // create list of all players from allAttendanceData
     var allPastPlayers = [];
@@ -133,13 +134,11 @@ if (typeof module != "undefined") {
       var weekAttendanceData = allAttendanceData[gamesCollectionId];
       Object.keys(weekAttendanceData).forEach(function(weekNumber) {
         if (weekNumber >= '0' && weekNumber <= '52') {
-          var playerList = weekAttendanceData[weekNumber];
+          var playerList = weekAttendanceData[weekNumber].players;
           Object.keys(playerList).forEach(function(playerName) {
-            if (playerName != "scores") {
-              //console.log("FOUND:", playerName, weekNumber, gamesCollectionId);
-              if (!allPastPlayers.includes(playerName)) {
-                allPastPlayers.push(playerName);
-              }
+            //console.log("FOUND:", playerName, weekNumber, gamesCollectionId);
+            if (!allPastPlayers.includes(playerName)) {
+              allPastPlayers.push(playerName);
             }
           });
         }
@@ -208,7 +207,7 @@ if (typeof module != "undefined") {
             var weekScores = weekAttendanceData[weekNumber]['scores'];
             if (weekScores) {
               // attendance data includes the scores so check if the currentPlayer played
-              var playerWeekTeamNumber = weekAttendanceData[weekNumber][currentPlayer];
+              var playerWeekTeamNumber = weekAttendanceData[weekNumber].players[currentPlayer];
               //console.log("using player week data...", currentPlayer, playerWeekTeamNumber);
               if (playerWeekTeamNumber) {
                 // played
@@ -286,6 +285,7 @@ if (typeof module != "undefined") {
         // algorithm6 = sort by algorithm3 and pick teams by alternating between the top 3 and the bottom 3
 
         // algorithm7 = sort by algorithm (1, 2, 3 or 4) and pick teams by randomising the top 3 and the bottom 3
+        //console.log("DEBUG NEW", playersGamesPlayedRatio)
       } else {
         // new player so defeult to rank as 50/50
         playersGamesPlayedRatio[playerName].algorithm0ratio = 0.5;

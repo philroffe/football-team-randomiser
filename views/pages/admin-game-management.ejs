@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+    <div id="blank" style="height: 40px"></div>
+    <p><h3>Admin - Game Management</h3>
+
+    <div class="borderdiv" id="gameManagementDiv">
+      <br>What would you like to do?<p>
+      <!-- Radio buttons -->
+      <input id="cancelGameChoice" type="radio" name="cancelGameType" value="cancel" onclick="changeHelpText();" checked/>
+      <label for="cancelGameChoice">Cancel Game</label>
+      
+      <br>Game Week: <input type="text" id="gameDate" placeholder="e.g. 2025-01-06" data-lpignore=true>
+      <br>Description: <input type="text" id="description" placeholder="e.g. Not enough players" data-lpignore=true>
+      <br>Charge (£): <input type="number" id="cost" placeholder="e.g. -37" data-lpignore=true>
+    </div>
+      <br><br><button id="submit" style="background-color: #90EE90;float:left;" type="button" onclick="saveGameManagement();">Submit</button><br><br>
+
+      <script type="text/javascript">
+        // restringify and then parse the json to get the page
+        var pageData = JSON.parse(JSON.stringify(<%- pageData %>));
+        console.log('pageData=', pageData);
+
+        var nextMonday = pageData.players.nextMonday;
+        var nextMondayDate = new Date(nextMonday);
+        var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
+        document.getElementById('gameDate').value = nextMondayDate.getFullYear() + "-" + monthDateNumericFormat.format(nextMondayDate) + "-" + nextMondayDate.getDate();
+
+
+        function saveGameManagement() {
+          // now send the POST request with the data
+          var formData = {};
+          formData.type = document.getElementById('cancelGameChoice').value;
+          formData.gameDate = document.getElementById('gameDate').value;
+          formData.description = document.getElementById('description').value;
+          formData.cost = document.getElementById('cost').value;
+          
+          console.log("SAVING GAME-MANAGEMENT:" + JSON.stringify(formData));
+          var xmlhttp = new XMLHttpRequest();
+          xmlhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+              console.log("Saved response", this.responseText);
+              //location.reload(true);
+            }
+          };
+          xmlhttp.open("POST", "/services/save-game-management");
+          xmlhttp.setRequestHeader("Content-Type", "application/json");
+          xmlhttp.send(JSON.stringify(formData));
+        }
+      </script>
+  </div>
+</body>
+</html>

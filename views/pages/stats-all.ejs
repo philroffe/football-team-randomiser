@@ -18,13 +18,14 @@
     
 
   <div id="padding" style="height: 40px"></div>
-  <h3 id="alltimegames">Stats since: 
-    <select name="dateRange" id="dateRange" onchange="changeDateRange(this.value)">
+  <h3 id="alltimegames">Stats  
+    <select name="dateRange" id="dateRange" onchange="updateFilterFromDateRange(this.value) ; changeTab();">
       <option value="12">12 Months</option>
       <option value="6" selected>6 Months</option>
       <option value="3">3 Months</option>
       <option value="9999">Since Jan23</option>
     </select>
+    before <label id="dateLabel"></div>
   </h3>
 
   <input class="radio" id="one" name="group" type="radio" onclick="changeTab('one');" checked>
@@ -69,12 +70,14 @@
         </div>
         <div style="clear:both;"></div>
         <div id="statsChartsDiv" style="height: 600px; max-width: 100%"></div>
+        <div id="oneHiddenStats" hidden></div>
       </div>
     </div>
     <div class="panel" id="two-panel">
       <div class="content">
         <div id="blank2" style="height: 40px"></div>
         <div id="totalRedBlueWinsContainer" style="height: 800px; max-width: 100%"></div>
+        <div id="twoHiddenStats" hidden></div>
       </div>
     </div>
     <div class="panel" id="three-panel">
@@ -88,31 +91,36 @@
         </div>
         <div id="blank3" style="height: 80px"></div>
         <div id="playerHeadToHeadDiv" style="height: 1000px; max-width: 100%"></div>
+        <div id="threeHiddenStats" hidden></div>
       </div>
     </div>
     <div class="panel" id="four-panel">
       <div class="content">
         <div id="blank4" style="height: 40px"></div>
         <div id="playerStackChartDiv" style="height: 800px; max-width: 100%"></div>
+        <div id="fourHiddenStats" hidden></div>
       </div>
     </div>
     <div class="panel" id="five-panel">
       <div class="content">
         <div id="blank5" style="height: 40px"></div>
         <div id="playerColourBarChartDiv" style="height: 800px; max-width: 100%"></div>
+        <div id="fiveHiddenStats" hidden></div>
       </div>
     </div>
     <div class="panel" id="six-panel">
       <div class="content">
         <div id="blank6" style="height: 40px"></div>
         <div id="playerWinBarChartDiv" style="height: 800px; max-width: 100%"></div>
+        <div id="sixHiddenStats" hidden></div>
       </div>
     </div>
     <div class="panel" id="seven-panel">
       <div class="content">
         <div id="blank7" style="height: 40px"></div>
-        <h3>Goals Scored per Game</h3>
+        <h3>Goals Scored</h3>
         <div id="goalScorersBarChartDiv" style="height: 800px; max-width: 100%"></div>
+        <div id="sevenHiddenStats" hidden></div>
       </div>
     </div>
     <div class="panel" id="eight-panel">
@@ -131,6 +139,7 @@
         </div>
         <div id="blank8a" style="height: 40px"></div>
         <div id="playerChartsDiv"  style="height: 800px; max-width: 100%"></div>
+        <div id="eightHiddenStats" hidden></div>
       </div>
     </div>
     <div class="panel" id="nine-panel">
@@ -138,19 +147,34 @@
         <div id="blank9" style="height: 40px"></div>
         <h3>Total Games Played Since 2019</h3>
         <div id="playerTickerDiv" style="height: 800px; max-width: 100%"></div>
+        <div id="nineHiddenStats" hidden></div>
       </div>
     </div>
   </div>
-  <!-- check main.css to ensure tab numbers are added -->
   </div>
 
   <%- include ("./stats-utils.js") %>
 
   <script type="text/javascript">
+    // auto select the options based on the URL params
+    var tabParam = new URL(document.location.href).searchParams.get("tab");
+    if (!tabParam) { tabParam = "one" };
+    var dateParam = new URL(document.location.href).searchParams.get("date");
+    if (!dateParam) { dateParam = new Date().toISOString().split('T')[0] };
+    var dateRangeParam = new URL(document.location.href).searchParams.get("dateRange");
+    if (!dateRangeParam) { dateRangeParam = "6" };
+    var statChartParam = new URL(document.location.href).searchParams.get("statChart");
+    if (!statChartParam) { statChartParam = "Won" };
+    
+    document.getElementById("dateRange").value = dateRangeParam;
+    document.getElementById("statChartSelect").value = statChartParam;
+    document.getElementById(tabParam).checked = true;
+    document.getElementById("dateLabel").innerHTML = dateParam;
+
     // restringify and then parse the json to get the page
     var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
-    //console.log('Data=', pagedata);
-    
+    console.log('Data=', pagedata);
+
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });
     var monthShortDateFormat = new Intl.DateTimeFormat('en', { month: 'short' });
     var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
@@ -160,7 +184,10 @@
     if (!players) { players = {}; }
     var allCollectionDocs = pagedata.data.allCollectionDocs;
     if (!allCollectionDocs) { allCollectionDocs = {}; }
-    var filteredAllCollectionDocs = allCollectionDocs;
+    //var filteredAllCollectionDocs = allCollectionDocs;
+    var filteredAllCollectionDocs = {};
+    updateFilterFromDateRange(document.getElementById("dateRange").value);
+
     //var attendanceByYearMap = pagedata.data.attendanceByYear;
     //if (!attendanceByYearMap) { attendanceByYearMap = {}; }
     //var paydetailsMap = pagedata.data.paydetails;
@@ -172,9 +199,8 @@
     var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap).sort());
     //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
 
-    if (!pagedata.selectTab) { pagedata.selectTab = 'one'; }
-
     function changeTab(tabName) {
+      if (!tabName) { tabName = tabParam };
       // calculate updated URL
       var newURL = window.location.href;
       if (window.location.href.includes("tab=")) {
@@ -185,7 +211,6 @@
       }
       // update the URL (without refreshing) to reflect tab change
       window.history.pushState({}, 'unused', newURL);
-      pagedata.selectTab = tabName;
 
       switch(tabName) {
         case 'one':
@@ -285,6 +310,7 @@
     // STACK CHART - PLAYER WIN/LOSE/DRAW STATS
     /////////////
     //add player names to options, generate each players graph
+    var combinedPlayerDataDebug = {};
     var playerNamesData = [];
     var winData = [];
     var loseData = [];
@@ -302,6 +328,7 @@
         loseData.unshift(playerData.lose);
         drawData.unshift(playerData.draws);
         goalsData.unshift(playerData.goals);
+        combinedPlayerDataDebug[playerName] = [playerData.win, playerData.lose, playerData.draws, playerData.goals];
       }
     }
     //console.log(playerNamesData, winData, loseData, drawData)
@@ -342,6 +369,7 @@
       var stackChart = echarts.init(stackChartDom);
       var stackOption;
 
+      var combinedPlayerDataDebug = {};
       var playerNamesData = [];
       var goalsData = [];
       allPlayerData.sort(function(a, b) { return b[1].goals - a[1].goals; });
@@ -352,6 +380,7 @@
           // add data to the start (unshift) of each array to keep it in alphabetical order
           playerNamesData.unshift(playerName);
           goalsData.unshift(playerData.goals);
+          combinedPlayerDataDebug[playerName] = [playerData.win, playerData.lose, playerData.draws, playerData.goals];
         }
       }
 
@@ -370,6 +399,10 @@
         ],
       };
       stackOption && stackChart.setOption(stackOption);
+
+      /// show the dataset in the hiddenStats div (used for selenium testing)
+      var hiddenStatsElement = document.getElementById("sevenHiddenStats");
+      hiddenStatsElement.innerHTML = JSON.stringify(combinedPlayerDataDebug);
     }
 
     
@@ -573,15 +606,15 @@
               var docData = filteredAllCollectionDocs[collectionId][docId].data;
               // loop through scores of each week
               for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
-                var playerList = docData[weekNumber];
-                if (playerList && playerList.scores) {
-                  totalRedGoals += playerList.scores.team1goals;
-                  totalBlueGoals += playerList.scores.team2goals;
-                  if (playerList.scores.winner == 2) {
+                var attendanceData = docData[weekNumber];
+                if (attendanceData && attendanceData.scores) {
+                  totalRedGoals += attendanceData.scores.team1goals;
+                  totalBlueGoals += attendanceData.scores.team2goals;
+                  if (attendanceData.scores.winner == 2) {
                     totalBlueWins++;
-                  } else if (playerList.scores.winner == 1) {
+                  } else if (attendanceData.scores.winner == 1) {
                     totalRedWins++;
-                  } else if (playerList.scores.winner == 0) {
+                  } else if (attendanceData.scores.winner == 0) {
                     totalDraws++;
                   }
                 }
@@ -651,6 +684,24 @@
     }
 
     function calcPlayerWinsOptionData(playerName, elementId) {
+      /*
+      var dateParam = new URL(document.location.href).searchParams.get("date");
+      if (!dateParam) { dateParam = new Date().toISOString().split('T')[0] };
+      var endDate = new Date(dateParam);
+      var startDate = new Date(endDate);
+      //console.log("Changing Date Range", value, tabParam, endDate)
+      statsDateRange = value;
+      // apply the collection filter
+      filteredAllCollectionDocs = {};
+      startDate.setMonth(startDate.getMonth() - statsDateRange);
+      for (const collectionId in allCollectionDocs) {
+        var currentMonth = new Date(collectionId.replace("games_", ""));
+        //console.log("--", collectionId.replace("games_", ""), currentMonth, startDate, endDate);
+        if (currentMonth.getTime() > startDate.getTime() && currentMonth.getTime() <= endDate.getTime()) {
+          filteredAllCollectionDocs[collectionId] = allCollectionDocs[collectionId];
+        }
+      }
+      */
       // loop through all of the costs and payments for this year
       var totals = {};
       totals.win = 0;
@@ -678,25 +729,25 @@
               var docData = filteredAllCollectionDocs[collectionId][docId].data;
               // loop through scores of each week
               for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
-                var playerList = docData[weekNumber];
-                if (playerList && playerList.scores) {
-                  for (const weekPlayerName in playerList) {
+                var attendanceData = docData[weekNumber];
+                if (attendanceData && attendanceData.scores) {
+                  for (const weekPlayerName in attendanceData.players) {
                     if (weekPlayerName == playerName) {
-                      var playerTeamNumber = playerList[weekPlayerName];
+                      var playerTeamNumber = attendanceData.players[weekPlayerName];
                       if (playerTeamNumber > 0) {
                         var goalsAttr = "team" + playerTeamNumber + "scorers";
-                        if (playerList.scores[goalsAttr] && playerList.scores[goalsAttr][playerName]) {
-                          totals.goals += playerList.scores[goalsAttr][playerName];
+                        if (attendanceData.scores[goalsAttr] && attendanceData.scores[goalsAttr][playerName]) {
+                          totals.goals += attendanceData.scores[goalsAttr][playerName];
                         }
                         // this player played so record totals of win/lose/draw
-                        if (playerList.scores.winner == playerTeamNumber) {
+                        if (attendanceData.scores.winner == playerTeamNumber) {
                           totals.win++;
                           if (playerTeamNumber == 1) {
                             totals.redTeam.win++;
                           } else {
                             totals.blueTeam.win++;
                           }
-                        } else if (playerList.scores.winner == 0) {
+                        } else if (attendanceData.scores.winner == 0) {
                           totals.draws++;
                           if (playerTeamNumber == 1) {
                             totals.redTeam.draws++;
@@ -813,8 +864,8 @@
               var docData = filteredAllCollectionDocs[collectionId][docId].data;
               // loop through scores of each week
               for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
-                var playerList = docData[weekNumber];
-                if (playerList && playerList.scores) {
+                var attendanceData = docData[weekNumber];
+                if (attendanceData && attendanceData.scores) {
                   weekCount++;
                     for (var i = 0; i < playerNameSuggestions.length; i++) {
                       weekPlayerName = playerNameSuggestions[i];
@@ -834,16 +885,16 @@
                           playerMap.winRatio = 0.5;
                           playerMap.totalGoals = 0;
                         }
-                        var playerTeamNumber = playerList[weekPlayerName];
+                        var playerTeamNumber = attendanceData.players[weekPlayerName];
                         if (playerTeamNumber > 0) {
                           var goalsAttr = "team" + playerTeamNumber + "scorers";
-                          if (playerList.scores[goalsAttr] && playerList.scores[goalsAttr][weekPlayerName]) {
-                            playerMap.totalGoals = playerMap.totalGoals + Number(playerList.scores[goalsAttr][officialName]);
+                          if (attendanceData.scores[goalsAttr] && attendanceData.scores[goalsAttr][weekPlayerName]) {
+                            playerMap.totalGoals = playerMap.totalGoals + Number(attendanceData.scores[goalsAttr][officialName]);
                           }
                           // this player played so co
-                          if (playerList.scores.winner == playerTeamNumber) {
+                          if (attendanceData.scores.winner == playerTeamNumber) {
                             playerMap.won = playerMap.won + 1;
-                          } else if (playerList.scores.winner == 0) {
+                          } else if (attendanceData.scores.winner == 0) {
                             playerMap.drawn = playerMap.drawn + 1;
                           } else {
                             playerMap.lost = playerMap.lost + 1;
@@ -979,7 +1030,9 @@
 
       option && myChart.setOption(option);
 
-
+      /// show the dataset in the hiddenStats div (used for selenium testing)
+      var hiddenStatsElement = document.getElementById("oneHiddenStats");
+      hiddenStatsElement.innerHTML = JSON.stringify(option.dataset);
 
       return option;
     }
@@ -1021,33 +1074,33 @@
               var docData = filteredAllCollectionDocs[collectionId][docId].data;
               // loop through scores of each week
               for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
-                var playerList = docData[weekNumber];
-                if (playerList && playerList.scores) {
+                var attendanceData = docData[weekNumber];
+                if (attendanceData && attendanceData.scores) {
                   var player1TeamNumber = 0;
                   var player2TeamNumber = 0;
-                  for (const weekPlayerName in playerList) {
+                  for (const weekPlayerName in attendanceData.players) {
                     if (weekPlayerName == player1) {
-                      player1TeamNumber = playerList[weekPlayerName];
+                      player1TeamNumber = attendanceData.players[weekPlayerName];
                     } else if (weekPlayerName == player2) {
-                      player2TeamNumber = playerList[weekPlayerName];
+                      player2TeamNumber = attendanceData.players[weekPlayerName];
                     }
                   }
                   if (player1TeamNumber && player2TeamNumber) {
                     // both teams played
                     totals.games++;
                     if (player1TeamNumber == player2TeamNumber) {
-                      if (playerList.scores.winner == player1TeamNumber) {
+                      if (attendanceData.scores.winner == player1TeamNumber) {
                         totals.sameTeam.wins++;
-                      } else if (playerList.scores.winner == 0) {
+                      } else if (attendanceData.scores.winner == 0) {
                         totals.sameTeam.draws++;
                       } else {
                         totals.sameTeam.loses++;
                       }
-                    } else if (playerList.scores.winner == player1TeamNumber) {
+                    } else if (attendanceData.scores.winner == player1TeamNumber) {
                       totals.oppositeTeam.player1wins++;
-                    } else if (playerList.scores.winner == player2TeamNumber) {
+                    } else if (attendanceData.scores.winner == player2TeamNumber) {
                       totals.oppositeTeam.player2wins++;
-                    } else if (playerList.scores.winner == 0) {
+                    } else if (attendanceData.scores.winner == 0) {
                       totals.oppositeTeam.draws++;
                     }
                   }
@@ -1185,29 +1238,25 @@
     }
     ///////////////////////////////////////////////
 
-    var tabName = pagedata.selectTab;
-    if (!tabName) { tabName = "one" };
-    if (document.getElementById(tabName)) {
-      document.getElementById(tabName).checked = true;
-      changeDateRange(document.getElementById("dateRange").value);
-    }
+    // auto select the tab to initialise the page
+    changeTab(tabParam);
 
-    function changeDateRange(value) {
-      //console.log("Changing Date Range", value, pagedata.selectTab)
-      statsDateRange = value;
+    function updateFilterFromDateRange(statsDateRange) {
+      var dateParam = new URL(document.location.href).searchParams.get("date");
+      if (!dateParam) { dateParam = new Date().toISOString().split('T')[0] };
+      var endDate = new Date(dateParam);
+      var startDate = new Date(endDate);
+      //console.log("Changing Date Range", statsDateRange, tabParam, endDate)
       // apply the collection filter
       filteredAllCollectionDocs = {};
-      var endDate = new Date();
-      var startDate = new Date();
       startDate.setMonth(startDate.getMonth() - statsDateRange);
       for (const collectionId in allCollectionDocs) {
         var currentMonth = new Date(collectionId.replace("games_", ""));
-        //console.log("--", collectionId.replace("games_", ""), currentMonth);
-        if (currentMonth.getTime() > startDate.getTime() && currentMonth.getTime() < endDate.getTime()) {
+        //console.log("--", collectionId.replace("games_", ""), currentMonth, startDate, endDate);
+        if (currentMonth.getTime() > startDate.getTime() && currentMonth.getTime() <= endDate.getTime()) {
           filteredAllCollectionDocs[collectionId] = allCollectionDocs[collectionId];
         }
       }
-      changeTab(pagedata.selectTab);
     }
 
     </script>

@@ -15,9 +15,9 @@
             var docData = allCollectionDocs[collectionId][docId].data;
             // loop through scores of each week
             for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
-              var playerList = docData[weekNumber];
-              if (playerList && Object.keys(playerList).length > 0) {
-                //console.log("----", collectionId, weekNumber, playerList);
+              var attendanceData = docData[weekNumber];
+              if (attendanceData && Object.keys(attendanceData).length > 0) {
+                //console.log("----", collectionId, weekNumber, attendanceData);
                 weekCount++;
                 for (var i = 0; i < playerNameSuggestions.length; i++) {
                   weekPlayerName = playerNameSuggestions[i];
@@ -30,7 +30,7 @@
                         playerMap.totalGames = 0;
                         playerMap.playerName = officialName;
                       }
-                      var playerTeamNumber = playerList[weekPlayerName];
+                      var playerTeamNumber = attendanceData.players[weekPlayerName];
                       if (playerTeamNumber) {
                         // this player played
                         playerMap.totalGames = playerMap.totalGames + 1;

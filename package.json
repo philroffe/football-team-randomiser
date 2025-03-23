@@ -8,9 +8,12 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node test.js",
+    "test": "jest",
+    "db": "gcloud beta emulators firestore start --host-port='0.0.0.0:5678'",
     "restore": "node database.js restore",
-    "backup": "node database.js backup"
+    "backup": "node database.js backup",
+    "preview-last-backup": "jq --color-output . ./backups/DB-Backup-date-latest.json | less -R",
+    "datafix": "node database.js datafix"
   },
   "dependencies": {
     "@google-cloud/connect-firestore": "^3.0.0",
@@ -27,11 +30,14 @@
     "nodemailer": "^6.9.4",
     "passport": "^0.7.0",
     "passport-google-oauth": "^2.0.0",
-    "prettier": "^3.4.2"
+    "prettier": "^3.4.2",
+    "selenium-webdriver": "^4.28.1"
   },
   "devDependencies": {
     "depcheck": "^1.4.7",
-    "got": "^14.4.1"
+    "got": "^14.4.1",
+    "jest": "^29.7.0",
+    "wdio-wait-for": "^3.0.11"
   },
   "repository": {
     "type": "git",

@@ -11,11 +11,14 @@
     <div id="blank" style="height: 40px"></div>
     <p><h3>Admin Preferences</h3>
 
-    <div class="borderdiv" id="preferencesDiv">
-      <p>enableCronEmail: <input type="checkbox" id="enableCronEmail" data-lpignore=true>
-      <br>openFinancialYear: <input type="number" id="openFinancialYear" data-lpignore=true>
-      <br>overrideDefaultDate (2024-09-01): <input type="text" id="overrideDefaultDate" data-lpignore=true>
-      <br>costOfPitch: <input type="number" id="costOfPitch" data-lpignore=true>
+    <div id="preferencesDiv">
+      <table style="border:none;">
+        <tr><td style="border:none;">enableCronEmail:</td><td style="border:none;"><input type="checkbox" id="enableCronEmail" data-lpignore=true></td></tr>
+        <tr><td style="border:none;">openFinancialYear:</td><td style="border:none;"><input type="number" id="openFinancialYear" data-lpignore=true></td></tr>
+        <tr><td style="border:none;">overrideDefaultDate (2024-09-01):</td><td style="border:none;"><input type="text" id="overrideDefaultDate" data-lpignore=true></td></tr>
+        <tr><td style="border:none;">costOfPitch:</td><td style="border:none;"><input type="number" id="costOfPitch" data-lpignore=true></td></tr>
+        <tr><td style="border:none;">fullAdminEmails: (csv)</td><td style="border:none;"><input type="text" id="fullAdminEmails" data-lpignore=true></td></tr>
+      </table>
     </div>
       <br><br><button id="submit" style="background-color: #90EE90;float:left;" type="button" onclick="savePreferences();">Submit</button><br><br>
 

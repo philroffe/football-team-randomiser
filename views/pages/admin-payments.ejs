@@ -219,11 +219,12 @@ function addPaymentsTableRows(paymentsMap, showEditTotals = true, showExpandable
 
           // add table cell
           const tdOwed = tr.insertCell();
+          tdOwed.id = "player" + showEditTotals + playerName + "OwedPayment";
           tdOwed.style.textAlign = 'center';
           tdOwed.appendChild(document.createTextNode("£" + amountOwed));
 
           var paymentLinkElement = document.createElement("a");
-          paymentLinkElement.setAttribute("id", "player" + currentPlayerNumber + "LinkPayment"); 
+          paymentLinkElement.setAttribute("id", "player" + showEditTotals + currentPlayerNumber + "LinkPayment"); 
           if (outstandingBalance > 0) {
             var paymentLink = "https://www.paypal.me/philroffe/" + outstandingBalance;
             var linkText = document.createTextNode("(PayPal £" + outstandingBalance + ")");
@@ -276,28 +277,29 @@ function addPaymentsTableRows(paymentsMap, showEditTotals = true, showExpandable
         }
       })
 
-      if (showEditTotals) {
-        // create new row for table
-        const tr = tbl.insertRow();
-        const tdNameTotal = tr.insertCell();
+      // create new row for table
+      const tr = tbl.insertRow();
+      const tdNameTotal = tr.insertCell();
 
-        // games total
-        const tdGamesTotal = tr.insertCell();
-        tdGamesTotal.style.textAlign = 'center';
-        tdGamesTotal.appendChild(document.createTextNode(overallGamesTotal));
-        // owes total
-        const tdOwesTotal = tr.insertCell();
-        tdOwesTotal.style.textAlign = 'center';
-        tdOwesTotal.appendChild(document.createTextNode("£" + overallOwesTotal));
-        // outstanding total
-        const tdOutstandingTotal = tr.insertCell();
-        tdOutstandingTotal.style.textAlign = 'center';
-        tdOutstandingTotal.appendChild(document.createTextNode("£" + (overallOwesTotal - overallPaidTotal)));
-        // tdOutstandingTotal total
-        //const tdPaidTotal = tr.insertCell();
-        //tdPaidTotal.style.textAlign = 'center';
-        //tdPaidTotal.appendChild(document.createTextNode("£" + overallPaidTotal));
-      }
+      // games total
+      const tdGamesTotal = tr.insertCell();
+      tdGamesTotal.setAttribute("id", "OverallGamesTotal" + showEditTotals);
+      tdGamesTotal.style.textAlign = 'center';
+      tdGamesTotal.appendChild(document.createTextNode(overallGamesTotal));
+      // owes total
+      const tdOwesTotal = tr.insertCell();
+      tdOwesTotal.setAttribute("id", "OverallOwesTotal" + showEditTotals);
+      tdOwesTotal.style.textAlign = 'center';
+      tdOwesTotal.appendChild(document.createTextNode("£" + overallOwesTotal));
+      // outstanding total
+      const tdOutstandingTotal = tr.insertCell();
+      tdOutstandingTotal.setAttribute("id", "OverallOutstandingTotal" + showEditTotals);
+      tdOutstandingTotal.style.textAlign = 'center';
+      tdOutstandingTotal.appendChild(document.createTextNode("£" + (overallOwesTotal - overallPaidTotal)));
+      // tdOutstandingTotal total
+      //const tdPaidTotal = tr.insertCell();
+      //tdPaidTotal.style.textAlign = 'center';
+      //tdPaidTotal.appendChild(document.createTextNode("£" + overallPaidTotal));
     }
 
   </script>

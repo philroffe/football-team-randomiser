@@ -91,7 +91,53 @@ app.use(express.static(path.join(__dirname, 'public')))
   req.session.messages = [];
   next();
 })
-.use('/', authRouter)
+
+// if running locally, allow a fake login for testing purposes
+if (process.env.FIRESTORE_EMULATOR_HOST) {
+  var fakeUser = {"id":123456, "username":"fake-user", "_id":"fake", "name":"Fake User"};
+  function middleware(req, res, next) {
+    if (req && req.session && req.session.user_tmp) {
+      req.user = req.session.user_tmp;
+    }
+    if (next) { next() }
+  }
+  function route(req, res) {
+    req.session = req.session || {};
+    req.session.user_tmp = fakeUser;
+    res.redirect('/');
+  } 
+  app.use(middleware)
+  app.get('/auth/fake', route)
+}
+
+async function getUserRoles(user) {
+  var userRoles = "anonymous";
+  if (user && user.email) {
+    userRoles = "authenticated";
+    // check admin user list from preferences
+    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+    var preferences = preferencesDoc.data();
+    //console.log(preferences, user)
+    if (preferences && preferences.fullAdminEmails && preferences.fullAdminEmails.includes(user.email)) {
+      userRoles = "fulladmin";  
+    }
+  }
+  return userRoles;
+}
+
+async function clearExpiredExpressSessions() {
+  const sessionsCollection = firestore.collection("express-sessions");
+  const allSessionDocs = await sessionsCollection.get();
+  allSessionDocs.forEach(doc => {
+    var data = JSON.parse(doc.data().data);
+    if (!data.cookie || !data.cookie.expires || new Date(data.cookie.expires) < new Date()) {
+      //console.log("Deleting session...", doc.id, data.cookie.expires);
+      firestore.collection("express-sessions").doc(doc.id).delete();
+    }
+  })
+}
+
+app.use('/', authRouter)
 .get('/login', function(req, res, next) {
   // a hack that won't scale past a single user logging in at a time
   // store the referer on login attempt, to allow redirect after successful login
@@ -147,7 +193,8 @@ app.use(express.static(path.join(__dirname, 'public')))
         gameDay = "0" + gameDay;
       }
       var thisDate = gameYear + "-" + gameMonth + "-" + gameDay;
-      var playerList = attendanceData[weekNumber];
+
+      var playerList = attendanceData[weekNumber].players;
       if (playerList) {
         Object.keys(playerList).forEach(await function(playerName) {
           // check a real player (not the scores) and that the player actually played
@@ -240,7 +287,9 @@ app.use(express.static(path.join(__dirname, 'public')))
           }
         }
         if (thisDataId.startsWith("payment_")) {
-          if (filterData[thisDataId].financialYear != openFinancialYear && filterData[thisDataId].chargeId.length > 0) {
+          console.log("WHAT IS WRONG WITH: ", thisDataId, filterData[thisDataId]);
+          // TODO: Check chargeId = must be null
+          if (filterData[thisDataId].financialYear != openFinancialYear && filterData[thisDataId].chargeId && filterData[thisDataId].chargeId.length > 0) {
             delete filterData[thisDataId];
           }
         }
@@ -274,7 +323,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString(), "environment": environment };
     
     if (req.isAuthenticated()) {
-      console.log("User is logged in: ", req.user);
+      console.log("User is logged in: ", JSON.stringify(req.user));
       pageData.user = req.user;
     }
 
@@ -324,7 +373,7 @@ app.use(express.static(path.join(__dirname, 'public')))
   console.log('GOT PAYMENT-MANUAL POST:', ip, req.body);
 
   if (req.isAuthenticated()) {
-    console.log("User is logged in: ", req.user);
+    console.log("User is logged in: ", JSON.stringify(req.user));
   } else {
     console.log("User NOT logged in - rejecting");
     res.sendStatus(400);
@@ -375,7 +424,7 @@ app.use(express.static(path.join(__dirname, 'public')))
   console.log('GOT PAYMENT-MANUAL POST:', ip, req.body);
 
   if (req.isAuthenticated()) {
-    console.log("User is logged in: ", req.user);
+    console.log("User is logged in: ", JSON.stringify(req.user));
   } else {
     console.log("User NOT logged in - rejecting");
     res.sendStatus(400);
@@ -754,17 +803,22 @@ app.use(express.static(path.join(__dirname, 'public')))
 .get('/teams', async (req, res) => {
       try {
         console.log('Generating TEAMS page with data for date: ', req.query.date);
-        var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
+        var requestedDate = new Date();
+        if (req.query.date) {
+          requestedDate = new Date(req.query.date);
+        }
+        console.log('Generating TEAMS page with data for date: ', requestedDate);
+        var rowdata = await queryDatabaseAndBuildPlayerList(requestedDate);
         
         // read the list of players and aliases
         var playerAliasMaps = {};
         playerAliasMaps = await getDefinedPlayerAliasMaps();
         rowdata.playerAliasMaps = playerAliasMaps;
 
-        var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio();
+        var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(requestedDate);
         rowdata.allAttendanceData = allAttendanceData;
 
-        var nextMonday = getDateNextMonday();
+        var nextMonday = getDateNextMonday(requestedDate);
         var calcPaymentsFromDate = nextMonday;
         if (req.query.date) {
           calcPaymentsFromDate = req.query.date;
@@ -779,7 +833,7 @@ app.use(express.static(path.join(__dirname, 'public')))
         // combine database data with supplimentary game data and render the page
         var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString(), "environment": environment };
         if (req.isAuthenticated()) {
-          console.log("User is logged in: ", req.user);
+          console.log("User is logged in: ", JSON.stringify(req.user));
           pageData.user = req.user;
         }
         res.render('pages/poll-generate-teams', { pageData: JSON.stringify(pageData) });
@@ -883,18 +937,25 @@ app.use(express.static(path.join(__dirname, 'public')))
   }
 
   try {
-    console.log('Rendering POLL page with data' + req.query.date);
-    var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
-    console.log('SCORES POLL page with data' + JSON.stringify(rowdata.scores));
-
     var nextMonday = getDateNextMonday();
     var calcPaymentsFromDate = nextMonday;
     if (req.query.date) {
-      calcPaymentsFromDate = req.query.date;
+      if (req.query.date.match('^20[0-9][0-9]\-(0[1-9]|1[012])\-(01)$')) {
+        calcPaymentsFromDate = req.query.date;
+      } else {
+        console.log('WARNING: Invalid date - should be the first of a month in yyyy-mm-dd format). Redirecting', req.query.date);
+        res.redirect(302, "/poll");
+        return;
+      }
     }
+
+    console.log('Rendering POLL page with data' + req.query.date);
+    var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
+    //console.log('SCORES POLL page with data' + JSON.stringify(rowdata.scores));
+
     var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments(calcPaymentsFromDate);
     rowdata.outstandingPayments = outstandingPayments;
-    console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
+    //console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
 
     var tabName = "";
     if (req.query.tab) {
@@ -905,7 +966,8 @@ app.use(express.static(path.join(__dirname, 'public')))
     if (bankHolidaysCache && Object.keys(bankHolidaysCache).length === 0) {
       try {
         bankHolidaysCache = await downloadPage("https://www.gov.uk/bank-holidays.json");
-        console.log("Got NEW bank holidays: " + Object.keys(bankHolidaysCache).length)
+        console.log("Got NEW bank holidays: " + Object.keys(bankHolidaysCache).length);
+        clearExpiredExpressSessions(); // clear expired express-sessions too
       } catch (err) {
         bankHolidaysCache = {};
         console.log("ERROR retrieving NEW bank holidays - proceeding without them...", err)
@@ -918,7 +980,7 @@ app.use(express.static(path.join(__dirname, 'public')))
 
     var playerAliasData = {};
     if (req.isAuthenticated()) {
-      console.log("User is logged in: ", req.user);
+      console.log("User is logged in: ", JSON.stringify(req.user));
       pageData.user = req.user;
       //console.log('Generating ALIASES page with data');
       var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
@@ -927,6 +989,13 @@ app.use(express.static(path.join(__dirname, 'public')))
         playerAliasData = {};
       }
     }
+
+    // allow cron to be disabled by setting app preferences
+    var attendanceDoc = await firestore.collection("games_2025-01-01").doc("_attendance").get();
+    var attendanceData = attendanceDoc.data();
+    if (!attendanceData) { attendanceData = {}; }
+    //console.log("PRE attendanceData", attendanceData);
+
     pageData.playerAliasData = playerAliasData;
 
     res.render('pages/poll', { pageData: JSON.stringify(pageData) });
@@ -1078,24 +1147,25 @@ app.use(express.static(path.join(__dirname, 'public')))
       return;
     }
 
-    var gameWeek = req.body.gameWeek;
+    var weekNumber = req.body.weekNumber;
+    var gameDay = req.body.gameDay;
     var gameMonth = req.body.gameMonth;
     var gameYear = req.body.gameYear;
     var playersAttended = req.body.playersAttended;
     var scores = req.body.scores;
+    var status = req.body.status;
     var saveType = req.body.saveType;
 
     var timestamp = new Date();
     var attendanceDetails = { "month": gameYear + "-" + gameMonth, "timestamp": timestamp, 
-     "saveType": saveType, "source_ip": ip };
-    Object.keys(playersAttended).forEach(function(weekNumber) {
-      attendanceDetails[weekNumber] = playersAttended[weekNumber];
-    });
-    Object.keys(scores).forEach(function(weekNumber) {
-      attendanceDetails[weekNumber].scores = scores[weekNumber];
-    });
+     "saveType": saveType, "source_ip": ip};
 
-    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Week Attendance Change] " + gameYear + "-" + gameMonth + " (" + gameWeek + ")", JSON.stringify(attendanceDetails));
+    attendanceDetails[weekNumber] = {};
+    attendanceDetails[weekNumber].players = playersAttended;
+    attendanceDetails[weekNumber].scores = scores;
+    attendanceDetails[weekNumber].status = status;
+
+    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Week Attendance Change] " + gameYear + "-" + gameMonth + " (" + weekNumber + ")", JSON.stringify(attendanceDetails));
 
     console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
     try {
@@ -1373,42 +1443,36 @@ app.use(express.static(path.join(__dirname, 'public')))
 })
 .get('/admin-team-preview', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
-  console.log('GOT ADMIN TEAM-PREVIEW GET FROM:', ip, req.body);
+  console.log('GOT ADMIN TEAM-PREVIEW GET FROM:', ip, req.date);
   try {
+    var requestedDate = new Date();
+    if (req.query.date) {
+      requestedDate = new Date(req.query.date);
+    }
+    var dateRange = 12; // default to 12 months
+    if (req.query.dateRange && isNaN(req.query.dateRange)) {
+      dateRange = Number(req.query.dateRange);
+    }
+    var nextMondayRequestedDate = getDateNextMonday(requestedDate);
+    var pageData = {};
+
+    // get preview teams (if saved)
     var playersPreviewData = await getGameWeekPreviewTeams();
+    // check if preview of teams has already been generated, and is on the same day
+    if (!teamUtils.datesAreOnSameDay(new Date(playersPreviewData.gameWeek), nextMondayRequestedDate)) {
+      // no saved teams found for day requested, calculate next game teams
+      var playersGamesPlayedRatio = await calculateNextGameTeams(nextMondayRequestedDate);
+      var playersPreviewData = playersGamesPlayedRatio.generatedTeams;
+      playersPreviewData.gameWeek = nextMondayRequestedDate.toISOString().split('T')[0];
+    }
     var pageData = { playersPreviewData: playersPreviewData, "environment": environment };
 
-    //////////////////////////////////////////
-    //////////////////////////////////////////
-    //////////////////////////////////////////
-    // Query database and get all players for games matching this month
-    var requestedDateMonth = "2024-02-01"
-    const dbresult = await firestore.collection("games_" + requestedDateMonth).orderBy('timestamp', 'asc').get();
-    //console.log('dbresult=' + JSON.stringify(dbresult));
-    var rowdata = {};
-    console.log("QQQ", "games_" + requestedDateMonth)
-    if (dbresult.size > 0) {
-      // We have data! now build the player list and set it as the players for the front-end
-      console.log("PPP")
-      rowdata = {}
-      rowdata.status = "FROM_DATABASE"
-      rowdata.gameid = requestedDateMonth
-      //rowdata.playerAliasMaps = playerAliasMaps;
-      //if (filterType == PLAYER_LOG_FILTER) {
-        rowdata.players = buildPlayerLogList(dbresult);
-        pageData.players = rowdata.players;
-      //}
-    }
-    //////////////////////////////////////////
-    //////////////////////////////////////////
-    //////////////////////////////////////////
-
     // get all ratio data for comparison
-    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio();
+    var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(nextMondayRequestedDate, dateRange);
     pageData.allAttendanceData = allAttendanceData;
 
-    console.log('Rendering POLL page with data' + req.query.date);
-    var rowdata = await queryDatabaseAndBuildPlayerList(new Date(requestedDateMonth));
+    // build player list
+    var rowdata = await queryDatabaseAndBuildPlayerList(nextMondayRequestedDate);
     pageData.players = rowdata;
     
     res.render('pages/admin-team-preview', { pageData: JSON.stringify(pageData)} );
@@ -1424,18 +1488,15 @@ app.use(express.static(path.join(__dirname, 'public')))
     var pageData = { "environment": environment };
 
     if (req.isAuthenticated()) {
-      console.log("User is logged in: ", req.user);
+      console.log("User is logged in: ", JSON.stringify(req.user));
       pageData.user = req.user;
     } else {
       res.redirect(302, "/login?redirect=/admin");
       return;
     }
 
-    // lookup preferences from database
-    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
-    var preferences = preferencesDoc.data();
-    if (!preferences) { preferences = {}; }
-    pageData.preferences = preferences;
+    // check user logged in roles
+    pageData.user.roles = await getUserRoles(pageData.user);
 
     res.render('pages/admin', { pageData: JSON.stringify(pageData)} );
   } catch (err) {
@@ -1450,7 +1511,7 @@ app.use(express.static(path.join(__dirname, 'public')))
     var pageData = { "environment": environment };
 
     if (req.isAuthenticated()) {
-      console.log("User is logged in: ", req.user);
+      console.log("User is logged in: ", JSON.stringify(req.user));
       pageData.user = req.user;
     } else {
       res.redirect(302, "/login?redirect=/admin");
@@ -1469,12 +1530,51 @@ app.use(express.static(path.join(__dirname, 'public')))
     res.send("Error " + err);
   }
 })
+
+.get('/admin-database', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
+  console.log('Got /admin-database GET:', ip, JSON.stringify(req.body));
+  try {
+    var pageData = { "environment": environment };
+
+    if (req.isAuthenticated()) {
+      console.log("User is logged in: ", JSON.stringify(req.user));
+      pageData.user = req.user;
+    } else {
+      res.redirect(302, "/login?redirect=/admin");
+      return;
+    }
+
+    pageData.database = await getAllDataFromDB();
+    res.render('pages/admin-database', { pageData: JSON.stringify(pageData)} );
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
+.post('/services/get-database-doc', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('POST /services/get-database-doc', ip, req.body);
+
+  var collectionId = req.body.collectionId;
+  var documentId = req.body.documentId;
+
+  const docRef = firestore.collection(collectionId).doc(documentId);
+  var existingDoc = await docRef.get();
+  if (existingDoc.data()) {
+    res.json({'result': existingDoc.data()});
+  } else {
+    res.sendStatus(404);
+  }
+})
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))
 
 // catch any unexpected exception and try to send an email alert before exiting
 process.on('uncaughtException', function(err) {
   teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "SERVER ERROR: Caught catastrophic exception. Check server logs", err);
-  console.log('ERROR: Caught catastrophic exception: ' + err);
+  console.log('ERROR: Caught catastrophic exception: ' + err.message);
+  //console.error((new Date).toUTCString() + ' uncaughtException:', err.message)
+  console.error(err.stack)
 
   // Intentionally cause an exception by calling undefined function, but don't catch it.
   forceQuit();
@@ -1507,10 +1607,12 @@ function monthDiff(dateFrom, dateTo) {
     (12 * (dateTo.getFullYear() - dateFrom.getFullYear()))
 }
 
-async function queryDatabaseAndCalcGamesPlayedRatio() {
+async function queryDatabaseAndCalcGamesPlayedRatio(maxDate, previousNoOfMonths = 12) {
   // game scores and win/lose/draw only available from 2023-01-01 (game played available from 2019-08-01)
-  var requestedDate = new Date();
-  noOfMonths = monthDiff(new Date("2023-01-01"), new Date());
+  if (!maxDate) { maxDate = new Date(); }
+  var requestedDate = new Date(maxDate);
+  noOfMonths = monthDiff(new Date("2023-01-01"), requestedDate);
+  noOfMonths = Math.min(noOfMonths, previousNoOfMonths);
 
   var allAttendanceData = {};
   for (var i = 0; i <= noOfMonths; i ++) {
@@ -1519,7 +1621,7 @@ async function queryDatabaseAndCalcGamesPlayedRatio() {
     var gameYear = thisDate.getFullYear();
     var gameMonth = thisDate.toISOString().split('-')[1];
     var gamesCollectionId = "games_" + gameYear + "-" + gameMonth + "-01";
-    console.log('GETTING ATTENDANCE data:', gamesCollectionId);
+    //console.log('GETTING ATTENDANCE data:', gamesCollectionId);
     const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
     var existingDoc = await docRef.get();
     if (existingDoc.data()) {
@@ -1538,6 +1640,8 @@ async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3)
       // if date not specified just default to beginning of this month
       requestedDate.setDate(1);
     }
+    
+    var filterFinancialYear = 2050;
 
     const paymentsCollection = firestore.collection("OPEN_LEDGER");
     const allPaymentsDocs = await paymentsCollection.get();
@@ -1552,13 +1656,17 @@ async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3)
       Object.keys(playerPaymentData).sort().forEach(function(transaction) {
       //console.log('GOT transaction:', playerName, transaction, playerPaymentData[transaction]);
         if (transaction.startsWith("charge_")) {
-          // TODO: Consider whether noOfMonths is still needed and if a filter is needed
-          totalCharges += playerPaymentData[transaction].amount;
-          charges.push(transaction.replace('charge_', ''));
+          if (playerPaymentData[transaction].financialYear == filterFinancialYear) {
+            // TODO: Consider whether noOfMonths is still needed and if a filter is needed
+            totalCharges += playerPaymentData[transaction].amount;
+            charges.push(transaction.replace('charge_', ''));
+          }
         }
         if (transaction.startsWith("payment_")) {
-          totalPayments += playerPaymentData[transaction].amount;
-          payments.push(transaction);
+          if (playerPaymentData[transaction].financialYear == filterFinancialYear) {
+            totalPayments += playerPaymentData[transaction].amount;
+            payments.push(transaction);
+          }
         }
       })
       //console.log('GOT player payment data:', playerName, totalCharges, totalPayments);
@@ -1590,10 +1698,10 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     var requestedDate = nextMonday;
     if (reqDate) {
       requestedDate = new Date(reqDate);
-    } else {
-      // if date not specified just default to beginning of this month
-      requestedDate.setDate(1);
     }
+    // default to beginning of this month
+    requestedDate.setDate(1);
+    
     var requestedDateMonth = requestedDate.toISOString().split('T')[0]
     //console.log("requestedDateMonth=" + requestedDateMonth)
 
@@ -1629,6 +1737,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     var attendedData = {};
     var paymentData = {};
     var scoresData = {};
+    var cancelledData = {};
     dbresult.forEach((doc) => {
       if (doc.data().saveType == "ATTENDANCE") {
         // assume no more than 4 weeks in a month
@@ -1637,8 +1746,12 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
           //console.log('Added Attendance for week: ' + weekNumber + " " + JSON.stringify(attendedData[weekNumber]));
 
           //extract the scores data out of the attended list
-          if (attendedData[weekNumber]) {
-            scoresData[weekNumber] = attendedData[weekNumber].scores;
+          if (attendedData[weekNumber] && attendedData[weekNumber].status) {
+            if (attendedData[weekNumber].status.status == "CANCELLED") {
+              cancelledData[weekNumber] = attendedData[weekNumber].status;
+            } else {
+              scoresData[weekNumber] = attendedData[weekNumber].scores;
+            }
             delete attendedData[weekNumber].scores;
           }
         }
@@ -1647,17 +1760,17 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
         //
       }
     });
-    //console.log('LOADED from DB attendedData by week: ' + JSON.stringify(attendedData));
+    //console.log('LOADED from DB attendedData by week: ', JSON.stringify(attendedData));
 
     // transform from {weekNumber: {player1, player2}} to {player: {weekNumber, weekNumber}}
     var attendedDataByPlayer = {};
     Object.keys(attendedData).sort().forEach(function(weekNumber) {
-      if (attendedData[weekNumber]) {
-        Object.keys(attendedData[weekNumber]).sort().forEach(function(player) {
+      if (attendedData[weekNumber] && attendedData[weekNumber].players) {
+        Object.keys(attendedData[weekNumber].players).sort().forEach(function(player) {
           if (!attendedDataByPlayer[player]) {
             attendedDataByPlayer[player] = {};
           }
-          var playerSelection = attendedData[weekNumber][player];
+          var playerSelection = attendedData[weekNumber].players[player];
           attendedDataByPlayer[player][weekNumber] = playerSelection;
         });
       }
@@ -1666,6 +1779,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
 
     rowdata.attendance = attendedDataByPlayer;
     rowdata.scores = scoresData;
+    rowdata.cancelled = cancelledData;
     //  rowdata.paydetails = paymentData;
 
     //console.log('rowdata=' + JSON.stringify(rowdata));
@@ -1724,7 +1838,7 @@ function buildPlayerUniqueList(dbresult) {
       }
     }
   });
-  console.log('AllPlayers=' + JSON.stringify(playerdata));
+  //console.log('AllPlayers=', JSON.stringify(playerdata));
   return playerdata;
 }
 
@@ -2176,10 +2290,10 @@ async function addRemoveEmailSubscription(details, hostname) {
 }
 
 
-async function calculateNextGameTeams() {
+async function calculateNextGameTeams(date = new Date()) {
     // choose the algorithm to us to select the teams
     var algorithmType = "algorithm6";
-    var nextMonday = getDateNextMonday(new Date());
+    var nextMonday = getDateNextMonday(date);
     var gameYear = nextMonday.getFullYear();
     var gameMonth = nextMonday.toISOString().split('-')[1];
     var dateString = gameYear + "-" + gameMonth + "-01";
