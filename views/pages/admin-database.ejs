@@ -13,6 +13,18 @@
 
 
     <div style="width:100%;display:flex;">
+      <div id="dummyDiv" style="display:inline;width:20%"></div>
+      <div id="dummyDiv" style="display:inline;width:35%">
+        <input id="newDocName" type="text" placeholder="<New Doc Name>" data-lpignore=true>
+        <button id="renameDoc" type="button" onclick="renameSelectedDocument();">Rename</button>
+        <button id="deleteDoc" type="button" onclick="deleteSelectedDocument();">Delete</button>
+      </div>
+      <div id="databaseDiv" style="display:inline;width:45%">
+        <button id="updateDoc" type="button" onclick="updateSelectedDocument();">Update</button>
+      </div>
+    </div> 
+
+    <div style="width:100%;display:flex;">
       <div id="databaseDiv" style="display:inline;width:20%">Collection<br><select name="dbCollections" id="dbCollections" multiple onclick="clickCollection(this.value);" style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></select></div>
       <div id="databaseDiv" style="display:inline;width:35%">Document<br><select name="dbDocuments" id="dbDocuments" multiple onclick="clickDocument(this.value);" style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></select></div>
       <div id="databaseDiv" style="display:inline;width:45%">Fields<br><textarea name="dbFields" id="dbFields" multiple style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></textarea></div>
@@ -73,6 +85,7 @@
           dbDocumentsElement.appendChild(opt);
         });
         dbFieldsElement.value = "";
+        document.getElementById('newDocName').value = "";
         updateHref();
       }
 
@@ -82,8 +95,11 @@
         // update field details with new selection
         var fieldDetailsId = database[collectionId][documentKey].id;
         var fieldDetailsData = database[collectionId][documentKey].data;
-        var fieldDetails = JSON.stringify(fieldDetailsData, null, "\t");
+        var fieldDetails = JSON.stringify(fieldDetailsData.result, null, "\t");
         dbFieldsElement.value = fieldDetails;
+
+        var documentName = dbDocumentsElement.options[dbDocumentsElement.selectedIndex].innerHTML;
+        document.getElementById('newDocName').value = documentName;
         updateHref();
         getUpdatedData();
       }
@@ -122,7 +138,8 @@
               // now update the dable with the data
               var updatedData = JSON.parse(this.responseText);
               database[collectionId][documentKey].data = updatedData;
-              dbFieldsElement.value = "Showing document: " + documentName + "...\n" + JSON.stringify(updatedData, null, "\t");
+              //dbFieldsElement.value = "Showing document: " + documentName + "...\n" + JSON.stringify(updatedData, null, "\t");
+              dbFieldsElement.value = JSON.stringify(updatedData.result, null, "\t");
               //location.reload(true);
             }
           };
@@ -132,6 +149,112 @@
         }
       }
 
+      function deleteSelectedDocument() {
+        // now send the POST request with the data
+        if (!dbDocumentsElement.options[dbDocumentsElement.selectedIndex]) {
+          !alert('Error: Please select a document');
+          return;
+        }
+        var collectionId = dbCollectionsElement.value;
+        var documentKey = dbDocumentsElement.value;
+        var documentName = dbDocumentsElement.options[dbDocumentsElement.selectedIndex].innerHTML;
+        if (!confirm('This will permanently delete: ' + documentName + ' \nAre you sure?')) return;
+
+        var body = { "collectionId": collectionId, "documentId": documentName };
+        console.log("GETTING DOC:" + JSON.stringify(body));
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            console.log("Saved response", this.responseText);
+            // now update the dable with the data
+            var updatedData = JSON.parse(this.responseText);
+            delete database[collectionId][documentKey];
+            dbFieldsElement.value = "Deleted document: " + documentName + "...\n" + JSON.stringify(updatedData, null, "\t");
+            clickCollection(collectionId);
+          }
+        };
+        xmlhttp.open("POST", "/services/delete-database-doc");
+        xmlhttp.setRequestHeader("Content-Type", "application/json");
+        xmlhttp.send(JSON.stringify(body));
+      }
+
+      function renameSelectedDocument() {
+        // now send the POST request with the data
+        if (!dbDocumentsElement.options[dbDocumentsElement.selectedIndex]) {
+          !alert('Error: Please select a document');
+          return;
+        }
+        var collectionId = dbCollectionsElement.value;
+        var documentKey = dbDocumentsElement.value;
+        var documentName = dbDocumentsElement.options[dbDocumentsElement.selectedIndex].innerHTML;
+        var newDocumentName = document.getElementById('newDocName').value;
+
+        if (!newDocumentName || (newDocumentName == documentName)) {
+          !alert('Error: Name has not changed, please enter a new name');
+          document.getElementById('newDocName').focus();
+          return;
+        }
+        if (!confirm('This will rename: ' + documentName + ' to ' + newDocumentName + ' \nAre you sure?')) return;
+
+        var body = { "collectionId": collectionId, "documentId": documentName, "newDocumentName": newDocumentName };
+        console.log("GETTING DOC:" + JSON.stringify(body));
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            console.log("Saved response", this.responseText);
+            // worked so delete old document from cache
+            delete database[collectionId][documentKey];
+            // now update the table with the data
+            var updatedData = JSON.parse(this.responseText);
+            database[collectionId][newDocumentName] = { "id": newDocumentName, "data": updatedData};
+            dbFieldsElement.value = "Showing new renamed document: " + newDocumentName + "...\n" + JSON.stringify(updatedData, null, "\t");
+            clickCollection(collectionId);
+          }
+        };
+        xmlhttp.open("POST", "/services/rename-database-doc");
+        xmlhttp.setRequestHeader("Content-Type", "application/json");
+        xmlhttp.send(JSON.stringify(body));
+      }
+
+      function updateSelectedDocument() {
+        if (!dbDocumentsElement.options[dbDocumentsElement.selectedIndex]) {
+          !alert('Error: Please select a document');
+          return;
+        }
+        var collectionId = dbCollectionsElement.value;
+        var documentKey = dbDocumentsElement.value;
+        var documentName = dbDocumentsElement.options[dbDocumentsElement.selectedIndex].innerHTML;
+        var documentData;
+        try {
+          var json = JSON.parse(dbFieldsElement.value); // test valid json
+          documentData = json;
+          //console.log("Updated documentData:", documentData);
+        } catch (err) {
+          !alert('Error: check valid JSON');
+          dbFieldsElement.focus();
+          return;
+        }
+        if (!confirm('This will update: ' + documentName + ' \nAre you sure?')) return;
+
+        var body = { "collectionId": collectionId, "documentId": documentName, "documentData": documentData };
+        console.log("aGETTING DOC:", body);
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            console.log("Saved response", this.responseText);
+            // now update the dable with the data
+            var updatedData = JSON.parse(this.responseText);
+            database[collectionId][documentKey].data = updatedData;
+            //dbFieldsElement.value = "Showing document: " + documentName + "...\n" + JSON.stringify(updatedData, null, "\t");
+            dbFieldsElement.value = JSON.stringify(updatedData, null, "\t");
+            //location.reload(true);
+            clickDocument(documentKey);
+          }
+        };
+        xmlhttp.open("POST", "/services/update-database-doc");
+        xmlhttp.setRequestHeader("Content-Type", "application/json");
+        xmlhttp.send(JSON.stringify(body));
+      }
     </script>
   </div>
 </body>

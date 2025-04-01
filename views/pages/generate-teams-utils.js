@@ -1,6 +1,15 @@
 const EMAIL_TYPE_ALL_PLAYERS = 0;
 const EMAIL_TYPE_ADMIN_ONLY = 1;
 const EMAIL_TYPE_TEAMS_ADMIN = 2;
+const ALGORITHM_UNITS = {
+  "algorithm0": "Random",
+  "algorithm1": "Win ratio",
+  "algorithm2": "Win/Draw ratio",
+  "algorithm3": "Avg",
+  "algorithm4": "Total",
+  "algorithm5": "Played",
+  "algorithm6": "xG",
+}
 var SYSTEM_ADMIN_EMAIL_ADDRS = "Phil Roffe <philroffe@gmail.com>";
 var TEAMS_ADMIN_EMAIL_ADDRS = SYSTEM_ADMIN_EMAIL_ADDRS;
 var ATTENDANCE_ADMIN_EMAIL_ADDRS = TEAMS_ADMIN_EMAIL_ADDRS;
@@ -354,15 +363,36 @@ if (typeof module != "undefined") {
 
     if (forceUpdate) {
       // generate the teams - standby first, then divide into reds and blues
-      var standbyPlayers = generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, playersPreviewData.standbyPlayers);
-      var generatedTeams = generateRedBlueTeams(sortedPlayerNamesThisWeek, standbyPlayers);
-      //console.log("NEW TEAMS", generatedTeams)
-      playersGamesPlayedRatio.standbyPlayers = standbyPlayers;
-      playersGamesPlayedRatio.generatedTeams = generatedTeams;
+      var newStandbyPlayers = generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, playersPreviewData.standbyPlayers);
+      var newGeneratedTeams = generateRedBlueTeams(sortedPlayerNamesThisWeek, newStandbyPlayers);
+      //console.log("NEW TEAMS", newGeneratedTeams)
+      playersGamesPlayedRatio.standbyPlayers = newStandbyPlayers;
+      playersGamesPlayedRatio.generatedTeams = newGeneratedTeams;
     }
+
+    // generate team ratio totals
+    var algorithmUnit = ALGORITHM_UNITS[algorithmType];
+    playersGamesPlayedRatio.generatedTeams.ratios = {"algorithm": algorithmType, "algorithmUnit": algorithmUnit, 
+      "redRatioTotal": 0, "blueRatioTotal": 0, "playerRatios": {} };
+    var redRatioTotal = 0;
+    var blueRatioTotal = 0;
+    playersGamesPlayedRatio.generatedTeams.redPlayers.forEach(function(playerName) {
+      var playerRatio = playersGamesPlayedRatio[playerName][algorithmType + "ratio"];
+      redRatioTotal += Number(Number(playerRatio).toFixed(2));
+      playersGamesPlayedRatio.generatedTeams.ratios.playerRatios[playerName] = Number(playerRatio);
+    });
+    playersGamesPlayedRatio.generatedTeams.bluePlayers.forEach(function(playerName) {
+      var playerRatio = playersGamesPlayedRatio[playerName][algorithmType + "ratio"];
+      blueRatioTotal += Number(Number(playerRatio).toFixed(2));
+      playersGamesPlayedRatio.generatedTeams.ratios.playerRatios[playerName] = Number(playerRatio);
+    });
     
+    playersGamesPlayedRatio.generatedTeams.ratios.redRatioTotal += Number(redRatioTotal.toFixed(2));
+    playersGamesPlayedRatio.generatedTeams.ratios.blueRatioTotal += Number(blueRatioTotal.toFixed(2));
     playersGamesPlayedRatio.sortedPlayers = sortedPlayers;
     playersGamesPlayedRatio.totalPossibleGames = totalPossibleGames;
+    //console.log("All players and games played ratios", playersGamesPlayedRatio);
+
     return playersGamesPlayedRatio;
   }
 
@@ -486,6 +516,7 @@ function generateTeamsEmailText(generatedTeams, nextMondayDate) {
   var redPlayers = generatedTeams.redPlayers
   var bluePlayers = generatedTeams.bluePlayers
   var standbyPlayers = generatedTeams.standbyPlayers
+  var ratios = generatedTeams.ratios;
   //////////////////////
   // generate email text
   //////////////////////
@@ -532,12 +563,19 @@ function generateTeamsEmailText(generatedTeams, nextMondayDate) {
   fullEmailSubject = emailSubject + " - Mon " + dayDateFormat.format(nextMondayDate) + " " + monthDateFormat.format(nextMondayDate) + " [Footie, Goodwin, 6pm Mondays]\n"
   fullEmailText = "Hi all,\n\n" + emailHeader + "\n\nTeams below...\n\n"
 
-  fullEmailText += "REDS\n"
+  var redRatioText = "";
+  var blueRatioText = "";
+  if (ratios && ratios.algorithmUnit) {
+    var redRatioText = " (" + ratios.algorithmUnit + ": " + Number(ratios.redRatioTotal).toFixed(2) + ")";
+    var blueRatioText = " (" + ratios.algorithmUnit + ": " + Number(ratios.blueRatioTotal).toFixed(2) + ")";
+  }
+
+  fullEmailText += "REDS" + redRatioText + "\n";
   for (var i = 0; i < redPlayers.length; i++) {
     fullEmailText += i+1 + " " + redPlayers[i] + "\n"
   }
   fullEmailText += "\n"
-  fullEmailText += "BLUES\n"
+  fullEmailText += "BLUES" + blueRatioText + "\n";
   for (var i = 0; i < bluePlayers.length; i++) {
     fullEmailText += i+1 + " " + bluePlayers[i] + "\n"
   }

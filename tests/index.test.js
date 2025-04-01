@@ -25,6 +25,7 @@ var playerCostPerGame = 4;
 var newPlayerIndex = 0;
 var testFinancialYear = 2050;
 var originalFinancialYear;
+const localeDateOptions = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', };
 
 async function deleteAllTestData() {
   // delete all data from test month
@@ -37,6 +38,10 @@ async function deleteAllTestData() {
   for (var i = 0; i < testData.playerAvailability.length; i ++) {
     returnValue = await indexDBUtils.deleteTestDataForPlayer(testData.playerAvailability[i].name);
   }
+  // delete the GameWeekPreview data
+  const response = await fetch(rootURL + '/schedule/delete-draft-list-for-admins', {
+    method: "GET", headers: { "X-Appengine-Cron": "true", },
+  });
 }
 
 // the main test data - availability and attendance
@@ -1037,3 +1042,67 @@ it ('30 - test historical games are correct', async () => {
 }, 3000)
 
 
+it ('40 - test weekly cron', async () => {
+  //if (!enabledTests) { return };
+
+  var dateString = "2050-06-06";
+  var dateStringLocale = new Date(dateString).toLocaleDateString('en-GB', localeDateOptions);
+  var expectedRed = 6, expectedBlue = 6, expectedStandby = 2; // hardcoded for now
+  var expectedTotal = expectedRed + expectedBlue + expectedStandby; 
+
+  // delete any previous teams list
+  var response = await fetch(rootURL + '/schedule/delete-draft-list-for-admins', {
+    method: "GET", headers: { "X-Appengine-Cron": "true", },
+  });
+  //console.log(response);
+  expect(response.status).toEqual(200);
+
+  // check it loads a GENERATED team list
+  await driver.get(rootURL + '/admin-team-preview?date=' + dateString + '&algorithm=6');
+  var title = await driver.findElement(By.id('teamTitle')).getText();
+  expect(title).toEqual("Generated: " + dateStringLocale);
+  var teamList = await driver.findElement(By.id('teamList')).getAttribute("value"); 
+  expect(teamList).toContain("Total Players: " + expectedTotal);
+
+  // run cron to save the generate teams
+  var response = await fetch(rootURL + '/schedule/generate-draft-list-for-admins?date=' + dateString, {
+    method: "GET", headers: { "X-Appengine-Cron": "true", },
+  });
+  //console.log(response);
+  expect(response.status).toEqual(200);
+
+  // check it retries a SAVED team list
+  await driver.get(rootURL + '/admin-team-preview?date=' + dateString + '&algorithm=6');
+  var title = await driver.findElement(By.id('teamTitle')).getText();
+  expect(title).toEqual("Saved: " + dateStringLocale);
+  var teamList = await driver.findElement(By.id('teamList')).getAttribute("value"); 
+  expect(teamList).toContain("Total Players: " + expectedTotal);
+  // check total no of players
+  var element = await driver.findElement(By.id('redPlayerSelect'));
+  var allPlayerStatsText = await element.getText();
+  var noOfPlayers = allPlayerStatsText.split(/\r\n|\r|\n/).length; // count no of lines
+  expect(noOfPlayers).toEqual(expectedTotal);
+
+  // run the final cron to delete the teams list
+  var response = await fetch(rootURL + '/schedule/delete-draft-list-for-admins', {
+    method: "GET", headers: { "X-Appengine-Cron": "true", },
+  });
+  //console.log(response);
+  expect(response.status).toEqual(200);
+
+  // check it loads a GENERATED team list again
+  await driver.get(rootURL + '/admin-team-preview?date=' + dateString + '&algorithm=6');
+  var title = await driver.findElement(By.id('teamTitle')).getText();
+  expect(title).toEqual("Generated: " + dateStringLocale);
+  var teamList = await driver.findElement(By.id('teamList')).getAttribute("value"); 
+  expect(teamList).toContain("Total Players: " + expectedTotal);
+
+}, 3000)
+
+
+it ('41 - test mailing list', async () => {
+  //if (!enabledTests) { return };
+
+  //await driver.get(rootURL + 'http://localhost:5000/mailing-list');
+
+}, 3000)

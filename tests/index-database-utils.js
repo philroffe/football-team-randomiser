@@ -75,6 +75,12 @@ async function deleteTestDataForPlayer(playerName) {
   return true;
 }
 
+// delete transient files - such as GameWeekPreview
+async function deleteTransientFiles(playerName) {
+  await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
+  return true;
+}
+
 async function getAttendance() {
   var gamesCollectionId = "2024-01-01";
   const docRef = await firestore.collection(gamesCollectionId).doc("_attendance");
@@ -208,6 +214,7 @@ module.exports = {
   getAllDataFromDB,
   deleteGameMonth,
   deleteTestDataForPlayer,
+  deleteTransientFiles,
   getAttendance,
   copyCollection,
   exportTestDataToCsv,
