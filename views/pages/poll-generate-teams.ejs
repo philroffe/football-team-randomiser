@@ -108,6 +108,7 @@
 
   </div>
 
+  <%- include ("./admin-payments.ejs") %>
   <script>
   <%- include ("./generate-teams-utils.js") %>
 
@@ -439,8 +440,14 @@
   document.getElementById("algorithmChoice").selectedIndex = selectAlgorithm;
   document.getElementById('algorithmChoice').dispatchEvent(new Event('change'));
   
+  // change the algorithm for all players and regenerate teams
+  var emailTemplate = new URL(document.location.href).searchParams.get("template");
+  if (!emailTemplate) { emailTemplate = "teams" };
+  document.getElementById("emailChoice").value = emailTemplate;
+  document.getElementById('emailChoice').dispatchEvent(new Event('change'));
+  //changeOption(emailTemplate);
+
   </script>
-  <%- include ("./admin-payments.ejs") %>
 
   </body>
 </html>

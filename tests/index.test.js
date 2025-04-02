@@ -642,6 +642,48 @@ it ('22 - test closing second month and check ledger incremented appropriately',
   var element = await querySelector("[id=\'OverallOutstandingTotalfalse\']", driver);
   var actual = await element.getText();
   expect(actual).toEqual("£" + totalOwed);
+
+  //////////////////
+  // test teams/email generator includes the correct payments
+  await driver.get(rootURL + '/teams?date=' + test2YearMonth + '-01' + '&algorithm=3&template=payments');
+  for (const playerName in testDataTotals.chargeTotals) {
+    var element;
+    try {
+      element = await driver.findElement(By.id('playertrue' + playerName + 'OwedPayment'));
+    } catch (error) {
+      // error 
+      //console.log(error)
+    }
+
+    if (element) {
+      var actual = await element.getText();
+      expect(playerName + actual).toEqual(playerName + "£" + (testDataTotals.chargeTotals[playerName].owed*2))
+      totalOwed += testDataTotals.chargeTotals[playerName].owed*2;
+    } else {
+      expect(playerName + " £" + testDataTotals.chargeTotals[playerName].owed).toEqual(playerName + " £0")
+    }
+  }
+
+  //////////////////
+  // test teams/email generator includes the correct payments
+  await driver.get(rootURL + '/teams?date=' + test2YearMonth + '-01' + '&algorithm=3&template=availability');
+  for (const playerName in testDataTotals.chargeTotals) {
+    var element;
+    try {
+      element = await driver.findElement(By.id('playertrue' + playerName + 'OwedPayment'));
+    } catch (error) {
+      // error 
+      //console.log(error)
+    }
+
+    if (element) {
+      var actual = await element.getText();
+      expect(playerName + actual).toEqual(playerName + "£" + (testDataTotals.chargeTotals[playerName].owed*2))
+      totalOwed += testDataTotals.chargeTotals[playerName].owed*2;
+    } else {
+      expect(playerName + " £" + testDataTotals.chargeTotals[playerName].owed).toEqual(playerName + " £0")
+    }
+  }
 }, 11000)
 
 
