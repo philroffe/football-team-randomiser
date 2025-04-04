@@ -460,6 +460,12 @@ function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, forceP
     var bluePlayers = [];
     var standbyPlayers = optionalStandbyPlayers;
 
+    // randomise either red or blue first
+    var firstRandomisation = 0;  // red first
+    if (Math.random() > 0.5) {
+      firstRandomisation = 1; // blue first
+    }
+
     var playerCount = playersList.length;
     var maxPlayersPerTeam = Math.floor(playerCount/2) + 1;
     for (var i = 0; i < playerCount; i++) {
@@ -467,7 +473,7 @@ function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, forceP
       if (!standbyPlayers.includes(playersList[i])) {
         if (totalPlayerCount < 12) {
           // evens on reds, odds on blues
-          if (totalPlayerCount%2 == 0) {
+          if (totalPlayerCount%2 == firstRandomisation) {
             if (redPlayers.length < maxPlayersPerTeam) {
               redPlayers.push(playersList[i]);
             } else {
