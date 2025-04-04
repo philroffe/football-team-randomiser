@@ -110,6 +110,8 @@
         details.fullname = document.getElementById("fullname").value.trim();
         details.email = document.getElementById("email").value.trim();
 
+        document.getElementById("response").innerHTML = "Submitting...";
+
         // now send the POST request with the data
         var xmlhttp = new XMLHttpRequest();
         xmlhttp.onreadystatechange = function() {

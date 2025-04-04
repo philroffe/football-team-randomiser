@@ -9,7 +9,7 @@ const indexDBUtils = require('./index-database-utils');
 var enabledTests = true;
 var enabledHistoricTests = true;
 var deleteDataBeforeTests = true;
-var deleteDataAfterTests = true;
+var deleteDataAfterTests = false;
 
 let driver;
 const testYearMonth = "2050-01";
@@ -27,6 +27,22 @@ var testFinancialYear = 2050;
 var originalFinancialYear;
 const localeDateOptions = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', };
 
+async function waitUntilAfterHoldingText(element, holdingText) {
+  try {
+    for (var i = 0; i < 20; i ++) {
+      var currentText = await element.getText();
+      if (currentText != "" && !currentText.includes(holdingText)) {
+        return true;
+      }
+      await new Promise(r => setTimeout(r, 200)); // sleep 0.2s
+    }
+  } catch (error) {
+    return false;
+  }
+  // timeout exceeded so return false
+  return false;
+}
+
 async function deleteAllTestData() {
   // delete all data from test month
   var returnValue = await indexDBUtils.deleteGameMonth(testYearMonth);
@@ -35,8 +51,9 @@ async function deleteAllTestData() {
   var returnValue = await indexDBUtils.deleteGameMonth("2050-04");
   var returnValue = await indexDBUtils.deleteGameMonth("2050-05");
   var returnValue = await indexDBUtils.deleteGameMonth("2050-06");
-  for (var i = 0; i < testData.playerAvailability.length; i ++) {
-    returnValue = await indexDBUtils.deleteTestDataForPlayer(testData.playerAvailability[i].name);
+  var unitTestUserList = await indexDBUtils.getAllUnitTestUserList("UnitTest");
+  for (var i = 0; i < unitTestUserList.length; i ++) {
+    returnValue = await indexDBUtils.deleteTestDataForPlayer(unitTestUserList[i]);
   }
   // delete the GameWeekPreview data
   const response = await fetch(rootURL + '/schedule/delete-draft-list-for-admins', {
@@ -267,23 +284,29 @@ it ('02 - test adding players to mailing list', async () => {
   // should be the same as the first run
   expect(updatedAliasIndex).toEqual(newAliasIndex);
 
-  async function findAlias(aliasName) {
-    // check to see if the aliases are already added and maintain a global counter
-    for (i=0; i<newAliasIndex; i++) {
+  // check player alias persisted
+  for (var i = 0; i < testData.playerAvailability.length; i ++) {
+    var aliasIndex = await findAlias(testData.playerAvailability[i].name);
+    expect(aliasIndex > -1).toEqual(true);
+  }
+}, 10000)
+
+// find a given alias name from the alias list, return the index of the alias if found (or -1 otherwise) 
+async function findAlias(aliasName) {
+  // check to see if the aliases are already added and maintain a global counter
+  for (i=0; i<999; i++) {
+    try {
       var element = await driver.findElement(By.id('player' + i + 'Alias'));
       const currentAliasName = await element.getAttribute("value");
       if (currentAliasName == aliasName) {
-        return true;
+        return i;
       }
+    } catch (error) {
+      i = 99999;
     }
-    return false;
   }
-
-  // check player alias persisted
-  for (var i = 0; i < testData.playerAvailability.length; i ++) {
-    expect(await findAlias(testData.playerAvailability[i].name)).toEqual(true);
-  }
-}, 10000)
+  return -1;
+}
 
 it ('03 - test poll loads with correct month and no players', async () => {
   if (!enabledTests) { return };
@@ -351,8 +374,8 @@ it ('04 - test adding players to poll', async () => {
 }, 40000)
 
 // check that auto generated teams are created and incremented appropriately
-async function testPreviewTeamsPage(expectedRed, expectedBlue, expectedStandby) {
-  var expectedTotal = expectedRed + expectedBlue + expectedStandby;
+async function testPreviewTeamsPage(expectedTeam1, expectedTeam2, expectedStandby) {
+  var expectedTotal = expectedTeam1 + expectedTeam2 + expectedStandby;
 
   // check team preview
   await driver.get(rootURL + '/admin-team-preview?date=2050-01-01&algorithm=6');
@@ -389,8 +412,17 @@ async function testPreviewTeamsPage(expectedRed, expectedBlue, expectedStandby) 
     var expected = playerName + " (0.00)";
     expect(currentPlayerAlgorithm).toEqual(expected);
   }
-  expect(redList.length).toEqual(expectedRed);
-  expect(blueList.length).toEqual(expectedBlue);
+  // because of the randomised start of either red or blue
+  if (redList.length == expectedTeam1) {
+    // assumed started with red, so check blue
+    expect(blueList.length).toEqual(expectedTeam2);
+  } else if (redList.length == expectedTeam2) {
+    // assumed started with blue, so check red
+    expect(blueList.length).toEqual(expectedTeam1);
+  } else {
+    // something else went wrong so error with a check to help with debug...
+    expect(redList.length + " " + blueList.length).toEqual(expectedTeam1 + " " + expectedTeam2);
+  }
   expect(standbyList.length).toEqual(expectedStandby);
 }
 
@@ -788,7 +820,7 @@ it ('25 - test stats', async () => {
   //await getElementByIdAfterWaitClick('week' + gameWeek + 'Editattzendance')
   var hiddenStats =  await driver.findElement(By.id('oneHiddenStats')).getAttribute("innerHTML"); 
   //["Won","Lost","Drawn","Total Games","Total Red","Total Blue","Player Name","Week No","Win Ratio","Total Goals"]
-  //[6,0,6,12,0,12,"Test 09",24,0.75,6]
+  //[6,0,6,12,0,12,"UnitTest 09",24,0.75,6]
   for (const playerName in testDataTotals.chargeTotals) {
     var stats = getPlayerStats(playerName, noOfMonthsMultiplier);
     //console.log("Player", playerName, stats);
@@ -804,7 +836,7 @@ it ('25 - test stats', async () => {
   
   //await getElementByIdAfterWaitClick('week' + gameWeek + 'Editattzendance')
   var hiddenStats =  await driver.findElement(By.id('sevenHiddenStats')).getAttribute("innerHTML"); 
-  //expected = '"Test 09":[6,0,6,6]'
+  //expected = '"UnitTest 09":[6,0,6,6]'
   for (const playerName in testDataTotals.chargeTotals) {
     var stats = getPlayerStats(playerName, noOfMonthsMultiplier);
     //console.log("Player", playerName, stats);
@@ -1085,7 +1117,7 @@ it ('30 - test historical games are correct', async () => {
 
 
 it ('40 - test weekly cron', async () => {
-  //if (!enabledTests) { return };
+  if (!enabledTests) { return };
 
   var dateString = "2050-06-06";
   var dateStringLocale = new Date(dateString).toLocaleDateString('en-GB', localeDateOptions);
@@ -1143,8 +1175,102 @@ it ('40 - test weekly cron', async () => {
 
 
 it ('41 - test mailing list', async () => {
-  //if (!enabledTests) { return };
+  if (!enabledTests) { return };
 
-  //await driver.get(rootURL + 'http://localhost:5000/mailing-list');
+  var fullName = "UnitTest Alias01";
+  var email = fullName.replace(/ /, '') + "@test.com";
+  var nameAliasKey = fullName.substring(0, fullName.trim().lastIndexOf(" ") + 2);
+  //console.log("Name and Alias...", fullName, nameAliasKey)
 
-}, 3000)
+  // go to the aliases page and check the user is NOT listed
+  await driver.get(aliasURL);
+  var saveAliasEl = await getElementByIdAfterWaitClick("saveAlias");
+  var aliasIndex = await findAlias(nameAliasKey);
+  expect(aliasIndex == -1).toEqual(true);
+
+  // goto mailing list and add a new user and check that it save correctly
+  await driver.get(rootURL + '/mailing-list');
+  await driver.findElement(By.id('subscribeChoice')).click();
+  await driver.findElement(By.id('fullname')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, fullName);
+  await driver.findElement(By.id('email')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, email);
+  await driver.findElement(By.id('submit')).click();
+  await waitUntilAfterHoldingText(driver.findElement(By.id('response')), "Submitting");
+  var success = await driver.findElement(By.id('response')).getText();
+  expect(success).toContain("Success!");
+  // go to the aliases page and check the user is listed (but inactive)
+  await driver.get(aliasURL);
+  var saveAliasEl = await getElementByIdAfterWaitClick("saveAlias");
+  var aliasIndex = await findAlias(nameAliasKey);
+  expect(aliasIndex > -1).toEqual(true);
+  element = await driver.findElement(By.id('playerActive' + aliasIndex + 'Alias'));
+  var isChecked = await element.isSelected();
+  expect(isChecked).toEqual(false);
+
+  // add the same user and check that it save correctly (because already on the list)
+  await driver.get(rootURL + '/mailing-list');
+  await driver.findElement(By.id('subscribeChoice')).click();
+  await driver.findElement(By.id('fullname')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, fullName);
+  await driver.findElement(By.id('email')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, email);
+  await driver.findElement(By.id('submit')).click();
+  await waitUntilAfterHoldingText(driver.findElement(By.id('response')), "Submitting");
+  var success = await driver.findElement(By.id('response')).getText();
+  expect(success).toContain("Success!");
+  // go to the aliases page and check the user is listed (but inactive)
+  await driver.get(aliasURL);
+  var saveAliasEl = await getElementByIdAfterWaitClick("saveAlias");
+  var aliasIndex = await findAlias(nameAliasKey);
+  expect(aliasIndex > -1).toEqual(true);
+  element = await driver.findElement(By.id('playerActive' + aliasIndex + 'Alias'));
+  var isChecked = await element.isSelected();
+  expect(isChecked).toEqual(false);
+
+  // get the confirmation ID (sent by email) from DB and confirm...
+  var aliasData = await indexDBUtils.getAliasData(nameAliasKey);
+  //console.log("ALIAS CODE:", aliasData.code)
+  var response = await fetch(rootURL + '/mailing-list?code=' + aliasData.code);
+  expect(response.status).toEqual(200);
+  // go to the aliases page and check the user is listed (and active)
+  await driver.get(aliasURL);
+  var saveAliasEl = await getElementByIdAfterWaitClick("saveAlias");
+  var aliasIndex = await findAlias(nameAliasKey);
+  expect(aliasIndex > -1).toEqual(true);
+  element = await driver.findElement(By.id('playerActive' + aliasIndex + 'Alias'));
+  var isChecked = await element.isSelected();
+  expect(isChecked).toEqual(true);
+
+  // add the same user and check that it save correctly (because already on the list)
+  await driver.get(rootURL + '/mailing-list');
+  await driver.findElement(By.id('subscribeChoice')).click();
+  await driver.findElement(By.id('fullname')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, fullName);
+  await driver.findElement(By.id('email')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, email);
+  await driver.findElement(By.id('submit')).click();
+  await waitUntilAfterHoldingText(driver.findElement(By.id('response')), "Submitting");
+  var success = await driver.findElement(By.id('response')).getText();
+  expect(success).toContain("Success!");
+
+
+  // add a conflicting user and check that it fails
+  await driver.findElement(By.id('fullname')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, fullName + "DUPE");
+  await driver.findElement(By.id('email')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, email + "DUPE");
+  await driver.findElement(By.id('submit')).click();
+  await waitUntilAfterHoldingText(driver.findElement(By.id('response')), "Submitting");
+  var success = await driver.findElement(By.id('response')).getText();
+  expect(success).toContain("Error!");
+
+  // now unsubscribe...
+  await driver.findElement(By.id('unsubscribeChoice')).click();
+  await driver.findElement(By.id('email')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, email);
+  await driver.findElement(By.id('submit')).click();
+  await waitUntilAfterHoldingText(driver.findElement(By.id('response')), "Submitting");
+  var success = await driver.findElement(By.id('response')).getText();
+  expect(success).toContain("Success!");
+  // go to the aliases page and check the user is listed (but inactive)
+  await driver.get(aliasURL);
+  var saveAliasEl = await getElementByIdAfterWaitClick("saveAlias");
+  var aliasIndex = await findAlias(nameAliasKey);
+  expect(aliasIndex > -1).toEqual(true);
+  element = await driver.findElement(By.id('playerActive' + aliasIndex + 'Alias'));
+  var isChecked = await element.isSelected();
+  expect(isChecked).toEqual(false);
+
+}, 10000)

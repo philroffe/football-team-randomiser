@@ -609,6 +609,7 @@ app.use('/', authRouter)
           }
         }
       });
+      console.log("Checking mailing-list conf code:", code, "Match found?", playerConfirmedKey);
       if (playerConfirmedKey) {
         // save the updated alias map
         await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
@@ -1744,7 +1745,7 @@ async function queryDatabaseAndBuildOutstandingPayments(reqDate, noOfMonths = 3)
           }
         }
       })
-      console.log('GOT player payment data:', playerName, totalCharges, totalPayments);
+      //console.log('GOT player payment data:', playerName, totalCharges, totalPayments);
       var outstandingBalance = totalCharges + totalPayments;
       if (outstandingBalance < 0) {
         totalAmountOwed = (totalCharges * -1);

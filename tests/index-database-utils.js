@@ -210,6 +210,25 @@ async function importTestDataFromCsv(testDataPlayerAvailability, testDataWeeklyA
 
 }
 
+async function getAllUnitTestUserList(prefix) {
+  var unitTestUserList = [];
+  var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var playerAliasMap = playerAliasDoc.data();
+  for (const playerName in playerAliasMap) {
+    if (playerName.startsWith(prefix)) {
+      unitTestUserList.push(playerName);
+    }
+  }
+  return unitTestUserList;
+}
+
+async function getAliasData(name) {
+  const docRef = await firestore.collection("ADMIN").doc("_aliases");
+  var doc = await docRef.get();
+  var aliasData = await doc.data();
+  return aliasData[name];
+}
+
 module.exports = {
   getAllDataFromDB,
   deleteGameMonth,
@@ -218,5 +237,7 @@ module.exports = {
   getAttendance,
   copyCollection,
   exportTestDataToCsv,
-  importTestDataFromCsv
+  importTestDataFromCsv,
+  getAllUnitTestUserList,
+  getAliasData
 };
