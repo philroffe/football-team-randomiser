@@ -172,7 +172,7 @@
     document.getElementById("dateLabel").innerHTML = dateParam;
 
     // restringify and then parse the json to get the page
-    var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
+    var pagedata = JSON.parse(JSON.stringify(<%= pageData %>));
     console.log('Data=', pagedata);
 
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });

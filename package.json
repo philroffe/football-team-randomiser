@@ -31,7 +31,8 @@
     "passport": "^0.7.0",
     "passport-google-oauth": "^2.0.0",
     "prettier": "^3.4.2",
-    "selenium-webdriver": "^4.28.1"
+    "selenium-webdriver": "^4.28.1",
+    "he": "^1.2.0"
   },
   "devDependencies": {
     "depcheck": "^1.4.7",

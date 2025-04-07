@@ -1,4 +1,5 @@
 const express = require('express')
+const he = require('he');
 const path = require('path')
 const PORT = process.env.PORT || 5000
 const https = require('https')
@@ -914,7 +915,7 @@ app.use('/', authRouter)
 
     var tabName = "";
     if (req.query.tab) {
-      tabName = req.query.tab;
+      tabName = he.encode(req.query.tab);
     }
 
     //var allCollectionDocs = JSON.parse(allCollectionDocsJson);
