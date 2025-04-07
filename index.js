@@ -941,7 +941,7 @@ app.use('/', authRouter)
     var nextMonday = getDateNextMonday();
     var calcPaymentsFromDate = nextMonday;
     if (req.query.date) {
-      if (req.query.date.match('^20[0-9][0-9]\-(0[1-9]|1[012])\-(01)$')) {
+      if (req.query.date.match('^20[0-9][0-9]-(0[1-9]|1[012])-(01)$')) {
         calcPaymentsFromDate = req.query.date;
       } else {
         console.log('WARNING: Invalid date - should be the first of a month in yyyy-mm-dd format). Redirecting', req.query.date);
