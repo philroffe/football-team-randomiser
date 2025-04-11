@@ -319,11 +319,13 @@
       }
 
       function updatePlayerChoice() {
+        var algorithmUnit = ALGORITHM_UNITS[algorithmType]; // constant from generateTeamUtils
         currentState = {};
         currentState.redPlayers = [];
         currentState.bluePlayers = [];
         currentState.standbyPlayers = [];
         currentState.gameWeek = gameWeek;
+        currentState.ratios = { "algorithmUnit": algorithmUnit, "redRatioTotal": 0, "blueRatioTotal": 0 };
         // clone all players list to use for validation
         var allPlayersCopy = [...allPlayers];
         var failedValidationPlayers = [];
@@ -332,31 +334,29 @@
         // loop through all players and create text
         var redRatioText = "";
         var blueRatioText = "";
-        var ratios = pagedata.playersPreviewData.ratios;
-        if (ratios && ratios.algorithmUnit) {
-          var redRatioText = " (" + ratios.algorithmUnit + ": " + Number(ratios.redRatioTotal).toFixed(2) + ")";
-          var blueRatioText = " (" + ratios.algorithmUnit + ": " + Number(ratios.blueRatioTotal).toFixed(2) + ")";
-        }
         /////////////
-        var teamListText = "REDS" + redRatioText + "\n";
         var teamListRatiosText = "\n";
         var redOptions = document.getElementById("redPlayerSelect").options;
         var redTotalRatio = 0;
+        var redTeamListText = "";
         for (var i=0; i<redOptions.length; i++) {
           if (redOptions[i].selected) {
             var playerName = redOptions[i].value.split(" (")[0];
             var playerRatio = Number(redOptions[i].value.split(" (")[1].split(")")[0]);
             redTotalRatio += playerRatio;
-            teamListText += playerName + "\n"; //redOptions[i].value + "\n";
+            redTeamListText += playerName + "\n"; //redOptions[i].value + "\n";
             teamListRatiosText += playerRatio + "\n";
             currentState.redPlayers.push(playerName);
             validatePlayerSelection(allPlayersCopy, playerName, failedValidationPlayers);
           }
         }
+        // update ratio totals
+        currentState.ratios.redRatioTotal = redTotalRatio.toFixed(2);
         teamListRatiosText += "=" + redTotalRatio.toFixed(2) + "\n";
-
-        teamListText += "\nBLUES" + blueRatioText + "\n";
         teamListRatiosText += "\n";
+
+
+        var blueTeamListText = "";
         var blueOptions = document.getElementById("bluePlayerSelect").options;
         var blueTotalRatio = 0;
         for (var i=0; i<blueOptions.length; i++) {
@@ -364,28 +364,37 @@
             var playerName = blueOptions[i].value.split(" (")[0];
             var playerRatio = Number(blueOptions[i].value.split(" (")[1].split(")")[0]);
             blueTotalRatio += Number(blueOptions[i].value.split(" (")[1].split(")")[0]);
-            teamListText += playerName + "\n"; //blueOptions[i].value + "\n";
+            blueTeamListText += playerName + "\n"; //blueOptions[i].value + "\n";
             teamListRatiosText += playerRatio + "\n";
             currentState.bluePlayers.push(playerName);
             validatePlayerSelection(allPlayersCopy, playerName, failedValidationPlayers);
           }
         }
+        // update ratio totals
+        currentState.ratios.blueRatioTotal = blueTotalRatio.toFixed(2);
         teamListRatiosText += "=" + blueTotalRatio.toFixed(2) + "\n";
 
-        teamListText += "\nSTANDBY\n";
+        var standbyTeamListText = "";
         teamListRatiosText += "\n";
         var standbyOptions = document.getElementById("standbyPlayerSelect").options;
         for (var i=0; i<standbyOptions.length; i++) {
           if (standbyOptions[i].selected) {
             var playerName = standbyOptions[i].value.split(" (")[0];
             var playerRatio = Number(standbyOptions[i].value.split(" (")[1].split(")")[0]);
-            teamListText += playerName + "\n"; //standbyOptions[i].value + "\n";
+            standbyTeamListText += playerName + "\n"; //standbyOptions[i].value + "\n";
             teamListRatiosText += playerRatio + "\n";
             currentState.standbyPlayers.push(playerName);
             validatePlayerSelection(allPlayersCopy, playerName, failedValidationPlayers);
           }
         }
 
+        // now combine into one text
+        var teamListText = "REDS" + " (" + algorithmUnit + ": " + Number(redTotalRatio).toFixed(2) + ")\n";
+        teamListText += redTeamListText;
+        teamListText += "\nBLUES" + " (" + algorithmUnit + ": " + Number(blueTotalRatio).toFixed(2) + ")\n";
+        teamListText += blueTeamListText;
+        teamListText += "\nSTANDBY\n";
+        teamListText += standbyTeamListText;
         teamListText += "\nTotal Players: " + (currentState.redPlayers.length + currentState.bluePlayers.length + currentState.standbyPlayers.length);
         
         // perform various validations

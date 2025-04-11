@@ -1167,7 +1167,7 @@ app.use('/', authRouter)
     attendanceDetails[weekNumber].scores = scores;
     attendanceDetails[weekNumber].status = status;
 
-    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Week Attendance Change] " + gameYear + "-" + gameMonth + " (" + weekNumber + ")", JSON.stringify(attendanceDetails));
+    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Week Attendance Change Event] " + gameYear + "-" + gameMonth + " (" + weekNumber + ")", JSON.stringify(attendanceDetails));
 
     console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
     try {
