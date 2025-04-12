@@ -197,6 +197,7 @@
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
     var playerNameSuggestions = Array.from(Object.keys(playerToAliasMap).sort());
+    var playerCountMap = new Map();
     //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
 
     function changeTab(tabName) {
@@ -872,53 +873,53 @@
                       var officialName = getOfficialNameFromAlias(weekPlayerName.replace(/<br>/g,''), aliasToPlayerMap);
                       if (!checkNotProto(officialName)) return false;
                       if (officialName) {
-                        var playerMap = playerCountMap[officialName];
+                        var playerMap = playerCountMap.get(officialName);
                         if (!checkNotProto(playerMap)) return false;
                         if (!playerMap) {
-                          playerMap = {};
-                          playerMap.won = 0;
-                          playerMap.drawn = 0;
-                          playerMap.lost = 0;
-                          playerMap.totalGames = 0;
-                          playerMap.totalRed = 0;
-                          playerMap.totalBlue = 0;
-                          playerMap.playerName = officialName;
-                          playerMap.weekNo = 0;
-                          playerMap.winRatio = 0.5;
-                          playerMap.totalGoals = 0;
+                          playerMap = new Map();
+                          playerMap.set('won', 0);
+                          playerMap.set('drawn', 0);
+                          playerMap.set('lost', 0);
+                          playerMap.set('totalGames', 0);
+                          playerMap.set('totalRed', 0);
+                          playerMap.set('totalBlue', 0);
+                          playerMap.set('playerName', officialName);
+                          playerMap.set('weekNo', 0);
+                          playerMap.set('winRatio', 0.5);
+                          playerMap.set('totalGoals', 0);
                         }
                         var playerTeamNumber = attendanceData.players[weekPlayerName];
                         if (playerTeamNumber > 0) {
                           var goalsAttr = "team" + playerTeamNumber + "scorers";
                           if (attendanceData.scores[goalsAttr] && attendanceData.scores[goalsAttr][weekPlayerName]) {
-                            playerMap.totalGoals = playerMap.totalGoals + Number(attendanceData.scores[goalsAttr][officialName]);
+                            playerMap.set('totalGoals', playerMap.get('totalGoals') + Number(attendanceData.scores[goalsAttr][officialName]));
                           }
                           // this player played so co
                           if (attendanceData.scores.winner == playerTeamNumber) {
-                            playerMap.won = playerMap.won + 1;
+                            playerMap.set('won', playerMap.get('won') + 1);
                           } else if (attendanceData.scores.winner == 0) {
-                            playerMap.drawn = playerMap.drawn + 1;
+                            playerMap.set('drawn', playerMap.get('drawn') + 1);
                           } else {
-                            playerMap.lost = playerMap.lost + 1;
+                            playerMap.set('lost', playerMap.get('lost') + 1);
                           }
                           if (playerTeamNumber == 1) {
-                            playerMap.totalRed = playerMap.totalRed + 1;
+                            playerMap.set('totalRed', playerMap.get('totalRed') + 1);
                           } else {
-                            playerMap.totalBlue = playerMap.totalBlue + 1;
+                            playerMap.set('totalBlue', playerMap.get('totalBlue') + 1);
                           }
-                          playerMap.totalGames = playerMap.totalGames + 1;
-                          //playerMap.winRatio = Number((playerMap.won/(playerMap.won + playerMap.lost)).toFixed(2));
-                          playerMap.winRatio = Number(((playerMap.won + (playerMap.drawn/2)) / (playerMap.won + playerMap.lost + playerMap.drawn)).toFixed(2));
+                          playerMap.set('totalGames', playerMap.get('totalGames') + 1);
+                          //playerMap.set('winRatio', Number((playerMap.get('won')/(playerMap.get('won') + playerMap.get('lost'))).toFixed(2)));
+                          playerMap.set('winRatio', Number(((playerMap.get('won') + (playerMap.get('drawn')/2)) / (playerMap.get('won') + playerMap.get('lost') + playerMap.get('drawn'))).toFixed(2)));
 
-                          playerMap.weekNo = weekCount;
-                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo, playerMap.winRatio, playerMap.totalGoals];
-                          playerCountMap[officialName] = playerMap;
+                          playerMap.set('weekNo', weekCount);
+                          var data = [playerMap.get('won'), playerMap.get('lost'), playerMap.get('drawn'), playerMap.get('totalGames'), playerMap.get('totalRed'), playerMap.get('totalBlue'), playerMap.get('playerName'), playerMap.get('weekNo'), playerMap.get('winRatio'), playerMap.get('totalGoals')];
+                          playerCountMap.set(officialName, playerMap);
                           
                           jsonData.push(data);
                         } else {
                           // didn't play so just add the data for the player unchanged
-                          playerMap.weekNo = weekCount;
-                          var data = [playerMap.won, playerMap.lost, playerMap.drawn, playerMap.totalGames, playerMap.totalRed, playerMap.totalBlue, playerMap.playerName, playerMap.weekNo, playerMap.winRatio, playerMap.totalGoals];
+                          playerMap.set('weekNo', weekCount);
+                          var data = [playerMap.get('won'), playerMap.get('lost'), playerMap.get('drawn'), playerMap.get('totalGames'), playerMap.get('totalRed'), playerMap.get('totalBlue'), playerMap.get('playerName'), playerMap.get('weekNo'), playerMap.get('winRatio'), playerMap.get('totalGoals')];
                           jsonData.push(data);
                         }
                       }
