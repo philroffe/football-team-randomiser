@@ -146,7 +146,7 @@
           var dateTime = key.replace(EMAIL_DOC_PREFIX, "").replace(/T(\d\d:\d\d).*/, " $1");
           var pitchChargeAlreadyRegistered = false;
           for (const paymentId in closedLedgers["Admin"], parsedData[0]) {
-            console.log("pPPPPp", closedLedgers["Admin"][paymentId])
+            //console.log("Closed Ledger paymentId", closedLedgers["Admin"][paymentId])
             if (paymentId.startsWith("charge_pitch_") && closedLedgers["Admin"][paymentId].transactionId == parsedData[0].transactionId) {
               pitchChargeAlreadyRegistered = true;
             }
@@ -278,7 +278,7 @@
     Object.keys(cloneClosedLedgers).sort().forEach(function(key) {
       var playerAccounts = "";
       //console.log("Got payments ledger...", cloneClosedLedgers);
-      playerAccounts += "<div id='" + key.replace("'", "") + "PaymentDiv' class='collapse'>" + key + "...</div>";
+      playerAccounts += "<div id='" + key.replace(/'/g, "") + "PaymentDiv' class='collapse'>" + key + "...</div>";
       playerAccounts += "  <div class='paymentsListText'>";
       var payments = cloneClosedLedgers[key];
       var totalPayments = 0;
@@ -382,8 +382,8 @@
       }
 
       var totalDifference = totalPayments + totalCost;
-      //console.log("PPP", key.replace("'", ""), chargeError);
-      document.getElementById(key.replace("'", "") + "PaymentDiv").innerHTML = "<pre style='" + rowStyle + "'> &#12297; " + key.padEnd(12, '.') + String("£" + totalPayments).padStart(4, ' ') + "  | " + String("£" + totalCost).padStart(5, ' ') + "  | " + String("£" + totalDifference).padStart(4, ' ');
+      //console.log("Checking chargeError:", key.replace(/'/g, ""), chargeError);
+      document.getElementById(key.replace(/'/g, "") + "PaymentDiv").innerHTML = "<pre style='" + rowStyle + "'> &#12297; " + key.padEnd(12, '.') + String("£" + totalPayments).padStart(4, ' ') + "  | " + String("£" + totalCost).padStart(5, ' ') + "  | " + String("£" + totalDifference).padStart(4, ' ');
 
       overallTotalPayments += totalPayments;
       overallTotalCost += totalCost;

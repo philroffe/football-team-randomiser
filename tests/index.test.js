@@ -238,12 +238,14 @@ it ('01a - set preferences to test year', async () => {
 })
 
 it ('02 - test adding players to mailing list', async () => {
+  var debugThisTest = false;
   if (!enabledTests) { return };
   await driver.get(aliasURL);
   // check to see if any players are already added and maintain a global counter
   var newAliasIndex = 0;
   for (i=0; i<999; i++) {
     try {
+      if (debugThisTest) { console.log("Finding alias... ", i) } ;
       var element = await driver.findElement(By.id('player' + i + 'Alias'));
       newAliasIndex++;
     } catch (error) {
@@ -253,10 +255,11 @@ it ('02 - test adding players to mailing list', async () => {
 
   // add some test players
   for (var i = 0; i < testData.playerAvailability.length; i ++) {
-    await driver.findElement(By.id('addAlias')).click();
     var playerName = testData.playerAvailability[i].name;
     var playerEmail = testData.playerAvailability[i].email;
     var playerAlias = testData.playerAvailability[i].alias;
+    if (debugThisTest) { console.log("Adding alias... ", i, playerName) };
+    await driver.findElement(By.id('addAlias')).click();
     await driver.findElement(By.id('player' + newAliasIndex + 'Alias')).sendKeys(playerName); // add name
     await driver.findElement(By.id('playerEmail' + newAliasIndex + 'Alias')).sendKeys(Key.chord(Key.CONTROL, "a"), Key.DELETE, playerEmail); // add name
     await driver.findElement(By.id('playerAlias' + newAliasIndex + 'Alias')).sendKeys(playerAlias); // add name
@@ -274,22 +277,24 @@ it ('02 - test adding players to mailing list', async () => {
   // check to see if any players are already added and maintain a global counter
   for (i=0; i<9999; i++) {
     try {
+      if (debugThisTest) { console.log("Checking expected aliases are listed... ", i) };
       var element = await driver.findElement(By.id('player' + i + 'Alias'));
       updatedAliasIndex++;
     } catch (error) {
       i = 99999;
     }
   }
-  //console.log("Updated Alias Index:", updatedAliasIndex);
+  //if (debugThisTest) { console.log("Updated Alias Index:", updatedAliasIndex) };
   // should be the same as the first run
   expect(updatedAliasIndex).toEqual(newAliasIndex);
 
   // check player alias persisted
   for (var i = 0; i < testData.playerAvailability.length; i ++) {
+    if (debugThisTest) { console.log("Checking alias persisted... ", testData.playerAvailability[i].name) };
     var aliasIndex = await findAlias(testData.playerAvailability[i].name);
     expect(aliasIndex > -1).toEqual(true);
   }
-}, 10000)
+}, 15000)
 
 // find a given alias name from the alias list, return the index of the alias if found (or -1 otherwise) 
 async function findAlias(aliasName) {

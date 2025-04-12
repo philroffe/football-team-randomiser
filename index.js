@@ -11,6 +11,7 @@ const simpleParser = require('mailparser').simpleParser;
 const teamUtils = require("./views/pages/generate-teams-utils.js");
 const passport = require('passport');
 const prettier = require("prettier");
+const RateLimit = require('express-rate-limit');
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -64,12 +65,31 @@ app.use(compression());
 var authRouter = require('./routes/auth');
 var lastLocationBeforeLogin = '/';
 
+// set up rate limiter: maximum of 50 requests per minute (normal), 5000 requests per minute (test)
+var rateLimitPerWindowMs = 1000;
+if (process.env.FIRESTORE_EMULATOR_HOST) {
+  // in local test so increase rate limit
+  rateLimitPerWindowMs = 100000; 
+}
+var limiter = RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: rateLimitPerWindowMs, // max requests per windowMs
+  handler: (request, response, next, options) => {
+    if (request.rateLimit.used === request.rateLimit.limit + 1) {
+      // onLimitReached code here
+      console.log(`Rate limit reached for IP: ${request.ip}`, request.rateLimit.limit);
+    }
+    response.status(options.statusCode).send(options.message)
+  },
+});
+
 app.use(express.static(path.join(__dirname, 'public')))
 .use(express.urlencoded({ extended: true }))
 .use(express.json())
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 
+.use(limiter) // apply rate limiter to all requests
 .use(session({
   store: new FirestoreStore({
     dataset: new Firestore(),
@@ -941,7 +961,7 @@ app.use('/', authRouter)
     var nextMonday = getDateNextMonday();
     var calcPaymentsFromDate = nextMonday;
     if (req.query.date) {
-      if (req.query.date.match('^20[0-9][0-9]\-(0[1-9]|1[012])\-(01)$')) {
+      if (req.query.date.match('^20[0-9][0-9]-(0[1-9]|1[012])-(01)$')) {
         calcPaymentsFromDate = req.query.date;
       } else {
         console.log('WARNING: Invalid date - should be the first of a month in yyyy-mm-dd format). Redirecting', req.query.date);
@@ -2466,6 +2486,13 @@ function getGameWeekMonthIndex(gameDate) {
 
 // generate email text and send it
 function sendTeamsPreviewEmail(playersPreviewData, emailPrefix) {
+  if (!((playersPreviewData.redPlayers instanceof Array) && 
+        (playersPreviewData.bluePlayers instanceof Array) && 
+        (playersPreviewData.standbyPlayers instanceof Array))) { // Prevents DoS.
+    console.log("ERROR: Sending email failed - check playersPreviewData player lists are valid arrays")
+    return;
+  }
+  // now generate email and send
   var emailSubject = "STANDBY ADMIN " + playersPreviewData.gameWeek + " [ADMIN Footie, Goodwin, 6pm Mondays]\n"
   var emailBody = emailPrefix + "\n" + playersPreviewData.gameWeek + "\n";
   emailBody += "Check teams and edit list here:\n"
