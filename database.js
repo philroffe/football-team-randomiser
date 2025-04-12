@@ -131,6 +131,14 @@ async function restoreDatabase(filename) {
     return;
   }
 
+  // check that database is empty (or at least check there is no admin/_preferences file)
+  const docRef = await firestore.collection("ADMIN").doc("_preferences");
+  var existingDoc = await docRef.get();
+  if (existingDoc.exists) {
+    console.log("ERROR: Please ensure the local DB is empty before running this script");
+    return;
+  }
+
   // read the backup file of all collections and docs
   var allCollectionDocsJson = await fs.readFileSync(filename);
 
