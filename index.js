@@ -58,13 +58,6 @@ const EMAIL_TYPE_TEAMS_ADMIN = 2;
 /* Email functionality */
 const GOOGLE_MAIL_FROM_NAME = (process.env.GOOGLE_MAIL_FROM_NAME) ? process.env.GOOGLE_MAIL_FROM_NAME : "Phil Roffe <philroffe@gmail.com>";
 
-const app = express();
-app.use(compression());
-
-// enable google auth
-var authRouter = require('./routes/auth');
-var lastLocationBeforeLogin = '/';
-
 // set up rate limiter: maximum of 50 requests per minute (normal), 5000 requests per minute (test)
 var rateLimitPerWindowMs = 1000;
 if (process.env.FIRESTORE_EMULATOR_HOST) {
@@ -83,13 +76,20 @@ var limiter = RateLimit({
   },
 });
 
+const app = express();
+app.use(compression());
+app.use(limiter); // apply rate limiter to all requests
+
+// enable google auth
+var authRouter = require('./routes/auth');
+var lastLocationBeforeLogin = '/';
+
 app.use(express.static(path.join(__dirname, 'public')))
 .use(express.urlencoded({ extended: true }))
 .use(express.json())
 .set('views', path.join(__dirname, 'views'))
 .set('view engine', 'ejs')
 
-.use(limiter) // apply rate limiter to all requests
 .use(session({
   store: new FirestoreStore({
     dataset: new Firestore(),
@@ -157,13 +157,22 @@ async function clearExpiredExpressSessions() {
   })
 }
 
+// simple check to ensure a path is local - security measure to prevent Server-side URL redirect
+function isLocalUrl(path) {
+  try {
+    return (new URL(path, "https://example.com").origin === "https://example.com");
+  } catch (e) {
+    return false;
+  }
+}
+
 app.use('/', authRouter)
 .get('/login', function(req, res, next) {
   // a hack that won't scale past a single user logging in at a time
   // store the referer on login attempt, to allow redirect after successful login
   lastLocationBeforeLogin = (req.headers.referer) ? req.headers.referer : '/admin';
   //override if the url contains a place to redirect
-  lastLocationBeforeLogin = (req.query.redirect) ? req.query.redirect : lastLocationBeforeLogin;
+  lastLocationBeforeLogin = (req.query.redirect && isLocalUrl(req.query.redirect)) ? req.query.redirect : lastLocationBeforeLogin;
   res.redirect(302, "/login/federated/google");
 })
 .get('/loggedin', function(req, res, next) {
@@ -441,12 +450,18 @@ app.use('/', authRouter)
 
 .post('/services/payment-admin-cost', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
-  console.log('GOT PAYMENT-MANUAL POST:', ip, req.body);
+  console.log('GOT PAYMENT-ADMIN-COST POST:', ip, req.body);
 
   if (req.isAuthenticated()) {
     console.log("User is logged in: ", JSON.stringify(req.user));
   } else {
     console.log("User NOT logged in - rejecting");
+    res.sendStatus(400);
+    return;
+  }
+
+  if (!Array.isArray(req.body)) {
+    console.log("Invalid request body - expected an array");
     res.sendStatus(400);
     return;
   }
@@ -2288,6 +2303,7 @@ async function addRemoveEmailSubscription(details, hostname) {
     if (playerAliasMap[key].email.toUpperCase() == email.toUpperCase()) {
       foundExistingPlayer = true;
       playerKey = key;
+      if (!teamUtils.checkNotProto(playerKey)) return false;
       if (optIn) {
         // add/edit to subscribe email
         if (playerAliasMap[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED) {
@@ -2329,6 +2345,7 @@ async function addRemoveEmailSubscription(details, hostname) {
     // no existing player
     // create alias key... the first name and first initial of surname
     var nameAliasKey = name.substring(0, name.trim().lastIndexOf(" ") + 2);
+    if (!teamUtils.checkNotProto(nameAliasKey)) return false;
     if (!playerAliasMap[nameAliasKey]) {
       playerKey = nameAliasKey;
       mailinglistChanged = true;

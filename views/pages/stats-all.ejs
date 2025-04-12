@@ -870,8 +870,10 @@
                     for (var i = 0; i < playerNameSuggestions.length; i++) {
                       weekPlayerName = playerNameSuggestions[i];
                       var officialName = getOfficialNameFromAlias(weekPlayerName.replace(/<br>/g,''), aliasToPlayerMap);
+                      if (!checkNotProto(officialName)) return false;
                       if (officialName) {
                         var playerMap = playerCountMap[officialName];
+                        if (!checkNotProto(playerMap)) return false;
                         if (!playerMap) {
                           playerMap = {};
                           playerMap.won = 0;
@@ -1257,6 +1259,15 @@
           filteredAllCollectionDocs[collectionId] = allCollectionDocs[collectionId];
         }
       }
+    }
+
+    // security check to ensure that user-controlled input cannot be used to modify Object.prototype
+    function checkNotProto(key) {
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        console.error("ERROR - Invalid key", key);
+        return false;
+      }
+      return true;
     }
 
     </script>

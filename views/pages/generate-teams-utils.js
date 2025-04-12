@@ -852,6 +852,15 @@ function sendEmailToList(mailOptions, hostname) {
   });
 }
 
+// security check to ensure that user-controlled input cannot be used to modify Object.prototype
+function checkNotProto(key) {
+  if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+    console.error("ERROR - Invalid key", key);
+    return false;
+  }
+  return true;
+}
+
 // workaround check as this file is included serverside as a module
 if (typeof module != "undefined") {
   module.exports = {
@@ -863,7 +872,8 @@ if (typeof module != "undefined") {
     datesAreOnSameDay,
     checkIfBankHoliday,
     sendAdminEvent,
-    sendEmailToList
+    sendEmailToList,
+    checkNotProto
   };
 }
 
