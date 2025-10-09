@@ -109,8 +109,8 @@ if (typeof module != "undefined") {
   * nextMondayOptionIndex - the index of next Monday's game - used in the players map to get availability
   * noOfPreviousMonths - the number of months of historical attendance data to use to generate the algorithm score
   */
-  function changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex
-    , noOfPreviousMonths) {
+  function changeAlgorithmForPlayers(algorithmType, algorithmName, players, playersPreviewData, allAttendanceData
+    , aliasToPlayerMap, nextMondayOptionIndex, noOfPreviousMonths) {
     var playersGamesPlayedRatio = {};
 
     /////////////////////
@@ -303,7 +303,7 @@ if (typeof module != "undefined") {
         playersGamesPlayedRatio[playerName].algorithm3ratio = 0.5;
         playersGamesPlayedRatio[playerName].algorithm4ratio = 2;
         playersGamesPlayedRatio[playerName].algorithm5ratio = 0;
-        playersGamesPlayedRatio[playerName].algorithm6ratio = 0;
+        playersGamesPlayedRatio[playerName].algorithm6ratio = 0.5;
       }
     });
 
@@ -364,7 +364,7 @@ if (typeof module != "undefined") {
     if (forceUpdate) {
       // generate the teams - standby first, then divide into reds and blues
       var newStandbyPlayers = generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, playersPreviewData.standbyPlayers);
-      var newGeneratedTeams = generateRedBlueTeams(sortedPlayerNamesThisWeek, newStandbyPlayers);
+      var newGeneratedTeams = generateRedBlueTeams(sortedPlayerNamesThisWeek, newStandbyPlayers, playersGamesPlayedRatio, algorithmName);
       //console.log("NEW TEAMS", newGeneratedTeams)
       playersGamesPlayedRatio.standbyPlayers = newStandbyPlayers;
       playersGamesPlayedRatio.generatedTeams = newGeneratedTeams;
@@ -455,11 +455,42 @@ function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, forceP
     return standbyPlayers;
   }
 
-  function generateRedBlueTeams(playersList, optionalStandbyPlayers = []) {
+  function generateRedBlueTeams(playersList, optionalStandbyPlayers, playersGamesPlayedRatio, algorithmName) {
+    var redPlayers = [];
+    var bluePlayers = [];
+    var standbyPlayers = optionalStandbyPlayers;
+    var teams = {};
+    ///////////////
+    // TODO: Fix Algorithms - only Alternate works.  The others result in unbalanced numbers in teams
+    ///////////////
+    //algorithmName = "Alternate";
+    if (algorithmName == "Parity") {
+      teams = balanceTeamsUsingParityAlgorithm(playersList, optionalStandbyPlayers, playersGamesPlayedRatio);
+    } else if (algorithmName == "ParityGPG") {
+      teams = balanceTeamsUsingParityThenLowestGPGAlgorithm(playersList, optionalStandbyPlayers, playersGamesPlayedRatio);
+    } else if (algorithmName == "Exhaustive") {
+      teams = balanceTeamsExhaustively(playersList, optionalStandbyPlayers, playersGamesPlayedRatio);
+    } else if (algorithmName == "Alternate") {
+      teams = balanceTeamsUsingRedBlueAlgorithm(playersList, optionalStandbyPlayers, playersGamesPlayedRatio);
+    } else {
+      // default to Alternate
+      teams = balanceTeamsUsingRedBlueAlgorithm(playersList, optionalStandbyPlayers, playersGamesPlayedRatio);
+    }
+    redPlayers = teams.redPlayers;
+    bluePlayers = teams.bluePlayers;
+
+    // console.log("Generated Teams:", generatedTeams);
+    var generatedTeams = {'redPlayers': redPlayers, 'bluePlayers': bluePlayers, 'standbyPlayers':standbyPlayers}
+    return generatedTeams;
+  }
+
+  function balanceTeamsUsingRedBlueAlgorithm(playersList, optionalStandbyPlayers, playersGamesPlayedRatio) {
+    console.log("Using Alternative Red/Blue Algorithm");
     var redPlayers = [];
     var bluePlayers = [];
     var standbyPlayers = optionalStandbyPlayers;
 
+    /** use alternate red, blue algorithm **/
     // randomise either red or blue first
     var firstRandomisation = 0;  // red first
     if (Math.random() > 0.5) {
@@ -478,19 +509,19 @@ function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, forceP
               redPlayers.push(playersList[i]);
             } else {
               standbyPlayers.push(playersList[i]);
-              console.log("REDS", i, redPlayers.length, maxPlayersPerTeam);
+              //console.log("REDS", i, redPlayers.length, maxPlayersPerTeam);
             }
           } else {
             if (bluePlayers.length < maxPlayersPerTeam) {
               bluePlayers.push(playersList[i]);
             } else {
               standbyPlayers.push(playersList[i]);
-              console.log("BLUES", i, redPlayers.length, maxPlayersPerTeam);
+              //console.log("BLUES", i, redPlayers.length, maxPlayersPerTeam);
             }
           }
         } else {
           standbyPlayers.push(playersList[i]);
-          console.log("PLAY", i, redPlayers.length, maxPlayersPerTeam);
+          //console.log("STANDBY", i, redPlayers.length, maxPlayersPerTeam);
         }
       }
     }
@@ -499,6 +530,147 @@ function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, forceP
     var generatedTeams = {'redPlayers': redPlayers, 'bluePlayers': bluePlayers, 'standbyPlayers':standbyPlayers}
     return generatedTeams;
   }
+
+  function balanceTeamsUsingParityAlgorithm(playersList, optionalStandbyPlayers, playersGamesPlayedRatio) {
+    // use pure parity algorithm (red, blue, blue, red, red, blue...)
+    console.log("Using Parity Algorithm");
+    // Sort players by goalsPerGame in descending order
+    const sortedPlayers = [...playersList].sort((a, b) => b.goalsPerGame - a.goalsPerGame);
+
+    const redPlayers = [];
+    const bluePlayers = [];
+    var standbyPlayers = optionalStandbyPlayers;
+
+    // randomise either red or blue first
+    const parityOrderMap = { "0": ["red", "blue", "blue"], "1": ["blue", "red", "red"] };
+    var lastParityOrderMapIndex = (Math.random() > 0.5) ? firstRandomisation = 0 : firstRandomisation = 1;
+    var currentParityOrder = [];
+
+    var playerCount = playersList.length;
+    var maxPlayersPerTeam = Math.floor(playerCount/2) + 1;
+    for (var i = 0; i < playerCount; i++) {
+      var totalPlayerCount = redPlayers.length + bluePlayers.length;
+      if (!standbyPlayers.includes(playersList[i])) {
+        // update parity order
+        if (currentParityOrder.length == 0) {
+          lastParityOrderMapIndex = (lastParityOrderMapIndex == 0) ? 1 : 0;
+          currentParityOrder = parityOrderMap[lastParityOrderMapIndex].slice(); // copy array
+        }
+
+        if (totalPlayerCount < 12) {
+          const team = currentParityOrder.shift();
+          if (team == "red") {
+            redPlayers.push(playersList[i]);
+            //console.log("Red", playersList[i]);
+          } else if (team == "blue") {
+            bluePlayers.push(playersList[i]);
+            //console.log("Blue", playersList[i]);
+          } else {
+            //console.log("ERROR - unknown team!", playersList[i], team);
+          }
+        } else {
+          standbyPlayers.push(playersList[i]);
+          //console.log("STANDBY", playersList[i], redPlayers.length, maxPlayersPerTeam);
+        } 
+      }
+    }
+
+    return { redPlayers, bluePlayers };
+  }
+
+  function balanceTeamsUsingParityThenLowestGPGAlgorithm(playersList, optionalStandbyPlayers, playersGamesPlayedRatio) {
+    console.log("Using ParityThenLowestGPG Algorithm");
+    // Sort players by goalsPerGame in descending order
+    const sortedPlayers = [...playersList].sort((a, b) => b.goalsPerGame - a.goalsPerGame);
+
+    const redPlayers = [];
+    const bluePlayers = [];
+    var standbyPlayers = optionalStandbyPlayers;
+    let totalRed = 0;
+    let totalBlue = 0;
+
+    for (const player of sortedPlayers) {
+      var totalPlayerCount = redPlayers.length + bluePlayers.length;
+      if (!standbyPlayers.includes(player)) {
+        if (totalPlayerCount < 12) {
+          // Choose the team with the lower total GPG so far
+          if (redPlayers.length < 6 && (totalRed <= totalBlue || bluePlayers.length >= 6)) {
+            redPlayers.push(player);
+            totalRed += Number(playersGamesPlayedRatio[player].algorithm6ratio);
+            //console.log("Team A", player, totalRed);
+          } else {
+            bluePlayers.push(player);
+            totalBlue += Number(playersGamesPlayedRatio[player].algorithm6ratio);
+            //console.log("Team B", player, totalBlue);
+          }
+        } else {
+          standbyPlayers.push(player);
+          //console.log("STANDBY", player);
+        } 
+      }
+    }
+
+    return { redPlayers, bluePlayers };
+  }
+
+  function balanceTeamsExhaustively(playersList, optionalStandbyPlayers, playersGamesPlayedRatio) {
+    console.log("Using Exhaustive Algorithm");
+  function getCombinations(array, size) {
+    const result = [];
+    // internal functions
+    function combine(start, combo) {
+      if (combo.length === size) {
+        result.push(combo);
+        return;
+      }
+      for (let i = start; i < array.length; i++) {
+        combine(i + 1, [...combo, array[i]]);
+      }
+    }
+
+    combine(0, []);
+    return result;
+  }
+  function sumGoals(team, playersGamesPlayedRatio) {
+    return team.reduce((sum, player) => sum + Number(playersGamesPlayedRatio[player].algorithm6ratio), 0);
+  }
+  function arraysEqual(a, b) {
+    return a.length === b.length && a.every((val, index) => val === b[index]);
+  }
+
+  // remove standby players from full player list
+  const activePlayers = playersList.filter(item => !optionalStandbyPlayers.includes(item));
+
+  const allCombinations = getCombinations(activePlayers, 6);
+  //console.log(allCombinations)
+  let bestDifference = Infinity;
+  let bestTeamA = [];
+  let bestTeamB = [];
+  var standbyPlayers = optionalStandbyPlayers;
+
+  for (const teamA of allCombinations) {
+    const teamASet = new Set(teamA.map(p => p));
+    const teamB = activePlayers.filter(p => !teamASet.has(p));
+
+    const totalA = sumGoals(teamA, playersGamesPlayedRatio);
+    const totalB = sumGoals(teamB, playersGamesPlayedRatio);
+    const difference = Math.abs(totalA - totalB);
+
+    if (difference < bestDifference) {
+      bestDifference = difference;
+      bestTeamA = teamA;
+      bestTeamB = teamB;
+    }
+
+    // Early exit if perfect balance found
+    if (difference === 0) break;
+  }
+
+  var generatedTeams = {'redPlayers': bestTeamA, 'bluePlayers': bestTeamB, 'standbyPlayers':standbyPlayers}
+  return generatedTeams;
+}
+
+
   
   // no longer used, but this was the original randomiser
   function shuffle(array) {
@@ -625,7 +797,7 @@ function parsePaypalEmail(bodyText) {
         amountFromPayee = Number(payeeNameMatch[3].replace(/[^0-9.]/g, ''));
       } else if (thisString.match(/Transaction ID/)) {
         // get value of next line
-        transactionId = bodyTextArray[i+1].trim();
+        transactionId = bodyTextArray[i+1].trim().replace(/ .*/,'');
       } else if (thisString.match("date")) {
         // get value of next line
         transactionDate = new Date(bodyTextArray[i+1].trim());
@@ -873,7 +1045,7 @@ if (typeof module != "undefined") {
     checkIfBankHoliday,
     sendAdminEvent,
     sendEmailToList,
-    checkNotProto
+    checkNotProto,
+    parsePaypalEmail
   };
 }
-

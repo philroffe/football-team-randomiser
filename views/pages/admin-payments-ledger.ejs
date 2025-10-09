@@ -173,6 +173,19 @@
             if (!paymentAlreadyRegistered) {
               option.text += " (NEW)";
             }
+
+            // see if there are any outstanding charges
+            var outstandingCharges = 0;
+            // loop through all the unpaid games for the player
+            if (openLedgers[playerName]) {
+              Object.keys(openLedgers[playerName]).sort().forEach(function(chargesKey) {
+                outstandingCharges += openLedgers[playerName][chargesKey].amount;
+              });
+            }
+            option.text += " (Owes: £" + outstandingCharges + ")";
+
+            // remove the prefix (probably a nicer way to do this, but it does the job)
+            option.text = option.text.replace('PAYPAL_EMAIL_', '');
           }
           //console.log(playerName, parsedData, paymentAlreadyRegistered);
         }

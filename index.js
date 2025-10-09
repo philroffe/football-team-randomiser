@@ -92,7 +92,7 @@ app.use(express.static(path.join(__dirname, 'public')))
 
 .use(session({
   store: new FirestoreStore({
-    dataset: new Firestore(),
+    dataset: firestore,
     kind: 'express-sessions',
   }),
   secret: process.env.SESSION_SECRET,
@@ -590,6 +590,65 @@ app.use('/', authRouter)
     res.sendStatus(400);
   }
 })
+.post('/services/generate-payment-history-link', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT SERVCE: GENERATE PAYMENT-HISTORY LINK GET FROM:', ip, req.body);
+
+  try {
+    var email = req.body.email;
+
+    // look up the player name from the email
+    var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+    var playerAliasMap = playerAliasDoc.data();
+    var foundKey = "";
+    Object.keys(playerAliasMap).sort().forEach(function(key) {
+      if (playerAliasMap[key].email && playerAliasMap[key].email.toLowerCase() == email.toLowerCase()) {
+        foundKey = key;
+      }
+    });
+
+    // [5 Oct 2025] temporary admin event just to keep track of the new feature (delete at end of year)
+    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "Payment history request", email + "=" + foundKey);
+
+    var token;
+    if (foundKey) {
+      token = playerAliasMap[foundKey].token;
+      if (!token) {
+        console.log("No token found so generated new one for email:", email)
+        const crypto = require('crypto');
+        function generateToken() {
+          return crypto.randomBytes(32).toString('hex'); // 64-char random string
+        }
+        token = generateToken();
+        // now save the token
+        playerAliasMap[foundKey].token = token;
+        await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap); 
+      }
+      console.log("Got token:", email, token)
+
+      // now send the email
+      var emailSubject = "View your payment history [Footie, Goodwin, 6pm Mondays]";
+      var pollLink = "https://tensile-spirit-360708.nw.r.appspot.com/payment-history?token=" + token;
+      var emailBody = "Hi " + foundKey + "," +
+        "<br><br>The following link contains your unique token to view your payment details." +
+        "<br><br>Click the link to see your charges and payments history:<br>" + pollLink + "<br>";
+      var mailOptions = {
+        from: GOOGLE_MAIL_FROM_NAME,
+        to: email,
+        subject: emailSubject,
+        html: emailBody
+      };
+      // now send the email
+      var emailResult = teamUtils.sendEmailToList(mailOptions, req.hostname);
+    } else {
+      console.log("Failed to send email link - not a valid email:", email);
+    }
+    res.json({'result': 'OK'});
+  } catch (err) {
+    console.error(err);
+    res.json({'result': 'OK'}); //always send ok
+  }
+})
 .post('/services/modify-mailinglist', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT SERVCE: MODIFY MAILINGLIST GET FROM:', ip, req.body);
@@ -615,6 +674,76 @@ app.use('/', authRouter)
       console.error("ERROR - failed to add/Remove email subscription");
       res.sendStatus(400);
     }
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
+.get('/payment-history', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('GOT PAYMENT_HISTORY GET FROM:', ip, req.body, req.query.token);
+  try {
+    // now need to check if confirming subscriptionStatus
+    var token = req.query.token;
+    var paymentData = {};
+
+    if (token != undefined) {
+      // read the list of players and aliases
+      var playerAliasMaps = await getDefinedPlayerAliasMaps();
+      var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+      // lookup token to get the player name and email
+      var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+      var playerAliasMap = playerAliasDoc.data();
+      var officialPlayerName = "";
+      var email = "";
+      Object.keys(playerAliasMap).sort().forEach(function(key) {
+        if (playerAliasMap[key].token == token) {
+          officialPlayerName = key;
+          email = playerAliasMap[key].email;
+        }
+      });
+      if (officialPlayerName) {
+        //console.log("Found matching player:", officialPlayerName);
+        paymentData.token = token;
+        paymentData.name = officialPlayerName;
+        paymentData.email = email;
+
+        // get closed ledger
+        const playerClosedLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc(officialPlayerName);
+        var playerClosedLedgerDoc = await playerClosedLedgerDocRef.get();
+        paymentData.closedLedger = playerClosedLedgerDoc.data();
+        // get open ledger
+        const playerOpenLedgerDocRef = firestore.collection("OPEN_LEDGER").doc(officialPlayerName);
+        var playerOpenLedgerDoc = await playerOpenLedgerDocRef.get();
+        paymentData.openLedger = playerOpenLedgerDoc.data();
+
+        // get any payment emails not yet processed
+        const emailCollection = firestore.collection("INBOUND_EMAILS");
+        const allEmailDocs = await emailCollection.get();
+        var unprocessedPayments = [];
+        allEmailDocs.forEach(async doc => {
+          var emailDetails = doc.data();
+          // now convert html to plain text and try to parse the email
+          const options = { wordwrap: 10000 };
+          const html = emailDetails.data;
+          const text = convert(html, options);
+          //console.log("Plain HTML", text);
+
+          var parsedData = teamUtils.parsePaypalEmail(text);
+          if (emailDetails.parsedData && emailDetails.parsedData.payeeName ) {
+            var payeeName = emailDetails.parsedData.payeeName;
+            var officialPayee = teamUtils.getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
+            if (officialPayee && officialPayee == officialPlayerName) {
+              unprocessedPayments.push(emailDetails.parsedData);
+            }
+          }
+        });
+        paymentData.unprocessedPayments = unprocessedPayments;
+      }
+    }
+
+    var pageData = { paymentData: paymentData, "environment": environment };
+    res.render('pages/payment-history', { pageData: JSON.stringify(pageData)} );
   } catch (err) {
     console.error(err);
     res.send("Error " + err);
@@ -678,14 +807,24 @@ app.use('/', authRouter)
     req.on('end', function() {
       // done so convert from quoted-printable mime type
       body = mimelib.decodeQuotedPrintable(streamData);
+      var parsedData = {};
       // store the data for future processing
       var docNamePrefix = "PAYMENT_ERROR_EMAIL";
       if (body.includes("no-reply@sheffield.ac.uk")) {
         docNamePrefix = "PAYMENT_PITCH_EMAIL";
       } else if (body.includes("service@paypal.co.uk")) {
         docNamePrefix = "PAYMENT_PAYPAL_EMAIL";
+        try {
+          // convert html to plain text and try to parse the email
+          const options = { wordwrap: 10000 };
+          const text = convert(body, options);
+          //console.log("Plain Text", text);
+          parsedData = teamUtils.parsePaypalEmail(text);
+        } catch (err) {
+          // do nothing
+        }
       }
-      var emailDetails = { "parsed_status": "NEW", "type": docNamePrefix, "data": body}
+      var emailDetails = { "parsed_status": "NEW", "type": docNamePrefix, "parsedData": parsedData, "data": body}
       const docRef = firestore.collection("INBOUND_EMAILS").doc(docNamePrefix + "_" + new Date().toISOString());
       docRef.set(emailDetails);
     });
@@ -1202,7 +1341,8 @@ app.use('/', authRouter)
     attendanceDetails[weekNumber].scores = scores;
     attendanceDetails[weekNumber].status = status;
 
-    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Week Attendance Change Event] " + gameYear + "-" + gameMonth + " (" + weekNumber + ")", JSON.stringify(attendanceDetails));
+    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Week Attendance Change Event] " + gameYear + "-" + gameMonth + 
+      " (" + weekNumber + ")", JSON.stringify(attendanceDetails, null, 2));
 
     console.log('Inserting DB data:', JSON.stringify(attendanceDetails));
     try {
@@ -2285,11 +2425,31 @@ async function refundPayment(paypalTransactionId) {
 
 // string name/email, int subscriptionStatus
 async function addRemoveEmailSubscription(details, hostname) {
+  //console.log("LLL", details, hostname)
   var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
   var playerAliasMap = playerAliasDoc.data();
-  if (!playerAliasMap) {
-    playerAliasMap = {};
-  }
+  /*
+  var playerAliasMap = new Map();
+  Object.keys(playerAliasObject).forEach((key) => {
+    console.log("Obj key", key, playerAliasObject[key]);
+    playerAliasMap.set(key, playerAliasObject[key]);
+  });
+  */
+
+  /*
+  var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var playerAliasMap = playerAliasDoc.data();
+  var foundKey = "";
+  Object.keys(playerAliasMap).sort().forEach(function(key) {
+    if (playerAliasMap[key].email == email.toLowerCase()) {
+      foundKey = key;
+    }
+  });
+  */
+
+  //if (!playerAliasMap) {
+    //playerAliasMap = new Map();
+  //}
   var email = details.email;
   var name = details.name;
   var optIn = details.optIn;
@@ -2299,7 +2459,7 @@ async function addRemoveEmailSubscription(details, hostname) {
   var foundExistingPlayer = false;
   var playerKey = "";
   Object.keys(playerAliasMap).sort().forEach(function(key) {
-    //console.log("key", playerAliasMap[key]);
+    console.log("key", playerAliasMap[key]);
     if (playerAliasMap[key].email.toUpperCase() == email.toUpperCase()) {
       foundExistingPlayer = true;
       playerKey = key;
@@ -2352,7 +2512,7 @@ async function addRemoveEmailSubscription(details, hostname) {
       sendConfirmationEmail = true;
       // create a new player
       playerAliasMap[playerKey] = {"aliases": [ name ], "subscriptionStatus": MAIL_SUBSCRIPTION_STATUS_CONFIRMING, "email": email};
-      console.log("Adding new email to mailing list:", name, email, playerAliasMap[name]);
+      console.log("Adding new email to mailing list:", name, email, playerAliasMap[nameAliasKey]);
     } else {
       console.error("ERROR - nameAliasKey already exists", name, email, playerAliasMap[nameAliasKey]);
       // TODO - need to handle this better
@@ -2373,9 +2533,11 @@ async function addRemoveEmailSubscription(details, hostname) {
       emailSubject = "Confirm your email address [Footie, Goodwin, 6pm Mondays]";
       emailText = "Welcome to Sheffield Monday Night footie mailing list!\n\n";
       emailText += "To subscribe please confirm it is you by clicking the confirm link...\n";
-      playerAliasMap[playerKey].date = details.date;
-      var code = playerAliasMap[playerKey].date.getTime();
-      playerAliasMap[playerKey].code = code;
+      let playerData = playerAliasMap[playerKey];
+      playerData.date = details.date;
+      var code = playerData.date.getTime();
+      playerData.code = code;
+      playerAliasMap[playerKey] = playerData;
       emailText += urlPrefix + "/mailing-list?code=" + code;
     } else {
       emailSubject = "You have been unsubscribed [Footie, Goodwin, 6pm Mondays]";
@@ -2406,6 +2568,7 @@ async function addRemoveEmailSubscription(details, hostname) {
 async function calculateNextGameTeams(date = new Date()) {
     // choose the algorithm to us to select the teams
     var algorithmType = "algorithm6";
+    var algorithmName = "ParityGPG";
     var nextMonday = getDateNextMonday(date);
     var gameYear = nextMonday.getFullYear();
     var gameMonth = nextMonday.toISOString().split('-')[1];
@@ -2432,7 +2595,7 @@ async function calculateNextGameTeams(date = new Date()) {
     // change the algorithm for all players and regenerate teams
     var algorithmRange = 12;
     var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(date);
-    var playersGamesPlayedRatio = teamUtils.changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, 
+    var playersGamesPlayedRatio = teamUtils.changeAlgorithmForPlayers(algorithmType, algorithmName, players, playersPreviewData, 
       allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
     return playersGamesPlayedRatio;
 }

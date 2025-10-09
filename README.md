@@ -28,20 +28,18 @@ Install node using nvm as described here https://github.com/nvm-sh/nvm
 ```sh
 # if using Ubuntu, remove any old version of node
 sudo apt remove nodejs
+# follow these instructions (option 2)... https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-22-04
 # install the new version
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+curl -sL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
+sudo bash nodesource_setup.sh
+sudo apt install nodejs
 . ~/.bashrc  # because get nvm on the PATH
-nvm -v       # should say 0.40.1
-nvm list-remote # gives a list of packages
-# install the version you need (as shown is latest v20 at time of writing)
-nvm install 20.18.1
 ```
 
 Install the gcloud CLI as described here: https://cloud.google.com/sdk/docs/install#deb
 ```sh
 sudo apt-get install apt-transport-https ca-certificates gnupg curl
 curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
-sudo apt-get update && sudo apt-get install google-cloud-cli
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
 sudo apt-get update && sudo apt-get install google-cloud-cli
 sudo apt install google-cloud-cli-firestore-emulator default-jre
@@ -91,7 +89,7 @@ Now deploy the app...
 gcloud app deploy .app-prod.yaml
 # if you get a build error (e.g. after deleting old files from storage), run with --no-cache 
 #ERROR: failed to initialize analyzer: getting previous image: getting config file for image... unexpected status code 404 Not Found:
-gcloud app deploy .app-prod.yaml--no-cache
+gcloud app deploy .app-prod.yaml --no-cache
 
 # if you want a weekly scheduled task then deploy the cron too...
 gcloud app deploy cron.yaml

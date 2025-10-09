@@ -52,7 +52,7 @@
 
       function validateEmail(input) {
         document.getElementById("response").innerHTML = "";
-        var validRegex = /^([a-zA-Z0-9._%-+]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/;
+        var validRegex = /^([a-zA-Z0-9._%\-\+]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/;
         if (input.value.trim().match(validRegex)) {
           //console.log("Valid email address!");
           //input.style.border="2px solid green";

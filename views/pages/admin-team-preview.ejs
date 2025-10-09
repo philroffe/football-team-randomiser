@@ -56,6 +56,15 @@
         </select>
       </div>
       <div style="clear:both;"></div>
+      <div id="chooseOptionAlgorithmName" style="display:inline;">
+        Regenerate (does nothing currently):
+        <select name="algorithmName" id="algorithmName" checked onchange="changeAlgorithmName(this.value)">
+          <option value="ParityGPG">ParityGPG</option>
+          <option value="Parity">Parity</option>
+          <option value="Exhaustive">Exhaustive</option>
+          <option value="Alternate">Alternate</option>
+        </select>
+      </div>
 
       <div id="toggleAddPlayer" class="expandable" onclick="toggleVisbility(this);">Add another player</div>
       <div class="autocomplete">
@@ -134,11 +143,12 @@
       if (!dateRangeParam) { dateRangeParam = "12" };
       document.getElementById("algorithmChoiceRange").value = dateRangeParam;
       var algorithmType = document.getElementById("algorithmChoice").value;
+      var algorithmName = document.getElementById("algorithmName").value;
       var nextMondayOptionIndex = 2;
       // need to clone these (which means it must be destructive - maybe fix?)
       let clonePlayers = { ...pagedata.players }
       let clonePlayersPreviewData = { ...pagedata.playersPreviewData }
-      var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, dateRangeParam);
+      var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, algorithmName, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, dateRangeParam);
       //console.log("playersGamesPlayedRatio", playersGamesPlayedRatio)
 
       var redPlayers = pagedata.playersPreviewData["redPlayers"];
@@ -237,10 +247,16 @@
         let clonePlayers = { ...pagedata.players }
         let clonePlayersPreviewData = { ...pagedata.playersPreviewData }
         var dateRange = document.getElementById("algorithmChoiceRange").value;
-        playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, dateRange);
+        var algorithmName = document.getElementById("algorithmName").value;
+        playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, algorithmName, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, dateRange);
         updateHtmlSelect();
         updatePlayerChoice();
         updateURL();
+      }
+      
+      function changeAlgorithmName(newAlgorithmName) {
+        algorithmName = newAlgorithmName;
+        changeAlgorithm(document.getElementById("algorithmChoice").value)
       }
 
       function changeAlgorithmRange(newDateRange) {
@@ -254,7 +270,7 @@
         // need to clone these (which means it must be destructive - maybe fix?)
         let clonePlayers = { ...pagedata.players }
         let clonePlayersPreviewData = { ...pagedata.playersPreviewData }
-        playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, dateRange);
+        playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, algorithmName, clonePlayers, clonePlayersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, dateRange);
         updateHtmlSelect();
         updatePlayerChoice();
         */

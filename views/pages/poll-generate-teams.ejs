@@ -40,16 +40,7 @@
     <div id="optionDates">Not Yet Available</div><br>
 
     <div style="display: flex;">
-      <div id="chooseOption" style="display:inline;">
-        Email Template:
-        <select name="emailChoice" id="emailChoice" checked onchange="changeOption(this.value)">
-          <option value="teams">Teams</option>
-          <option value="availability">Availability</option>
-          <option value="payments">Payments</option>
-        </select>
-      </div>
-
-      <div id="chooseOptionAlgorithm" style="display:inline;margin-left:10px;">
+      <div id="chooseOptionAlgorithm" style="display:inline;">
         Order By:
         <select name="algorithmChoice" id="algorithmChoice" checked onchange="changeAlgorithm(this.value)">
           <option value="algorithm0">Random</option>
@@ -63,7 +54,7 @@
         <button class="linkborder" onclick=";changeAlgorithm('algorithm0')" id="randomiseAgain">Randomise Players Again!</button>
       </div>
     
-      <div id="chooseOptionAlgorithm" style="display:inline;">
+      <div id="chooseOptionAlgorithmChoice" style="display:inline;">
         <select name="algorithmChoiceRange" id="algorithmChoiceRange" checked onchange="changeAlgorithmRange(this.value)">
           <option value="12">12 Months</option>
           <option value="6">6 Months</option>
@@ -71,10 +62,34 @@
           <option value="999999999">Since Jan23</option>
         </select>
       </div>
+
+      <div id="chooseOptionAlgorithmName" style="display:inline;">
+        <select name="algorithmName" id="algorithmName" checked onchange="changeAlgorithmName(this.value)">
+          <option value="ParityGPG">ParityGPG</option>
+          <option value="Parity">Parity</option>
+          <option value="Exhaustive">Exhaustive</option>
+          <option value="Alternate">Alternate</option>
+        </select>
+      </div>
+
+      <div id="chooseShowDatesInPayments" style="display:inline;margin-left:10px;">
+        <label for="showDatesInPayments">Show Dates in Payments?</label><input type="checkbox" id="showDatesInPayments" name="showDatesInPayments" style="background: #eee;" onclick="generateAvailabilityEmailText();">
+      </div>
     </div>
 
-      <input type="text" id="emailTitle" style="width:100%;font-size: 90%;" data-lpignore=true>
-      <br>
+    <div style="display: flex;">
+      <div id="chooseOption" style="display:inline;">
+        Email Template:
+        <select name="emailChoice" id="emailChoice" checked onchange="changeOption(this.value)">
+          <option value="teams">Teams</option>
+          <option value="availability">Availability</option>
+          <option value="payments">Payments</option>
+          <option value="welcome">Welcome</option>
+        </select>
+      </div>
+      <input type="text" id="emailTitle" style="width:50%;font-size: 90%;" data-lpignore=true>
+    </div>
+
     <div style="width:100%;display:flex;">
       <div id="emailEntryDiv" style="display:inline;width:55%"><textarea id="emailBody" rows="30" style="width:95%;font-size: 90%;margin-top:10px" >Not Yet Available</textarea></div>
       <div id="paymentsEntryDiv" style="display:inline;width:44%;font-size: 80%;"></div>
@@ -139,6 +154,7 @@
                          "algorithm5": "Most Played (W|D|L)",
                          "algorithm6": "Goals Per Game"}
   var algorithmRange = 12; //default
+  var algorithmName = "ParityGPG"; //default
 
     var players = pagedata.data.players;
     if (!players) { players = {}; }
@@ -274,7 +290,7 @@
     }
 
     // change the algorithm for all players and regenerate teams
-    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
+    var playersGamesPlayedRatio = changeAlgorithmForPlayers(algorithmType, algorithmName, players, playersPreviewData, allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
 
     // get the generated variables returned as playersGamesPlayedRatio
     var totalPossibleGames = playersGamesPlayedRatio.totalPossibleGames;
@@ -330,6 +346,12 @@
     algorithmRange = newAlgorithmRange;
     changeAlgorithm(document.getElementById("algorithmChoice").value)
   }
+  
+
+  function changeAlgorithmName(newAlgorithmName) {
+    algorithmName = newAlgorithmName;
+    changeAlgorithm(document.getElementById("algorithmChoice").value)
+  }
 
   function changeOption(emailChoice) {
     //console.log("email choice:", emailChoice)
@@ -344,12 +366,16 @@
     } else if (emailChoice == "payments") {
       document.getElementById("chooseOptionAlgorithm").style.display = "none"
       generatePaymentsEmailText();
+    } else if (emailChoice == "welcome") {
+      document.getElementById("chooseOptionAlgorithm").style.display = "none"
+      generateFirstIntroEmailText();
     }
   }
 
   function generateAvailabilityEmailText() {
     document.getElementById("paymentsEntryDiv").innerHTML = '<p>';
-    addPaymentsTableRows(outstandingPayments, true, false);
+    var showExpandedDates = document.getElementById("showDatesInPayments").checked;
+    addPaymentsTableRows(outstandingPayments, true, showExpandedDates);
 
     var dateText = monthDateLongFormat.format(nextMondayDate) + " " + nextMondayDate.getFullYear();
     var emailSubject = "Availability for " + dateText + " [Footie, Goodwin, 6pm Mondays]"
@@ -362,6 +388,28 @@
     emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/poll\n"
     //emailBody += "\n-----------\n"
     //emailBody += "To unsubscribe: https://tensile-spirit-360708.nw.r.appspot.com/mailing-list?type=unsubscribe\n"
+    document.getElementById("emailTitle").value = emailSubject;
+    document.getElementById("emailBody").value = emailBody;
+    document.getElementById("emailTitle").style.width = "100%";
+    document.getElementById("emailBody").style.width = "100%";
+  }
+
+  function generateFirstIntroEmailText() {
+    var dateText = monthDateLongFormat.format(nextMondayDate) + " " + nextMondayDate.getFullYear();
+    var emailSubject = "Monday Night Football Game [Footie, Goodwin, 6pm Mondays]"
+    var emailBody = "Hi,"
+    emailBody += "\n\nSomeone mentioned that you might be interested in a game of footie so I've added you to our mailing list."
+    emailBody += "\n\nWe play 6-a-side every Monday at 6pm at Goodwin Sports Centre in Broomhill.";
+    emailBody += "\n\nInstructions are easy... ";
+    emailBody += "\n- Fill out the poll - an email will be sent each month with a poll for the games in that month. ";
+    emailBody += "\n- Each week teams are automatically created from the poll and an email sent round.  ";
+    emailBody += "\n- If there are more than 12 players then you might be on standby - watch out for your emails in case anyone drop-outs and the standby players come in.";
+    emailBody += "\n- Payment is at the end of the month - I'll send an email with a PayPal link";
+    emailBody += "\n\nHere is the usual poll link (It's the same link each month so you can bookmark it)...";
+    emailBody += "\nhttps://tensile-spirit-360708.nw.r.appspot.com/poll";
+    emailBody += "\n\nHopefully see you sometime next month.";
+    emailBody += "\n\nCheers,";
+    emailBody += "\nPhil";
     document.getElementById("emailTitle").value = emailSubject;
     document.getElementById("emailBody").value = emailBody;
     document.getElementById("emailTitle").style.width = "100%";
