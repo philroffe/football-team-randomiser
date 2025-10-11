@@ -23,10 +23,10 @@
       // restringify and then parse the json to get the page
       var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
     
-      if (pagedata.playerAliasData) {
+      if (pagedata.thisPlayerAliasMap) {
         // player email must have been confirmed so show message
         document.getElementById("borderTitle").innerHTML = "<H3>Email Confirmed!</H3>";
-        document.getElementById("helperText").innerHTML = "Welcome to the list! " + pagedata.playerAliasData.email+ "<p>Next step is simply to fill in the <a href=''/poll'>poll (here)</a> and start playing :)";
+        document.getElementById("helperText").innerHTML = "Welcome to the list! " + pagedata.thisPlayerAliasMap.email+ "<p>Next step is simply to fill in the <a href=''/poll'>poll (here)</a> and start playing :)";
       } else {
         document.getElementById("borderTitle").innerHTML = "<H3>Error Confirming Email!</H3>";
         document.getElementById("helperText").innerHTML = "Could not find a match to your confirmation code: " + pagedata.code + ".<p>Please resubsribe <a href=''/mailing-list'>(here)</a> if you're not getting emails";

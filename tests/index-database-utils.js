@@ -63,12 +63,12 @@ async function deleteGameMonth(yearMonthString) {
 
 // delete all docs in a month (e.g. 2025-01)
 async function deleteTestDataForPlayer(playerName) {
-  var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-  var playerAliasMap = playerAliasDoc.data();
-  if (playerAliasMap) {
+  var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var aliasesMap = aliasesDoc.data();
+  if (aliasesMap) {
     // if aliases exists then assume the rest of it does
-    delete playerAliasMap[playerName];
-    await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
+    delete aliasesMap[playerName];
+    await firestore.collection("ADMIN").doc("_aliases").set(aliasesMap);
     await firestore.collection("OPEN_LEDGER").doc(playerName).delete();
     await firestore.collection("CLOSED_LEDGER").doc(playerName).delete();
   }
@@ -212,9 +212,9 @@ async function importTestDataFromCsv(testDataPlayerAvailability, testDataWeeklyA
 
 async function getAllUnitTestUserList(prefix) {
   var unitTestUserList = [];
-  var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-  var playerAliasMap = playerAliasDoc.data();
-  for (const playerName in playerAliasMap) {
+  var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var aliasesMap = aliasesDoc.data();
+  for (const playerName in aliasesMap) {
     if (playerName.startsWith(prefix)) {
       unitTestUserList.push(playerName);
     }

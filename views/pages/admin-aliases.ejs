@@ -1,19 +1,19 @@
 
   <script type="text/javascript">
-    var playerAliasMap = pagedata.playerAliasData;
+    var aliasesData = pagedata.aliasesData;
 
     var playersAliasHeader = document.getElementById("playersAliasHeader")
     var playerAliasCount = 0;
     var collapsedPlayerList = {};
-    Object.keys(playerAliasMap).sort().forEach(function(key) {
-      //console.log("key", playerAliasMap[key]);
+    Object.keys(aliasesData).sort().forEach(function(key) {
+      //console.log("key", aliasesData[key]);
       var playerName = key;
       var playerActive = false;
-      var subscriptionStatus = playerAliasMap[key].subscriptionStatus;
+      var subscriptionStatus = aliasesData[key].subscriptionStatus;
       if (subscriptionStatus == 2) { playerActive = true; }
 
-      var aliasesList = playerAliasMap[key].aliases;
-      var playerEmail = playerAliasMap[key].email;
+      var aliasesList = aliasesData[key].aliases;
+      var playerEmail = aliasesData[key].email;
       if (!playerEmail) { playerEmail = ""; }
       addAliasPlayer(playerName, playerActive, aliasesList, playerEmail);
       
@@ -92,7 +92,7 @@
 
     function savePlayerAliases(playerName, aliasesList) {
       document.getElementById("saveAlias").id = "savingAlias"; // do this to allow testing of page reload after save 
-      var playerAliasMap = {};
+      var aliasesData = {};
       for (var i = 0; i < playerAliasCount; i ++) {
         var player = document.getElementById("player" + i + "Alias").value;
         var isActive = document.getElementById("playerActive" + i + "Alias").checked;
@@ -104,11 +104,11 @@
         if (isActive) {
           subscriptionStatus = 2;
         }
-        playerAliasMap[player] = { "subscriptionStatus": subscriptionStatus, "email": playerEmail, "aliases": aliasesArray };
+        aliasesData[player] = { "subscriptionStatus": subscriptionStatus, "email": playerEmail, "aliases": aliasesArray };
       }
-      console.log("SAVING ALIASES:" + JSON.stringify(playerAliasMap));
+      console.log("SAVING ALIASES:" + JSON.stringify(aliasesData));
 
-      var postData = { "playerAliasMap": playerAliasMap };
+      var postData = { "aliasesData": aliasesData };
 
       // now send the POST request with the data
       var xmlhttp = new XMLHttpRequest();

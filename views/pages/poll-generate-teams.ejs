@@ -178,14 +178,14 @@
     //console.log("outstandingPayments=", outstandingPayments);
 
     // collate the aliases
-    var playerAliasMaps = pagedata.data.playerAliasMaps;
-    var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
-    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+    var playerToAliasMap = pagedata.data.playerToAliasMap;
+    var aliasToPlayerMap = pagedata.data.aliasToPlayerMap;
+    var activeEmailList = pagedata.data.activeEmailList;
     playerNameSuggestions = Array.from(Object.keys(playerToAliasMap));
     // define some test email addresses
     var testEmailList = [ "Phil RT1 <philroffe+test1@gmail.com>", "Phil RT2 <philroffe+test2@gmail.com>"];
     // update Send Email button to show the number of people on the mailiing list
-    document.getElementById("sendEmail").innerHTML = "Send Email to " + Object.keys(playerAliasMaps.activeEmailList).length + " players";
+    document.getElementById("sendEmail").innerHTML = "Send Email to " + Object.keys(activeEmailList).length + " players";
 
 
     var user = pagedata.user;
@@ -193,7 +193,7 @@
       document.getElementById("sendEmailDiv").style.visibility = "visible";
 
       // set the collapsed email
-      var activeEmailList = playerAliasMaps.activeEmailList;
+      var activeEmailList = activeEmailList;
       var allEmails = "";
       Object.keys(activeEmailList).forEach(function(key) {
         allEmails += activeEmailList[key] + "; ";
@@ -441,7 +441,7 @@
     if (document.getElementById("sendTestEmailList").checked) {
       document.getElementById("sendEmail").innerText = "Send Email to Test list"
     } else {
-      document.getElementById("sendEmail").innerHTML = "Send Email to " + Object.keys(playerAliasMaps.activeEmailList).length + " players";
+      document.getElementById("sendEmail").innerHTML = "Send Email to " + Object.keys(activeEmailList).length + " players";
     }
   }
 
@@ -453,7 +453,7 @@
       emailTo = testEmailList;
     } else {
       // real email list so get array from the values of activeEmailList
-      emailTo = Object.values(playerAliasMaps.activeEmailList);
+      emailTo = Object.values(activeEmailList);
       if (!confirm('This will send an email to everyone on the mailing list.\nAre you sure?')) return;
     }
 

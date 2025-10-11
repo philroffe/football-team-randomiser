@@ -283,8 +283,7 @@ app.use('/', authRouter)
     rowdata.inboundEmails = inboundEmails;
     
     // read the list of players and aliases
-    var playerAliasMaps = {};
-    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var playerAliasMaps = await getDefinedPlayerAliasMaps();
     rowdata.playerAliasMaps = playerAliasMaps;
 
     // get all daata - used to generate the costs and kitty
@@ -598,11 +597,11 @@ app.use('/', authRouter)
     var email = req.body.email;
 
     // look up the player name from the email
-    var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-    var playerAliasMap = playerAliasDoc.data();
+    var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+    var aliasesData = aliasesDoc.data();
     var foundKey = "";
-    Object.keys(playerAliasMap).sort().forEach(function(key) {
-      if (playerAliasMap[key].email && playerAliasMap[key].email.toLowerCase() == email.toLowerCase()) {
+    Object.keys(aliasesData).sort().forEach(function(key) {
+      if (aliasesData[key].email && aliasesData[key].email.toLowerCase() == email.toLowerCase()) {
         foundKey = key;
       }
     });
@@ -612,7 +611,7 @@ app.use('/', authRouter)
 
     var token;
     if (foundKey) {
-      token = playerAliasMap[foundKey].token;
+      token = aliasesData[foundKey].token;
       if (!token) {
         console.log("No token found so generated new one for email:", email)
         const crypto = require('crypto');
@@ -621,8 +620,8 @@ app.use('/', authRouter)
         }
         token = generateToken();
         // now save the token
-        playerAliasMap[foundKey].token = token;
-        await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap); 
+        aliasesData[foundKey].token = token;
+        await firestore.collection("ADMIN").doc("_aliases").set(aliasesData); 
       }
       console.log("Got token:", email, token)
 
@@ -691,31 +690,31 @@ app.use('/', authRouter)
       // read the list of players and aliases
       var playerAliasMaps = await getDefinedPlayerAliasMaps();
       var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
-      // lookup token to get the player name and email
-      var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-      var playerAliasMap = playerAliasDoc.data();
-      var officialPlayerName = "";
-      var email = "";
-      Object.keys(playerAliasMap).sort().forEach(function(key) {
-        if (playerAliasMap[key].token == token) {
-          officialPlayerName = key;
-          email = playerAliasMap[key].email;
-        }
-      });
+      var playerEmailMaps = await getDefinedPlayerEmailMaps();
+      var playerToEmailMap = playerEmailMaps["playerToEmailMap"];
+      var playerToTokenMap = playerEmailMaps["playerToTokenMap"];
+
+      var officialPlayerName = Object.keys(playerToTokenMap).find(key => playerToTokenMap[key] === token);
       if (officialPlayerName) {
         //console.log("Found matching player:", officialPlayerName);
         paymentData.token = token;
         paymentData.name = officialPlayerName;
-        paymentData.email = email;
+        paymentData.email = playerToEmailMap[officialPlayerName];
 
         // get closed ledger
         const playerClosedLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc(officialPlayerName);
         var playerClosedLedgerDoc = await playerClosedLedgerDocRef.get();
         paymentData.closedLedger = playerClosedLedgerDoc.data();
+        if (!paymentData.closedLedger) {
+          paymentData.closedLedger = {};
+        }
         // get open ledger
         const playerOpenLedgerDocRef = firestore.collection("OPEN_LEDGER").doc(officialPlayerName);
         var playerOpenLedgerDoc = await playerOpenLedgerDocRef.get();
         paymentData.openLedger = playerOpenLedgerDoc.data();
+        if (!paymentData.openLedger) {
+          paymentData.openLedger = {};
+        }
 
         // get any payment emails not yet processed
         const emailCollection = firestore.collection("INBOUND_EMAILS");
@@ -755,39 +754,39 @@ app.use('/', authRouter)
   try {
     // now need to check if confirming subscriptionStatus
     var code = Number(req.query.code);
-    var playerAliasData;
+    var thisPlayerAliasMap;
     // lookup confirmation code and update the subscriptionStatus as appropriate
     if (code) {
-      var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-      var playerAliasMap = playerAliasDoc.data();
+      var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+      var aliasesMap = aliasesDoc.data();
       var playerConfirmedKey;
-      Object.keys(playerAliasMap).sort().forEach(function(key) {
-        if (playerAliasMap[key].code == code) {
-          playerAliasData = playerAliasMap[key];
-          if (playerAliasMap[key].subscriptionStatus != MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED) {
-            playerAliasMap[key].subscriptionStatus = MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED;
+      Object.keys(aliasesMap).sort().forEach(function(key) {
+        if (aliasesMap[key].code == code) {
+          thisPlayerAliasMap = aliasesMap[key];
+          if (aliasesMap[key].subscriptionStatus != MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED) {
+            aliasesMap[key].subscriptionStatus = MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED;
             playerConfirmedKey = key;
-            console.log("CONFIRMED MAILING LIST CODE:", playerAliasData);
+            console.log("CONFIRMED MAILING LIST CODE:", thisPlayerAliasMap);
           } else {
-            console.log("FOUND MAILING LIST CODE BUT ALREADY SUBSCRIBED :", playerAliasData);
+            console.log("FOUND MAILING LIST CODE BUT ALREADY SUBSCRIBED :", thisPlayerAliasData);
           }
         }
       });
       console.log("Checking mailing-list conf code:", code, "Match found?", playerConfirmedKey);
       if (playerConfirmedKey) {
         // save the updated alias map
-        await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
-        var title = "[Mailing List CONFIRMED] " + playerAliasMap[playerConfirmedKey].email + " [Footie, Goodwin, 6pm Mondays]";
-        var subject = playerAliasMap[playerConfirmedKey].email + "\n" + playerAliasMap[playerConfirmedKey].subscriptionStatus;
+        await firestore.collection("ADMIN").doc("_aliases").set(aliasesMap);
+        var title = "[Mailing List CONFIRMED] " + aliasesMap[playerConfirmedKey].email + " [Footie, Goodwin, 6pm Mondays]";
+        var subject = aliasesMap[playerConfirmedKey].email + "\n" + aliasesMap[playerConfirmedKey].subscriptionStatus;
         teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, title, subject);
       }
-      if (!playerAliasData) {
+      if (!thisPlayerAliasMap) {
         console.log("ERROR FINDING MAILING LIST CODE:", code);
       }
-      var pageData = { code: code, playerAliasData: playerAliasData, "environment": environment };
+      var pageData = { code: code, thisPlayerAliasMap: thisPlayerAliasMap, "environment": environment };
       res.render('pages/mailing-list-confirmation', { pageData: JSON.stringify(pageData)} );
     } else {
-      var pageData = { code: code, playerAliasData: playerAliasData, "environment": environment };
+      var pageData = { code: code, thisPlayerAliasMap: thisPlayerAliasMap, "environment": environment };
       res.render('pages/mailing-list', { pageData: JSON.stringify(pageData)} );
     }
   } catch (err) {
@@ -918,8 +917,7 @@ app.use('/', authRouter)
     }
 
     // read the list of players and aliases
-    var playerAliasMaps = {};
-    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var playerAliasMaps = await getDefinedPlayerAliasMaps();
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
 
     // assumes REDS first, BLUES second!
@@ -985,10 +983,14 @@ app.use('/', authRouter)
         console.log('Generating TEAMS page with data for date: ', requestedDate);
         var rowdata = await queryDatabaseAndBuildPlayerList(requestedDate);
         
-        // read the list of players and aliases
-        var playerAliasMaps = {};
-        playerAliasMaps = await getDefinedPlayerAliasMaps();
-        rowdata.playerAliasMaps = playerAliasMaps;
+        // read the list of aliases
+        var playerAliasMaps = await getDefinedPlayerAliasMaps();
+        rowdata.playerToAliasMap = playerAliasMaps["playerToAliasMap"];
+        rowdata.aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+        // read the list of emails
+        var playerEmailMaps = await getDefinedPlayerEmailMaps();
+        rowdata.playerToEmailMap = playerEmailMaps["playerToEmailMap"];
+        rowdata.activeEmailList = playerEmailMaps["activeEmailList"];
 
         var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(requestedDate);
         rowdata.allAttendanceData = allAttendanceData;
@@ -1053,8 +1055,7 @@ app.use('/', authRouter)
 
 
     // read the list of players and aliases
-    var playerAliasMaps = {};
-    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var playerAliasMaps = await getDefinedPlayerAliasMaps();
 
     var rowdata = {};
     rowdata.attendanceByYear = attendanceMapByYear;
@@ -1153,15 +1154,15 @@ app.use('/', authRouter)
     // combine database data with any additional page data
     var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, selectTab: tabName, "environment": environment  };
 
-    var playerAliasData = {};
+    var aliasesData = {};
     if (req.isAuthenticated()) {
       console.log("User is logged in: ", JSON.stringify(req.user));
       pageData.user = req.user;
       //console.log('Generating ALIASES page with data');
-      var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-      playerAliasData = playerAliasDoc.data();
-      if (!playerAliasData) {
-        playerAliasData = {};
+      var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+      aliasesData = aliasesDoc.data();
+      if (!aliasesData) {
+        aliasesData = {};
       }
     }
 
@@ -1171,7 +1172,7 @@ app.use('/', authRouter)
     if (!attendanceData) { attendanceData = {}; }
     //console.log("PRE attendanceData", attendanceData);
 
-    pageData.playerAliasData = playerAliasData;
+    pageData.aliasesData = aliasesData;
 
     res.render('pages/poll', { pageData: JSON.stringify(pageData) });
   } catch (err) {
@@ -1217,15 +1218,6 @@ app.use('/', authRouter)
       var gamesCollectionId = "games_" + gameId;
       const docRef = firestore.collection(gamesCollectionId).doc(playerName + "_" + timestamp.toISOString());
       await docRef.set(gamedetails_new);
-
-      /* _aliases and _summary stored per game have never been users, removing
-      var playerSummary = await queryDatabaseAndBuildPlayerList(gameId);
-      // store the current alias maps separately to the rest of the summary
-      await firestore.collection(gamesCollectionId).doc("_aliases").set(playerSummary.playerAliasMaps);
-      delete playerSummary.playerAliasMaps; // exclude the transient alias maps in the summary
-      console.log('Inserting DB summary data:', JSON.stringify(playerSummary));
-      await firestore.collection(gamesCollectionId).doc("_summary").set(playerSummary);
-      */
 
       // check if preview of teams has already been generated
       var nextMonday = getDateNextMonday(new Date());
@@ -1430,12 +1422,12 @@ app.use('/', authRouter)
       return;
     }
 
-    var playerAliasMap = req.body.playerAliasMap;
+    var aliasesData = req.body.aliasesData;
 
-    console.log('Inserting ALIAS data:', JSON.stringify(playerAliasMap));
+    console.log('Inserting ALIAS data:', JSON.stringify(aliasesData));
     try {
       const docRef = firestore.collection("ADMIN").doc("_aliases");
-      await docRef.set(playerAliasMap);
+      await docRef.set(aliasesData);
 
       res.json({'result': 'OK'})
     } catch (err) {
@@ -1957,8 +1949,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
     //console.log("requestedDateMonth=" + requestedDateMonth)
 
     // read the list of players and aliases
-    var playerAliasMaps = {};
-    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var playerAliasMaps = await getDefinedPlayerAliasMaps();
     //console.log('playerAliasMaps=' + JSON.stringify(playerAliasMaps));
 
     // Query database and get all players for games matching this month
@@ -2095,45 +2086,63 @@ function buildPlayerUniqueList(dbresult) {
 
 // check for unique player name
 async function getDefinedPlayerAliasMaps() {
-  var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-  var playerAliasMap = playerAliasDoc.data();
-  if (!playerAliasMap) {
-    playerAliasMap = {};
+  var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var aliasesData = aliasesDoc.data();
+  if (!aliasesData) {
+    aliasesData = {};
   }
 
-  var collapsedPlayerMap = {};
-  var activeEmailList = {};
-  Object.keys(playerAliasMap).sort().forEach(function(key) {
-    //console.log("key", playerAliasMap[key]);
+  var playerToAliasMap = {};
+  var aliasToPlayerMap = {};
+  Object.keys(aliasesData).sort().forEach(function(key) {
     var officialName = key.trim();
-    var playerActive = false;
-    var subscriptionStatus = playerAliasMap[key].subscriptionStatus;
-    if (subscriptionStatus == 2) { playerActive = true; }
+    // create the player to alias map
+    playerToAliasMap[officialName] = aliasesData[key].aliases;
 
-    var aliasesList = playerAliasMap[key].aliases;
-    var playerEmail = playerAliasMap[key].email;
-
-    if (playerActive && playerEmail) {
-      activeEmailList[officialName] = officialName + " <" + playerEmail + ">";
-    }
-
-    //collapsedPlayerMap[playerName.toUpperCase()] = playerName;
-    collapsedPlayerMap[officialName.toUpperCase()] = officialName;
+    // create a reverse lookup map from alias to official name
+    var aliasesList = aliasesData[key].aliases;
+    aliasToPlayerMap[officialName.toUpperCase()] = officialName;
     for (var i = 0; i < aliasesList.length; i ++) {
       var aliasName = aliasesList[i].trim();
       if (aliasName != "") {
-        //collapsedPlayerMap[aliasesList[i].toUpperCase()] = playerName;
-        collapsedPlayerMap[aliasName.toUpperCase()] = officialName;
+        aliasToPlayerMap[aliasName.toUpperCase()] = officialName;
       }
     }
   });
 
-  ///// TODO - fix the sorting
-  //playerToAliasMap: new Map([...playerAliasMap].sort()
-  //aliasToPlayerMap: new Map([...collapsedPlayerMap].sort())
-
-  var playerAliasMaps = { playerToAliasMap: playerAliasMap, aliasToPlayerMap: collapsedPlayerMap, activeEmailList: activeEmailList };
+  var playerAliasMaps = { playerToAliasMap: playerToAliasMap, aliasToPlayerMap: aliasToPlayerMap };
   return playerAliasMaps;
+}
+
+// check for unique player name
+async function getDefinedPlayerEmailMaps() {
+  var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var aliasesData = aliasesDoc.data();
+  if (!aliasesData) {
+    aliasesData = {};
+  }
+
+  var playerToEmailMap = {};
+  var playerToTokenMap = {};
+  var activeEmailList = {};
+  Object.keys(aliasesData).sort().forEach(function(key) {
+    var officialName = key.trim();
+    
+    // create the player to email map
+    playerToEmailMap[officialName] = aliasesData[key].email;
+    // create the player to token map
+    playerToTokenMap[officialName] = aliasesData[key].token;
+
+    // create the active player email list
+    var playerEmail = aliasesData[key].email;
+    var playerActive = (aliasesData[key].subscriptionStatus == 2) ? true : false;
+    if (playerActive && playerEmail) {
+      activeEmailList[officialName] = officialName + " <" + playerEmail + ">";
+    }
+  });
+
+  var playerEmailMaps = { playerToEmailMap: playerToEmailMap, playerToTokenMap: playerToTokenMap, activeEmailList: activeEmailList };
+  return playerEmailMaps;
 }
 
 // clear the stats and database cache - need recalculating next time it reloads
@@ -2181,8 +2190,7 @@ async function saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, sc
    }
 
    // read the list of players and aliases
-   var playerAliasMaps = {};
-   playerAliasMaps = await getDefinedPlayerAliasMaps();
+   var playerAliasMaps = await getDefinedPlayerAliasMaps();
    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
 
    var timestamp = new Date();
@@ -2310,8 +2318,7 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
   console.log("openFinancialYear", openFinancialYear)
 
   // read the list of players and aliases
-  var playerAliasMaps = {};
-  playerAliasMaps = await getDefinedPlayerAliasMaps();
+  var playerAliasMaps = await getDefinedPlayerAliasMaps();
   var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
   var officialPlayerName = teamUtils.getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
 
@@ -2426,30 +2433,9 @@ async function refundPayment(paypalTransactionId) {
 // string name/email, int subscriptionStatus
 async function addRemoveEmailSubscription(details, hostname) {
   //console.log("LLL", details, hostname)
-  var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-  var playerAliasMap = playerAliasDoc.data();
-  /*
-  var playerAliasMap = new Map();
-  Object.keys(playerAliasObject).forEach((key) => {
-    console.log("Obj key", key, playerAliasObject[key]);
-    playerAliasMap.set(key, playerAliasObject[key]);
-  });
-  */
+  var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var aliasesData = aliasesDoc.data();
 
-  /*
-  var playerAliasDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-  var playerAliasMap = playerAliasDoc.data();
-  var foundKey = "";
-  Object.keys(playerAliasMap).sort().forEach(function(key) {
-    if (playerAliasMap[key].email == email.toLowerCase()) {
-      foundKey = key;
-    }
-  });
-  */
-
-  //if (!playerAliasMap) {
-    //playerAliasMap = new Map();
-  //}
   var email = details.email;
   var name = details.name;
   var optIn = details.optIn;
@@ -2458,42 +2444,42 @@ async function addRemoveEmailSubscription(details, hostname) {
   var sendConfirmationEmail = false;
   var foundExistingPlayer = false;
   var playerKey = "";
-  Object.keys(playerAliasMap).sort().forEach(function(key) {
-    console.log("key", playerAliasMap[key]);
-    if (playerAliasMap[key].email.toUpperCase() == email.toUpperCase()) {
+  Object.keys(aliasesData).sort().forEach(function(key) {
+    console.log("key", aliasesData[key]);
+    if (aliasesData[key].email.toUpperCase() == email.toUpperCase()) {
       foundExistingPlayer = true;
       playerKey = key;
       if (!teamUtils.checkNotProto(playerKey)) return false;
       if (optIn) {
         // add/edit to subscribe email
-        if (playerAliasMap[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED) {
+        if (aliasesData[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_SUBSCRIBED) {
           // already subscribed so do nothing
-          console.log("ALREADY SUBSCRIBED:", key, email, playerAliasMap[key]);
+          console.log("ALREADY SUBSCRIBED:", key, email, aliasesData[key]);
           mailinglistChanged = false;
-        } else if (playerAliasMap[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_CONFIRMING) {
+        } else if (aliasesData[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_CONFIRMING) {
           // resend email
-          console.log("STILL CONFIRMING - resending confirmation email request:", key, email, playerAliasMap[key]);
+          console.log("STILL CONFIRMING - resending confirmation email request:", key, email, aliasesData[key]);
           // SEND CONFIRMATION EMAIL NOW
           mailinglistChanged = false;
           sendConfirmationEmail = true;
-        } else if (playerAliasMap[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED) {
+        } else if (aliasesData[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED) {
           // add new email
-          console.log("Resubscribing email to mailing list:", key, email, playerAliasMap[key]);
+          console.log("Resubscribing email to mailing list:", key, email, aliasesData[key]);
           // SEND CONFIRMATION EMAIL NOW
-          playerAliasMap[key].subscriptionStatus = MAIL_SUBSCRIPTION_STATUS_CONFIRMING;
+          aliasesData[key].subscriptionStatus = MAIL_SUBSCRIPTION_STATUS_CONFIRMING;
           mailinglistChanged = true;
           sendConfirmationEmail = true;
         }
       } else {
         // remove/unsubscribe email
-        if (playerAliasMap[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED) {
+        if (aliasesData[key].subscriptionStatus == MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED) {
           // already unsubscribed so do nothing
-          console.log("ALREADY UNSUBSCRIBED:", key, email, playerAliasMap[key]);
+          console.log("ALREADY UNSUBSCRIBED:", key, email, aliasesData[key]);
           mailinglistChanged = false;
         } else {
           //MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED
-          console.log("UNSUBCRIBING:", key, email, playerAliasMap[key]);
-          playerAliasMap[key].subscriptionStatus = MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED;
+          console.log("UNSUBCRIBING:", key, email, aliasesData[key]);
+          aliasesData[key].subscriptionStatus = MAIL_SUBSCRIPTION_STATUS_UNSUBSCRIBED;
           mailinglistChanged = true;
           sendConfirmationEmail = true;
         }
@@ -2506,15 +2492,15 @@ async function addRemoveEmailSubscription(details, hostname) {
     // create alias key... the first name and first initial of surname
     var nameAliasKey = name.substring(0, name.trim().lastIndexOf(" ") + 2);
     if (!teamUtils.checkNotProto(nameAliasKey)) return false;
-    if (!playerAliasMap[nameAliasKey]) {
+    if (!aliasesData[nameAliasKey]) {
       playerKey = nameAliasKey;
       mailinglistChanged = true;
       sendConfirmationEmail = true;
       // create a new player
-      playerAliasMap[playerKey] = {"aliases": [ name ], "subscriptionStatus": MAIL_SUBSCRIPTION_STATUS_CONFIRMING, "email": email};
-      console.log("Adding new email to mailing list:", name, email, playerAliasMap[nameAliasKey]);
+      aliasesData[playerKey] = {"aliases": [ name ], "subscriptionStatus": MAIL_SUBSCRIPTION_STATUS_CONFIRMING, "email": email};
+      console.log("Adding new email to mailing list:", name, email, aliasesData[nameAliasKey]);
     } else {
-      console.error("ERROR - nameAliasKey already exists", name, email, playerAliasMap[nameAliasKey]);
+      console.error("ERROR - nameAliasKey already exists", name, email, aliasesData[nameAliasKey]);
       // TODO - need to handle this better
       return false;
     }
@@ -2533,11 +2519,11 @@ async function addRemoveEmailSubscription(details, hostname) {
       emailSubject = "Confirm your email address [Footie, Goodwin, 6pm Mondays]";
       emailText = "Welcome to Sheffield Monday Night footie mailing list!\n\n";
       emailText += "To subscribe please confirm it is you by clicking the confirm link...\n";
-      let playerData = playerAliasMap[playerKey];
+      let playerData = aliasesData[playerKey];
       playerData.date = details.date;
       var code = playerData.date.getTime();
       playerData.code = code;
-      playerAliasMap[playerKey] = playerData;
+      aliasesData[playerKey] = playerData;
       emailText += urlPrefix + "/mailing-list?code=" + code;
     } else {
       emailSubject = "You have been unsubscribed [Footie, Goodwin, 6pm Mondays]";
@@ -2557,9 +2543,9 @@ async function addRemoveEmailSubscription(details, hostname) {
     var emailResult = teamUtils.sendEmailToList(mailOptions, hostname);
   }
   if (mailinglistChanged) {
-    console.log("UPDATED LIST SO SAVING", playerAliasMap[playerKey]);
-    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Mailing List Change Event] " + email + EMAIL_TITLE_POSTFIX, email + "\n" + playerAliasMap[playerKey].subscriptionStatus);
-    await firestore.collection("ADMIN").doc("_aliases").set(playerAliasMap);
+    console.log("UPDATED LIST SO SAVING", aliasesData[playerKey]);
+    teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "[Mailing List Change Event] " + email + EMAIL_TITLE_POSTFIX, email + "\n" + aliasesData[playerKey].subscriptionStatus);
+    await firestore.collection("ADMIN").doc("_aliases").set(aliasesData);
   }
   return true;
 }
@@ -2580,8 +2566,7 @@ async function calculateNextGameTeams(date = new Date()) {
     var players = rowdata.players;
 
     // read the list of players and aliases
-    var playerAliasMaps = {};
-    playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var playerAliasMaps = await getDefinedPlayerAliasMaps();
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
 
     //
