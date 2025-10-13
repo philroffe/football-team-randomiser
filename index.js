@@ -836,137 +836,116 @@ app.use('/', authRouter)
 .post('/_ah/mail/teams@tensile-spirit-360708.appspotmail.com', async (req, res) => {
   console.log('Got /_ah/mail/teams@... with Content-Type:', req.get('Content-Type'));
 
-  var emailDocname = "TEAMS_EMAIL_" + new Date().toISOString();
-  var body;
+  // read the list of players and aliases
+  var playerAliasMaps = await getDefinedPlayerAliasMaps();
+  var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
 
-  var debug = false;
-  if (debug) {
-    // used for debugging only, uncomment as required
-    emailDocname = "TEAMS_EMAIL_2023-11-25T07:11:07.659Z";
-    var emailDoc = await firestore.collection("INBOUND_EMAILS").doc(emailDocname).get();
-    body = emailDoc.data().data;
-    //console.log(body);
-  } else {
-    try {
-      // read the data from the request
-      const bodyArray = [];
-      let length = 0;
-      const contentLength = +req.headers["content-length"];
-      var receivedBody = await new Promise((resolve, reject) => {
-        let ended = false;
-        function onEnd() {
-          if (!ended) {
-            resolve(Buffer.concat(bodyArray).toString());
-            ended = true;
-          }
-        }
-        req.on("data", chunk => {
-          bodyArray.push(chunk);
-          length += chunk.length;
-          if (length >= contentLength) onEnd();
-        })
-        .on("end", onEnd)
-        .on("error", (err) => {
-            reject(err);
-        });
-      });
-      // done so convert from quoted-printable mime type
-      body = mimelib.decodeQuotedPrintable(receivedBody);
-      //console.log(body);
-
-      /** Disabled - no longer needed
+  try {
+    var streamData = "";
+    await req.on('readable', function() {
+      streamData += req.read();
+    });
+    await req.on('close', function() {
+      /* Commented out - only needed for debugging
+      // Convert from quoted-printable mime type
+      //var body = mimelib.decodeQuotedPrintable(streamData);
+      //console.log("BODY", body);
       // store the data for future processing
       var emailDetails = { "parsed_status": "NEW", "data": body}
+      var emailDocname = "TEAMS_EMAIL_" + new Date().toISOString();
       const docRef = firestore.collection("INBOUND_EMAILS").doc(emailDocname);
       docRef.set(emailDetails);
       */
-    } catch (err) {
-      console.error(err);
-      res.json({'result': err})
-    }
-  }
 
-  try {
-    // get SCORES if defined (loop through lines, ignoring empty lines, to get the first text and try to parse score)
-    var scores;
-    let parsed = await simpleParser(body);
-    var emailLines = parsed.text.split('\n');
-    for (i=0; i<emailLines.length; i++) {
-      var currentLine = emailLines[i].trim();
-      if (currentLine != "") {
-        // non-empty line
-        i = emailLines.length;
-        var scoreValues = currentLine.split('-');
-        var goals1 = Number(scoreValues[0]);
-        var goals2 = Number(scoreValues[1]);
-        if (isNaN(goals1) || isNaN(goals2)) {
-          console.log("NO SCORES FOUND IN BODY, SKIPPING...");
-        } else {
-          var calcWinner = -1;
-          if (goals1 == goals2) {
-            calcWinner = 0; // draw
-          } else if (goals1 > goals2) {
-            calcWinner = 1; // team1 won
-          } else if (goals1 < goals2) {
-            calcWinner = 2; // team2 won
+      var options = {};
+      simpleParser(streamData, options, (err, mail) => {
+        if (err) throw err;
+        //console.log(mail);
+
+        // get any scores from the first line (before the forwarded message)
+        var scores = {};
+        var scoreText = mail.text.split("Forwarded message");
+        if (scoreText) {
+          var scoreLineMatch = scoreText[0].match(/\d+-\d+/); // find the score in format number-number
+          if (scoreLineMatch) {
+            var scoreLine = scoreLineMatch[0].split("-");
+            scores.team1goals = Number(scoreLine[0]);
+            scores.team2goals = Number(scoreLine[1]);
+            scores.winner = 0;
+            if (scores.team1goals > scores.team2goals) {
+              scores.winner = 1;
+            } else if (scores.team1goals > scores.team2goals) {
+              scores.winner = 2;
+            }
           }
-          scores = {"winner": calcWinner, "team1goals": goals1, "team2goals": goals2}
-          //console.log(scores);
+          //console.log("Scores", scoreLine, scores);
         }
-      }
-    }
 
-    // read the list of players and aliases
-    var playerAliasMaps = await getDefinedPlayerAliasMaps();
-    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+        // get the email date (Date: Fri, 1 Sep 2023 11:26:16 +0100)
+        var dateLine = mail.text.split("Date:")[1].split(":")[0].split(", ")[1].trim();
+        var emailDate = new Date(dateLine + " 18:00");
+        // get the game date from the subject
+        // Subject: Fwd: 2 Players Needed - Mon 21 Aug [Footie, Goodwin, 6pm Mondays]
+        var subjectLine = mail.text.split("Subject:")[1].split("[Footie, Goodwin, 6pm Mondays]")[0];
+        var gameDateLine = subjectLine.split("Mon ")[1];
+        var gameDate = new Date(gameDateLine + " " + emailDate.getFullYear() + " 18:00");
+        //console.log("Dates", emailDate, gameDate)
 
-    // assumes REDS first, BLUES second!
-    var redGoalScorers = {};
-    var blueGoalScorers = {};
-    var gameDate;
-    for (i=0; i<emailLines.length; i++) {
-      //console.log("Testing", i, emailLines[i]);
-      var currentUpperCaseText = emailLines[i].replace(/^>+/g, '').trim().toUpperCase();
-      if (currentUpperCaseText.startsWith("RED")) {
-        // found the reds team, now parse it
-        var redsIndex = i;
-        if (Object.keys(redGoalScorers).length == 0) {
-          redGoalScorers = parsePlayerTeamNames(emailLines, i, aliasToPlayerMap);
-        }
-      } else if (currentUpperCaseText.startsWith("BLUE")) {
-        var blueIndex = i;
-        if (Object.keys(blueGoalScorers).length == 0) {
-          blueGoalScorers = parsePlayerTeamNames(emailLines, i, aliasToPlayerMap);
-        }
-      } else if (currentUpperCaseText.startsWith("DATE:")) {
-        // update the date until the REDS players are found
-        if (Object.keys(redGoalScorers).length == 0) {
-          // clean the date ready for parsing
-          var dateText = currentUpperCaseText.split(" AT")[0];
-          var emailDate = new Date(dateText.split("DATE: ")[1]);
-          //calc date - use the next Monday after the email date
-          gameDate = getDateNextMonday(emailDate);
-          //console.log('WORKING DATE:', dateText, emailDate, gameDate);
-        }
-      }
-    }
-    console.log("DATE", dateText, emailDate);
-    console.log("SCORES", scores);
-    console.log("RED-GOAL-SCORERS", redGoalScorers);
-    console.log("BLUE-GOAL-SCORERS", blueGoalScorers);
+        // find the start of the player list
+        var allPlayersRaw = mail.text.toUpperCase().split("REDS")[1];
+        // find the end of the player list
+        allPlayersRaw = allPlayersRaw.split("CHEERS")[0];
+        allPlayersRaw = allPlayersRaw.split("THANKS")[0];
+        allPlayersRaw = allPlayersRaw.split("STANDBY")[0];
+        //console.log("Line:", allPlayersRaw)
+        var allPlayers;
+        var redPlayerMap = {};
+        var bluePlayerMap = {};
+        if (allPlayersRaw) {
+          // get the first 20 lines (should be max 6 reds, 6 blues plus headers and blank lines etc)
+          allPlayers = allPlayersRaw.split("\n").slice(0,20);
+          //console.log("Line:", allPlayers)
 
-    // save the details
-    var saveSuccess = saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, scores);
-    if (saveSuccess) {
-      console.log("SUCCESS: Saved teams from email:", emailDocname);
-    } else {
-      console.error("ERROR: FAILED TO SAVE TEAMS FROM EMAIL:", emailDocname);
-    }
+          // loop through all players
+          var currentMap = redPlayerMap;
+          for (i=0; i<allPlayers.length; i++) {
+            var cleanName = allPlayers[i].replace(/^>+/g, '').replace(/<br>/g, '').trim().replace(/^\d/, '')
+              .replace(/ \d$/, '').replace(/^\./g, '').replace(/^/g, '').replace(/\*+/i, '').trim();
+
+            var hasLastNumber = allPlayers[i].match(/\d+$/); // last number in string
+            var goalsScored = (hasLastNumber) ? hasLastNumber[0] : 0;
+
+            if (cleanName == "BLUES") {
+              // switch to using the blues map for subsequent players
+              currentMap = bluePlayerMap;
+            }
+            var officialPlayerName = teamUtils.getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
+            if (officialPlayerName) {
+              // set goals to 0 (GOALS/SCORE NOT YET IMPLEMENTED)
+              currentMap[officialPlayerName] = Number(goalsScored);
+            }
+            //console.log("Line", i, cleanName, officialPlayerName, goalsScored)
+          }
+          //console.log("gameDate", gameDate);
+          //console.log("redPlayerMap", redPlayerMap);
+          //console.log("bluePlayerMap", bluePlayerMap);
+          //console.log("scores", scores);
+        }
+        
+        // save the details
+        var saveSuccess = saveTeamsAttendance(gameDate, redPlayerMap, bluePlayerMap, scores);
+        if (saveSuccess) {
+          console.log("SUCCESS: Saved teams from email:", gameDateLine);
+        } else {
+          console.error("ERROR: FAILED TO SAVE TEAMS FROM EMAIL:");
+        }
+      });
+    });
+    res.json({'result': 'OK'});
   } catch (err) {
     console.error(err);
+    res.json({'result': err})
   }
-  // got here so always send 200 OK messsage (otherwise emails will be retried by google cloud)
-  res.json({'result': 'OK'})
 })
 .post('/logging', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
@@ -2213,12 +2192,15 @@ async function saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, sc
      playerName = (officialPlayerName) ? officialPlayerName : playerName;
      allPlayers[playerName] = 2;
    }
-   attendanceDetails[weekNumber] = allPlayers;
+   attendanceDetails[weekNumber] = {"players": allPlayers};
    if (scores) {
      attendanceDetails[weekNumber].scores = scores;
    }
    attendanceDetails[weekNumber].scores.team1scorers = redGoalScorers;
    attendanceDetails[weekNumber].scores.team2scorers = blueGoalScorers;
+
+   // set the status
+   attendanceDetails[weekNumber].status = {"status": "PROVISIONAL_FROM_EMAIL", "date": gameDateString}
 
    console.log('Inserting DB data:', gamesCollectionId, JSON.stringify(attendanceDetails));
    const docRef = firestore.collection(gamesCollectionId).doc("_attendance");
@@ -2252,6 +2234,16 @@ async function saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, sc
    return false;
  } 
 }
+
+/*
+2025-10-12 16:12:27 default[20251012t163544]  "POST /_ah/mail/teams@tensile-spirit-360708.appspotmail.com HTTP/1.1" 200
+2025-10-12 16:12:27 default[20251012t163544]  Got /_ah/mail/teams@... with Content-Type: message/rfc822
+2025-10-12 16:12:28 default[20251012t163544]  First Monday of month: 2025-10-06T00:00:00.000Z
+2025-10-12 16:12:28 default[20251012t163544]  Found date:Mon Oct 13 2025 18:00:00 GMT+0000 (Coordinated Universal Time) with index:1
+2025-10-12 16:12:28 default[20251012t163544]  SUCCESS: Saved teams from email: 13 Oct
+2025-10-12 16:12:28 default[20251012t163544]  Inserting DB data: games_2025-10-01 {"1":{"Jack W":1,"Phil R":1,"Vincent H":1,"Sam B":1,"Jon G":1,"Kyle C":1,"Tom B":1,"Phil G":1,"Rich M":1,"Will J":1,"Jord B":1,"Josh M":1,"scores":{"team1scorers":{"Jack W":0,"Phil R":0,"Vincent H":0,"Sam B":0,"Jon G":0,"Kyle C":0,"Tom B":0,"Phil G":0,"Rich M":0,"Will J":0,"Jord B":0,"Josh M":0},"team2scorers":{}}},"month":"2025-10","timestamp":"2025-10-12T16:12:28.718Z","saveType":"ATTENDANCE","source_ip":"email from UNKNOWN"}
+2025-10-12 16:12:28 default[20251012t163544]  UPDATING: {"1":{"Jack W":1,"Phil R":1,"Vincent H":1,"Sam B":1,"Jon G":1,"Kyle C":1,"Tom B":1,"Phil G":1,"Rich M":1,"Will J":1,"Jord B":1,"Josh M":1,"scores":{"team1scorers":{"Jack W":0,"Phil R":0,"Vincent H":0,"Sam B":0,"Jon G":0,"Kyle C":0,"Tom B":0,"Phil G":0,"Rich M":0,"Will J":0,"Jord B":0,"Josh M":0},"team2scorers":{}}},"month":"2025-10","timestamp":"2025-10-12T16:12:28.718Z","saveType":"ATTENDANCE","source_ip":"email from UNKNOWN"}
+*/
 
 // parse a list (array) of text containing the teams and extracts the player names
 function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
