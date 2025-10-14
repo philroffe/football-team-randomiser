@@ -862,34 +862,16 @@ app.use('/', authRouter)
         if (err) throw err;
         //console.log(mail);
 
-        // get any scores from the first line (before the forwarded message)
-        var scores = {};
-        var scoreText = mail.text.split("Forwarded message");
-        if (scoreText) {
-          var scoreLineMatch = scoreText[0].match(/\d+-\d+/); // find the score in format number-number
-          if (scoreLineMatch) {
-            var scoreLine = scoreLineMatch[0].split("-");
-            scores.team1goals = Number(scoreLine[0]);
-            scores.team2goals = Number(scoreLine[1]);
-            scores.winner = 0;
-            if (scores.team1goals > scores.team2goals) {
-              scores.winner = 1;
-            } else if (scores.team1goals > scores.team2goals) {
-              scores.winner = 2;
-            }
-          }
-          //console.log("Scores", scoreLine, scores);
-        }
-
         // get the email date (Date: Fri, 1 Sep 2023 11:26:16 +0100)
-        var dateLine = mail.text.split("Date:")[1].split(":")[0].split(", ")[1].trim();
+        var dateLine = mail.text.split("Date:")[1].split(":")[0].split(", ")[1].split(" at")[0].trim();
+        console.log("Dateline in email:", dateLine)
         var emailDate = new Date(dateLine + " 18:00");
         // get the game date from the subject
         // Subject: Fwd: 2 Players Needed - Mon 21 Aug [Footie, Goodwin, 6pm Mondays]
         var subjectLine = mail.text.split("Subject:")[1].split("[Footie, Goodwin, 6pm Mondays]")[0];
         var gameDateLine = subjectLine.split("Mon ")[1];
         var gameDate = new Date(gameDateLine + " " + emailDate.getFullYear() + " 18:00");
-        //console.log("Dates", emailDate, gameDate)
+        //console.log("Game date in email:", emailDate, gameDate)
 
         // find the start of the player list
         var allPlayersRaw = mail.text.toUpperCase().split("REDS")[1];
@@ -901,35 +883,53 @@ app.use('/', authRouter)
         var allPlayers;
         var redPlayerMap = {};
         var bluePlayerMap = {};
+        var scores = {};
         if (allPlayersRaw) {
           // get the first 20 lines (should be max 6 reds, 6 blues plus headers and blank lines etc)
           allPlayers = allPlayersRaw.split("\n").slice(0,20);
           //console.log("Line:", allPlayers)
 
           // loop through all players
-          var currentMap = redPlayerMap;
+          var currentTeam = 1;
+          var team1goals = 0;
+          var team2goals = 0;
           for (i=0; i<allPlayers.length; i++) {
             var cleanName = allPlayers[i].replace(/^>+/g, '').replace(/<br>/g, '').trim().replace(/^\d/, '')
-              .replace(/ \d$/, '').replace(/^\./g, '').replace(/^/g, '').replace(/\*+/i, '').trim();
+              .replace(/ \d$/, '').replace(/^\./g, '').replace(/^/g, '').replace(/\*+/i, '').split(" (")[0].trim();
 
             var hasLastNumber = allPlayers[i].match(/\d+$/); // last number in string
-            var goalsScored = (hasLastNumber) ? hasLastNumber[0] : 0;
+            var goalsScored = (hasLastNumber) ? Number(hasLastNumber[0]) : 0;
 
             if (cleanName == "BLUES") {
               // switch to using the blues map for subsequent players
-              currentMap = bluePlayerMap;
+              currentTeam = 2;
             }
             var officialPlayerName = teamUtils.getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
             if (officialPlayerName) {
-              // set goals to 0 (GOALS/SCORE NOT YET IMPLEMENTED)
-              currentMap[officialPlayerName] = Number(goalsScored);
+              if (currentTeam == 1) {
+                redPlayerMap[officialPlayerName] = goalsScored;
+                team1goals += Number(goalsScored);
+              } else {
+                bluePlayerMap[officialPlayerName] = goalsScored;
+                team2goals += Number(goalsScored);
+              }
             }
             //console.log("Line", i, cleanName, officialPlayerName, goalsScored)
           }
-          //console.log("gameDate", gameDate);
-          //console.log("redPlayerMap", redPlayerMap);
-          //console.log("bluePlayerMap", bluePlayerMap);
-          //console.log("scores", scores);
+          if ((team1goals > 0) || (team2goals > 0)) {
+            scores = { "team1goals": team1goals, "team2goals": team2goals};
+            // now calculate which team won
+            scores.winner = 0;
+            if (team1goals > team2goals) {
+              scores.winner = 1;
+            } else if (team1goals < team2goals) {
+              scores.winner = 2;
+            }
+          }
+          console.log("gameDate", gameDate);
+          console.log("redPlayerMap", redPlayerMap);
+          console.log("bluePlayerMap", bluePlayerMap);
+          console.log("scores", scores);
         }
         
         // save the details
