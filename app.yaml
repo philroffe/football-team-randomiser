@@ -1,1 +1,2 @@
-runtime: nodejs20
+runtime: nodejs24
+# this is a dummy file, use .app-prod.yaml for deployment

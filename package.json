@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "description": "A simple app to manage 5-a-side football games.  A poll each month allows players to add their weekly availability, and the ability to randomise the teams and generate an email.",
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "main": "index.js",
   "scripts": {
@@ -22,7 +22,7 @@
     "compression": "^1.7.4",
     "ejs": "^3.1.9",
     "express": "^4.15.2",
-    "express-rate-limit": "^7.5.0",
+    "express-rate-limit": "^8.1.0",
     "express-session": "^1.17.3",
     "html-to-text": "^9.0.5",
     "jsdom": "^24.1.0",

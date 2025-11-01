@@ -31,6 +31,7 @@ var environment = process.env.ENVIRONMENT;
 if (process.env.FIRESTORE_EMULATOR_HOST) {
   console.log("RUNNING LOCALLY WITH FIREBASE EMULATOR:", process.env.FIRESTORE_EMULATOR_HOST, "Environment:", environment);
 }
+console.log("Node version:", process.version);
 
 var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
 const localeDateOptions = {
@@ -79,7 +80,10 @@ var limiter = RateLimit({
 const app = express();
 app.use(compression());
 app.use(limiter); // apply rate limiter to all requests
-
+if (environment == "PRODUCTION") {
+  // needed when deployed to prod which sits behind a load balancer/proxy server
+  app.set('trust proxy', 1);
+}
 // enable google auth
 var authRouter = require('./routes/auth');
 var lastLocationBeforeLogin = '/';
@@ -1112,6 +1116,10 @@ app.use('/', authRouter)
     rowdata.outstandingPayments = outstandingPayments;
     //console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
 
+    // get player preview data
+    var playersPreviewData = await getGameWeekPreviewTeams();
+    rowdata.playersPreviewData = playersPreviewData;
+
     var tabName = "";
     if (req.query.tab) {
       tabName = req.query.tab;
@@ -1133,25 +1141,10 @@ app.use('/', authRouter)
     // combine database data with any additional page data
     var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, selectTab: tabName, "environment": environment  };
 
-    var aliasesData = {};
     if (req.isAuthenticated()) {
       console.log("User is logged in: ", JSON.stringify(req.user));
       pageData.user = req.user;
-      //console.log('Generating ALIASES page with data');
-      var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-      aliasesData = aliasesDoc.data();
-      if (!aliasesData) {
-        aliasesData = {};
-      }
     }
-
-    // allow cron to be disabled by setting app preferences
-    var attendanceDoc = await firestore.collection("games_2025-01-01").doc("_attendance").get();
-    var attendanceData = attendanceDoc.data();
-    if (!attendanceData) { attendanceData = {}; }
-    //console.log("PRE attendanceData", attendanceData);
-
-    pageData.aliasesData = aliasesData;
 
     res.render('pages/poll', { pageData: JSON.stringify(pageData) });
   } catch (err) {
@@ -1391,6 +1384,39 @@ app.use('/', authRouter)
     res.send({'result': err});
   }
  })
+.get('/admin-aliases', async (req, res) => {
+  try {
+    console.log('Generating ALIASES page with data');
+    var pageData = {};
+    pageData.environment = environment;
+    if (req.isAuthenticated()) {
+      console.log("User is logged in: ", JSON.stringify(req.user));
+      pageData.user = req.user;
+    } else {
+      res.redirect(302, "/login?redirect=/admin");
+      return;
+    }
+
+    // get aliases data from DB
+    var aliasesData = {};
+    if (req.isAuthenticated()) {
+      console.log("User is logged in: ", JSON.stringify(req.user));
+      pageData.user = req.user;
+      //console.log('Generating ALIASES page with data');
+      var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+      aliasesData = aliasesDoc.data();
+      if (!aliasesData) {
+        aliasesData = {};
+      }
+    }
+    pageData.aliasesData = aliasesData;
+
+    res.render('pages/admin-aliases', { pageData: JSON.stringify(pageData) });
+  } catch (err) {
+    console.error(err);
+    res.send("Error " + err);
+  }
+})
 .post('/admin-save-aliases', async (req, res) => {
     var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress 
     console.log('Got /admin-save-aliases POST:', ip, JSON.stringify(req.body));
@@ -1559,8 +1585,8 @@ app.use('/', authRouter)
     }
 
     // get the list of people on the email list
-    var playerAliasMaps = await getDefinedPlayerAliasMaps();
-    var emailTo = Object.values(playerAliasMaps.activeEmailList);
+    var playerEmailMaps = await getDefinedPlayerEmailMaps();
+    var emailTo = Object.values(playerEmailMaps.activeEmailList);
     // now generate the email text and send it
     var gameNextMondayDate = getDateNextMonday();
     var emailDetails = teamUtils.generateTeamsEmailText(playersPreviewData, gameNextMondayDate);
@@ -2076,15 +2102,17 @@ async function getDefinedPlayerAliasMaps() {
   Object.keys(aliasesData).sort().forEach(function(key) {
     var officialName = key.trim();
     // create the player to alias map
-    playerToAliasMap[officialName] = aliasesData[key].aliases;
+    if (aliasesData[key].subscriptionStatus > 0) {
+      playerToAliasMap[officialName] = aliasesData[key].aliases;
 
-    // create a reverse lookup map from alias to official name
-    var aliasesList = aliasesData[key].aliases;
-    aliasToPlayerMap[officialName.toUpperCase()] = officialName;
-    for (var i = 0; i < aliasesList.length; i ++) {
-      var aliasName = aliasesList[i].trim();
-      if (aliasName != "") {
-        aliasToPlayerMap[aliasName.toUpperCase()] = officialName;
+      // create a reverse lookup map from alias to official name
+      var aliasesList = aliasesData[key].aliases;
+      aliasToPlayerMap[officialName.toUpperCase()] = officialName;
+      for (var i = 0; i < aliasesList.length; i ++) {
+        var aliasName = aliasesList[i].trim();
+        if (aliasName != "") {
+          aliasToPlayerMap[aliasName.toUpperCase()] = officialName;
+        }
       }
     }
   });
@@ -2234,16 +2262,6 @@ async function saveTeamsAttendance(gameDate, redGoalScorers, blueGoalScorers, sc
    return false;
  } 
 }
-
-/*
-2025-10-12 16:12:27 default[20251012t163544]  "POST /_ah/mail/teams@tensile-spirit-360708.appspotmail.com HTTP/1.1" 200
-2025-10-12 16:12:27 default[20251012t163544]  Got /_ah/mail/teams@... with Content-Type: message/rfc822
-2025-10-12 16:12:28 default[20251012t163544]  First Monday of month: 2025-10-06T00:00:00.000Z
-2025-10-12 16:12:28 default[20251012t163544]  Found date:Mon Oct 13 2025 18:00:00 GMT+0000 (Coordinated Universal Time) with index:1
-2025-10-12 16:12:28 default[20251012t163544]  SUCCESS: Saved teams from email: 13 Oct
-2025-10-12 16:12:28 default[20251012t163544]  Inserting DB data: games_2025-10-01 {"1":{"Jack W":1,"Phil R":1,"Vincent H":1,"Sam B":1,"Jon G":1,"Kyle C":1,"Tom B":1,"Phil G":1,"Rich M":1,"Will J":1,"Jord B":1,"Josh M":1,"scores":{"team1scorers":{"Jack W":0,"Phil R":0,"Vincent H":0,"Sam B":0,"Jon G":0,"Kyle C":0,"Tom B":0,"Phil G":0,"Rich M":0,"Will J":0,"Jord B":0,"Josh M":0},"team2scorers":{}}},"month":"2025-10","timestamp":"2025-10-12T16:12:28.718Z","saveType":"ATTENDANCE","source_ip":"email from UNKNOWN"}
-2025-10-12 16:12:28 default[20251012t163544]  UPDATING: {"1":{"Jack W":1,"Phil R":1,"Vincent H":1,"Sam B":1,"Jon G":1,"Kyle C":1,"Tom B":1,"Phil G":1,"Rich M":1,"Will J":1,"Jord B":1,"Josh M":1,"scores":{"team1scorers":{"Jack W":0,"Phil R":0,"Vincent H":0,"Sam B":0,"Jon G":0,"Kyle C":0,"Tom B":0,"Phil G":0,"Rich M":0,"Will J":0,"Jord B":0,"Josh M":0},"team2scorers":{}}},"month":"2025-10","timestamp":"2025-10-12T16:12:28.718Z","saveType":"ATTENDANCE","source_ip":"email from UNKNOWN"}
-*/
 
 // parse a list (array) of text containing the teams and extracts the player names
 function parsePlayerTeamNames(playerArray, startIndex, aliasToPlayerMap) {
@@ -2654,11 +2672,11 @@ function sendTeamsPreviewEmail(playersPreviewData, emailPrefix) {
   var emailBody = emailPrefix + "\n" + playersPreviewData.gameWeek + "\n";
   emailBody += "Check teams and edit list here:\n"
   emailBody += "https://tensile-spirit-360708.nw.r.appspot.com/admin-team-preview\n"
-  emailBody += "\nREDS";
+  emailBody += "\nREDS (" + playersPreviewData.ratios.redRatioTotal + ")";
   for (var i = 0; i < playersPreviewData.redPlayers.length; i ++) {
     emailBody += "\n" + playersPreviewData.redPlayers[i];
   }
-  emailBody += "\n\nBLUES";
+  emailBody += "\n\nBLUES (" + playersPreviewData.ratios.blueRatioTotal + ")";
   for (var i = 0; i < playersPreviewData.bluePlayers.length; i ++) {
     emailBody += "\n" + playersPreviewData.bluePlayers[i];
   }

@@ -121,14 +121,7 @@
       var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
       var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
       // create list of active players (used in the autocomplete dropdown)
-      var playerNameSuggestions = [];
-      var fullAliasList = Object.keys(playerToAliasMap);
-      for (var i = 0; i < fullAliasList.length; i++) { 
-        var playerName = fullAliasList[i];
-        if (playerToAliasMap[playerName].subscriptionStatus > 0) {
-          playerNameSuggestions.push(playerName);
-        }
-      }
+      var playerNameSuggestions = Object.keys(playerToAliasMap);
 
       var allAttendanceData = pagedata.allAttendanceData;
       if (!allAttendanceData) { allAttendanceData = {}; }
@@ -299,7 +292,7 @@
             document.getElementById("response").innerHTML = "Error!  Something went wrong";
           }
         };
-        currentState.lastUpdated = "Custom:" + new Date().toISOString();
+        currentState.lastUpdated = "Custom: " + new Date().toISOString();
         xmlhttp.open("POST", "/services/update-game-week-preview");
         xmlhttp.setRequestHeader("Content-Type", "application/json");
         xmlhttp.send(JSON.stringify(currentState));
@@ -340,7 +333,8 @@
         currentState.redPlayers = [];
         currentState.bluePlayers = [];
         currentState.standbyPlayers = [];
-        currentState.gameWeek = gameWeek;
+        currentState.gameWeek = new Date(gameWeek).toLocaleDateString('en-GB', localeDateOptions);
+        currentState.status = "Saved";
         currentState.ratios = { "algorithmUnit": algorithmUnit, "redRatioTotal": 0, "blueRatioTotal": 0 };
         // clone all players list to use for validation
         var allPlayersCopy = [...allPlayers];

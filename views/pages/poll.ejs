@@ -26,13 +26,11 @@
   <input class="radio" id="two" name="group" type="radio" onclick="changeTab('two');">
   <input class="radio" id="three" name="group" type="radio" onclick="changeTab('three');">
   <input class="radio" id="four" name="group" type="radio" onclick="changeTab('four');">
-  <input class="radio" id="five" name="group" type="radio" onclick="changeTab('five');">
   <div class="tabs">
   <label class="tab" id="one-tab" for="one">Availability</label>
   <label class="tab" id="two-tab" for="two">Attendance</label>
   <label class="tab" id="three-tab" for="three">Payments</label>
-  <label class="tab" id="four-tab" for="four">Aliases</label>
-  <label class="tab" id="five-tab" for="five">Stats</label>
+  <label class="tab" id="four-tab" for="four">Stats</label>
     </div>
   <div id="panels" class="panels">
   <div class="panel" id="one-panel">
@@ -80,6 +78,10 @@
         <div id="tempPasswordOKDiv" hidden>
           <div id="scoreHeader" class="gameheader"></div>
 
+          <div id="copyFromPreview">
+            <button id="copyAttendanceFromPreviewButton" onclick="copyAttendanceFromPreview()" disabled>Copy from Preview</button>
+          </div>
+
           <div id="cancelCheckboxDiv">
             <label id="cancelCheckboxLabel" for="cancelCheckbox">Cancel</label>
             <input id="cancelCheckbox" type="checkbox" name="cancelType" onclick="cancelCurrentEdittingWeek();"/>
@@ -106,20 +108,6 @@
   </div>
 
   <div class="panel" id="four-panel">
-    <div class="panel-title">Aliases</div>
-      <div class="content" id="aliasEntryDiv">
-      Active Players
-      <div id="playersAliasHeader"></div><br>
-      <button id="addAlias" style="background-color: #90EE90;" type="button" onclick="addAliasPlayer();">(+) Add Player</button>
-      <br>
-      <button id="saveAlias" style="background-color: #90EE90;" onclick="savePlayerAliases()">Save</button>
-      <button id="cancelAliasEdit" onclick="location.reload()" disabled>Cancel</button>
-      <p>Inactive Players</p>
-      <p><div id="inactivePlayersHeader"></div>
-      <br><div id="unusedPlayers"></div><br>
-    </div>
-  </div>
-  <div class="panel" id="five-panel">
     <div class="panel-title">Stats</div>
     You should be redirected automatically.  If not, <a href="/stats">click here to see stats</a>
   </div>
@@ -134,16 +122,15 @@
 
     const AVAILABILITY = "availability";
     const ATTENDANCE = "attendance";
-    const PAYMENT = "payment";
 
     var monthDateFormat = new Intl.DateTimeFormat('en', { month: 'long' });
     var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
     var dayDateFormat = new Intl.DateTimeFormat('en', { day: '2-digit' });
 
-    var playerCount = {};
-    playerCount[AVAILABILITY] = 0;
-    playerCount[ATTENDANCE] = 0;
-    playerCount[PAYMENT] = 0;
+    var playerNameIdMap = {};
+    playerNameIdMap[AVAILABILITY] = {};
+    playerNameIdMap[ATTENDANCE] = {};
+    //var playerNameIdMap = { AVAILABILITY: {}, ATTENDANCE: {} };
 
     var todayDate = new Date();
     var playerElements = {};
@@ -193,6 +180,8 @@
     if (!paydetailsMap) { paydetailsMap = {}; }
     var outstandingPaymentsMap = pagedata.data.outstandingPayments;
     if (!outstandingPaymentsMap) { outstandingPaymentsMap = {}; }
+    var playersPreviewData = pagedata.data.playersPreviewData;
+    if (!playersPreviewData) { playersPreviewData = {}; }
     /*
     console.log("players", players);
     console.log("attendanceMap", attendanceMap);
@@ -205,14 +194,7 @@
     var playerToAliasMap = playerAliasMaps["playerToAliasMap"];
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
     // create list of active players (used in the autocomplete dropdown)
-    var playerNameSuggestions = [];
-    var fullAliasList = Object.keys(playerToAliasMap);
-    for (var i = 0; i < fullAliasList.length; i++) { 
-      var playerName = fullAliasList[i];
-      if (playerToAliasMap[playerName].subscriptionStatus > 0) {
-        playerNameSuggestions.push(playerName);
-      }
-    }
+    var playerNameSuggestions = Object.keys(playerToAliasMap);
     /*
     console.log("playerAliasMaps", playerAliasMaps);
     console.log("playerToAliasMap", playerToAliasMap);
@@ -239,12 +221,10 @@
     addPlayerListToTab(AVAILABILITY);
     addPlayerListToTab(ATTENDANCE);
     addPaymentsToTab();
-    //addPlayerListToTab(PAYMENT);
 
     // populate the weekly total counts
     calcWeeklyTotals(AVAILABILITY);
     calcWeeklyTotals(ATTENDANCE);
-    //calcWeeklyTotals("PAYMENT");
 
     if (user) {
       // show edit functionality if there is a valid logged-in user
@@ -258,9 +238,6 @@
         weekEditButtons[i].disabled = true;
         weekEditButtons[i].hidden = true;
       }
-      // remove the alias tab completely
-      document.getElementById("four-tab").remove();
-      document.getElementById("four").remove();
     }
 
 
@@ -273,7 +250,7 @@
     }
 
     function changeTab(tabName) {
-      if (tabName == "five") {
+      if (tabName == "four") {
         window.location.href = "/stats";
       } else {
         // calculate updated URL
@@ -485,9 +462,6 @@ function addPlayerListToTab(tabName) {
       case ATTENDANCE:
         playersMapForTab = attendanceMap;
         break;
-      case PAYMENT:
-        // code block
-        break;
       default:
         // code block
     }
@@ -511,7 +485,7 @@ function addPlayerListToTab(tabName) {
         weekTotalSummary.innerHTML = 0
 
         var currentTotal = 0;
-        var tabPlayerCount = playerCount[tabName];
+        var tabPlayerCount = Object.keys(playerNameIdMap[tabName]).length;
         //console.log("tabName " + tabName + " tabPlayerCount " + tabPlayerCount);
         for (var i = 0; i < tabPlayerCount; i++) {
           if (document.getElementById("player" + i + "Week" + j + tabName).checked) {
@@ -548,15 +522,16 @@ function addPlayerListToTab(tabName) {
     // add an additional text box and hook up listeners
     function addPlayer(playerName, availabilityMap, officialPlayerName, tabName = "availability") {
       //console.log("Add Player:", playerName, availabilityMap, officialPlayerName, tabName)
-      //update the player count for this tab
-      var tabPlayerCount = playerCount[tabName];
+
+      var tabPlayerCount = Object.keys(playerNameIdMap[tabName]).length;
       currentPlayerNumber = tabPlayerCount;
+      // add the player with the current ID
+      playerNameIdMap[tabName][playerName] = tabPlayerCount
       tabPlayerCount++;
       if (tabPlayerCount > 100) {
         // set a max list of names (just to protect a little)
         return;
-      }
-      playerCount[tabName] = tabPlayerCount;
+      };
       var nameHeader = document.getElementById("nameHeader" + tabName);
       
       // create a player text box
@@ -806,7 +781,7 @@ function addPlayerListToTab(tabName) {
 
   function editWeek(weekNumber) {
     var tabName = ATTENDANCE;
-    var tabPlayerCount = playerCount[tabName];
+    var tabPlayerCount = Object.keys(playerNameIdMap[tabName]).length;
     weekEditButton = document.getElementById("week" + weekNumber + "Edit" + tabName); 
     if (weekEditButton.getAttribute("toggleStatus") == "save") {
       // button toggled as Save, so save and put back to Edit move
@@ -833,6 +808,7 @@ function addPlayerListToTab(tabName) {
           document.getElementById("week" + i + "Score2" + tabName).hidden = false;
         }
       }
+      document.getElementById("copyAttendanceFromPreviewButton").disabled = true;
       document.getElementById("saveAttendanceButton").disabled = true;
       document.getElementById("cancelAttendanceEditButton").disabled = true;
       document.getElementById("closeMonthGeneratePaymentsButton").disabled = false;
@@ -882,6 +858,17 @@ function addPlayerListToTab(tabName) {
     document.getElementById("cancelAttendanceEditButton").disabled = false;
     document.getElementById("closeMonthGeneratePaymentsButton").disabled = true;
     document.getElementById("closeMonthGeneratePaymentsButton").setAttribute("weekNumber", weekNumber);
+    // make the copy-from-preview button available if the preview dates match the current editing week
+    if (playersPreviewData.gameWeek) {
+      var previewGameWeekDate = playersPreviewData.gameWeek.split(" ")[1];
+      if (mondaysDates[weekNumber] == previewGameWeekDate) {
+        document.getElementById("copyAttendanceFromPreviewButton").innerHTML = "Copy from Preview - " + playersPreviewData.gameWeek;
+        document.getElementById("copyAttendanceFromPreviewButton").style.backgroundColor = "lightgreen";
+        document.getElementById("copyAttendanceFromPreviewButton").disabled = false;
+      } else {
+        document.getElementById("copyAttendanceFromPreviewButton").disabled = true;
+      }
+    }
 
     if (cancelledMap[weekNumber]) {
       document.getElementById("cancelCheckbox").checked = true;
@@ -908,7 +895,7 @@ function addPlayerListToTab(tabName) {
       chosenPlayer = newPlayerEditButton.id.split('Edit')[0]
       console.log("EDITING Player: " + playerName + " ChosenPlayer:" + chosenPlayer);
       // disable everything
-      var tabPlayerCount = playerCount[tabName];
+      var tabPlayerCount = Object.keys(playerNameIdMap[tabName]).length;
       for (var i = 0; i < tabPlayerCount; i++) {
         document.getElementById("player" + i + tabName).disabled = true; 
         for (var j = 0; j < mondaysDates.length; j++) {
@@ -949,6 +936,78 @@ function addPlayerListToTab(tabName) {
       cancelDescElement.hidden = !cancelDescElement.hidden;
       cancelDescElement.focus();
       cancelDescElement.select();
+    }
+
+
+    function copyAttendanceFromPreview() {
+      //console.log("playerNameIdMap", playerNameIdMap)
+      //console.log("red players", playersPreviewData.redPlayers);
+      //console.log("blue players", playersPreviewData.bluePlayers);
+
+      var attendancePlayerNameIdMap = playerNameIdMap[ATTENDANCE];
+
+      // check which weekEdit button is active
+      for (var weekNumber = 0; weekNumber < mondaysDates.length; weekNumber ++) {
+        var weekEditButton = document.getElementById("week" + weekNumber + "Edit" + ATTENDANCE); 
+        if (weekEditButton.getAttribute("toggleStatus") == "save") {
+
+          for (var j = 0; j < playersPreviewData.redPlayers.length; j ++) {
+            var playerName = playersPreviewData.redPlayers[j];
+            if (attendancePlayerNameIdMap[playerName] >= 0) {
+              //console.log("Found red player from preview list", playerName, attendancePlayerNameIdMap[playerName]);
+              var shirtElement = document.getElementById("player" + attendancePlayerNameIdMap[playerName] + "Week" + weekNumber + ATTENDANCE);
+              updateTeamShirt(shirtElement, 1);
+            } else {
+              console.log("NEW Red Player not found", playerName);
+              addPlayer(playerName, {}, playerName, ATTENDANCE);
+              // now set to right colour
+              var shirtElement = document.getElementById("player" + attendancePlayerNameIdMap[playerName] + "Week" + weekNumber + ATTENDANCE);
+              updateTeamShirt(shirtElement, 1);
+              // now hide some of the new checkboxes 
+              for (var newPlayerWeek = 0; newPlayerWeek < mondaysDates.length; newPlayerWeek ++) {
+                var elementId = "player" + attendancePlayerNameIdMap[playerName] + "Week" + newPlayerWeek + ATTENDANCE;
+                if (newPlayerWeek != weekNumber) {
+                  document.getElementById(elementId).hidden = true;
+                }
+              }
+            }
+          }
+          for (var j = 0; j < playersPreviewData.bluePlayers.length; j ++) {
+            var playerName = playersPreviewData.bluePlayers[j];
+            if (attendancePlayerNameIdMap[playerName] >= 0) {
+              //console.log("Found red player from preview list", playerName, attendancePlayerNameIdMap[playerName]);
+              var shirtElement = document.getElementById("player" + attendancePlayerNameIdMap[playerName] + "Week" + weekNumber + ATTENDANCE);
+              updateTeamShirt(shirtElement, 2);
+            } else {
+              console.log("NEW Blue Player not found", playerName);
+              addPlayer(playerName, {}, playerName, ATTENDANCE);
+              // now set to right colour
+              var shirtElement = document.getElementById("player" + attendancePlayerNameIdMap[playerName] + "Week" + weekNumber + ATTENDANCE);
+              updateTeamShirt(shirtElement, 2);
+              // now hide some of the new checkboxes 
+              for (var newPlayerWeek = 0; newPlayerWeek < mondaysDates.length; newPlayerWeek ++) {
+                var elementId = "player" + attendancePlayerNameIdMap[playerName] + "Week" + newPlayerWeek + ATTENDANCE;
+                if (newPlayerWeek != weekNumber) {
+                  document.getElementById(elementId).hidden = true;
+                }
+              }
+            }
+          }
+          /*
+          if (playersPreviewData.redPlayers.includes(playerName)) {
+            //console.log("Found red player from preview list", playerName, i);
+            var shirtElement = document.getElementById("player" + i + "Week" + weekNumber + "attendance");
+            updateTeamShirt(shirtElement, 1);
+          }
+          if (playersPreviewData.bluePlayers.includes(playerName)) {
+            //console.log("Found blue player from preview list", playerName, i);
+            var shirtElement = document.getElementById("player" + i + "Week" + weekNumber + "attendance");
+            updateTeamShirt(shirtElement, 2);
+          }
+          */
+          break;
+        }
+      }
     }
 
     function saveAttendance(weekNumber) {
@@ -1098,8 +1157,6 @@ function addPlayerListToTab(tabName) {
     } // end of savePlayers()
 
   </script>
-
-  <%- include ("./admin-aliases.ejs") %>
 
 </div>
 </body>

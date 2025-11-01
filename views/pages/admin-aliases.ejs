@@ -1,6 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include ("../partials/header.ejs") %>
+</head>
+
+<body class="w3-light-grey">
+  <%- include ("../partials/nav.ejs") %>
+  <!-- Page content -->
+  <div class="w3-content" style="max-width:2000px;margin-top:46px;margin-left: 10px;">
+
+  <H3>Aliases</h3>
+  <p>Active Players</p>
+  <div id="playersAliasHeader"></div><br>
+  <button id="addAlias" style="background-color: #90EE90;" type="button" onclick="addAliasPlayer();">(+) Add Player</button>
+  <br>
+  <button id="saveAlias" style="background-color: #90EE90;" onclick="savePlayerAliases()">Save</button>
+  <button id="cancelAliasEdit" onclick="location.reload()" disabled>Cancel</button>
+  <p>Inactive Players</p>
+  <p><div id="inactivePlayersHeader"></div>
+
+  <br><div id="unusedPlayers"></div><br>
 
   <script type="text/javascript">
-    var aliasesData = pagedata.aliasesData;
+    // restringify and then parse the json to get the page
+    var pageData = JSON.parse(JSON.stringify(<%- pageData %>));
+    console.log('pageData=', pageData);
+
+    var aliasesData = pageData.aliasesData;
 
     var playersAliasHeader = document.getElementById("playersAliasHeader")
     var playerAliasCount = 0;
@@ -124,3 +150,5 @@
     }
 
   </script>
+</body>
+</html>

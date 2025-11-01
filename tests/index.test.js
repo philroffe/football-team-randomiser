@@ -19,7 +19,7 @@ const preferencesURL = 'http://localhost:5000/admin-preferences';
 const pollURL = rootURL + '/poll?date=' + testYearMonth + '-01' + '&tab=one';
 const attendanceURL = rootURL + '/poll?date=' + testYearMonth + '-01' + '&tab=two';
 const paymentsURL = rootURL + '/poll?date=' + testYearMonth + '-01' + '&tab=three';
-const aliasURL = rootURL + '/poll?date=' + testYearMonth + '-01' + '&tab=four';
+const aliasURL = rootURL + '/admin-aliases';
 const fakeLoginURL = rootURL + '/auth/fake';
 var playerCostPerGame = 4;
 var newPlayerIndex = 0;
@@ -895,6 +895,8 @@ it ('26 - test admin-team-preview', async () => {
   expect(standbyList.length).toEqual(2);
 }, 3000)
 
+
+
 it ('30 - test historical games are correct', async () => {
   if (!enabledHistoricTests) { return };
 
@@ -1139,6 +1141,7 @@ it ('30 - test historical games are correct', async () => {
 it ('40 - test weekly cron', async () => {
   if (!enabledTests) { return };
 
+  var gameMonthString = "2050-06-01";
   var dateString = "2050-06-06";
   var dateStringLocale = new Date(dateString).toLocaleDateString('en-GB', localeDateOptions).replace(',', '');
   var expectedRed = 6, expectedBlue = 6, expectedStandby = 2; // hardcoded for now
@@ -1151,7 +1154,7 @@ it ('40 - test weekly cron', async () => {
   //console.log(response);
   expect(response.status).toEqual(200);
 
-  // check it loads a GENERATED team list
+  // check it presents a GENERATED team list
   await driver.get(rootURL + '/admin-team-preview?date=' + dateString + '&algorithm=6');
   var title = await driver.findElement(By.id('teamTitle')).getText();
   expect(title).toEqual("Generated: " + dateStringLocale);
@@ -1176,6 +1179,15 @@ it ('40 - test weekly cron', async () => {
   var allPlayerStatsText = await element.getText();
   var noOfPlayers = allPlayerStatsText.split(/\r\n|\r|\n/).length; // count no of lines
   expect(noOfPlayers).toEqual(expectedTotal);
+
+  // check the button to copy the attendance works
+  //const thisAttendanceURL = rootURL + '/poll?date=' + gameMonthString + '&tab=two';
+  //await driver.get(thisAttendanceURL);
+  // try to click copy button (should work)
+  //var gameWeek = 1;
+  //(await getElementByIdAfterWaitClick('week' + gameWeek + 'Editattendance')).click();
+  //(await getElementByIdAfterWaitClick('copyAttendanceFromPreviewButton')).click();
+  //(await getElementByIdAfterWaitClick('saveAttendanceButton')).click();
 
   // run the final cron to delete the teams list
   var response = await fetch(rootURL + '/schedule/delete-draft-list-for-admins', {
