@@ -12,6 +12,7 @@ const teamUtils = require("./views/pages/generate-teams-utils.js");
 const passport = require('passport');
 const prettier = require("prettier");
 const RateLimit = require('express-rate-limit');
+const jsdom = require("jsdom");
 
 // By default, the client will authenticate using the service account file
 // specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable and use
@@ -242,13 +243,17 @@ app.use('/', authRouter)
             playerLedgerDocRef.set(playerTransactionSavedata, { merge: true });
           }
         });
+
         // now also store the pitch charge
-        const playerClosedLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc("Admin - Pitch Costs");
-        var playerTransactionName = "charge_pitch_" + thisDate;
-        var pitchTransactionSavedata = {};
-        pitchTransactionSavedata[playerTransactionName] = { "amount": preferences.costOfPitch, "gameDate": thisDate, "payeeName": "Admin Pitch Organiser"};
-        //console.log('Adding PITCH CHARGE:', thisDate, JSON.stringify(pitchTransactionSavedata));
-        playerClosedLedgerDocRef.set(pitchTransactionSavedata, { merge: true });
+        if (attendanceData[weekNumber].status.status == "PLAYED") {
+          const playerClosedLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc("Admin - Pitch Costs");
+          var playerTransactionName = "charge_pitch_" + thisDate;
+          var pitchTransactionSavedata = {};
+          pitchTransactionSavedata[playerTransactionName] = { "amount": preferences.costOfPitch * -1, 
+            "gameDate": thisDate, "payeeName": "Admin Pitch Organiser", "financialYear": gameYear};
+          //console.log('Adding PITCH CHARGE:', thisDate, JSON.stringify(pitchTransactionSavedata));
+          playerClosedLedgerDocRef.set(pitchTransactionSavedata, { merge: true });
+        }
       }
     }
     res.json({'result': 'OK'})
@@ -292,7 +297,6 @@ app.use('/', authRouter)
 
     // get all daata - used to generate the costs and kitty
     rowdata.allCollectionDocs = await getAllDataFromDB();
-    //console.log(rowdata.allCollectionDocs);
     // filter the data for the active accounting period
     var filterData = { ...rowdata.allCollectionDocs }
     for (const thisDataId in filterData) {
@@ -319,9 +323,11 @@ app.use('/', authRouter)
           }
         }
         if (thisDataId.startsWith("payment_")) {
-          console.log("WHAT IS WRONG WITH: ", thisDataId, filterData[thisDataId]);
-          // TODO: Check chargeId = must be null
-          if (filterData[thisDataId].financialYear != openFinancialYear && filterData[thisDataId].chargeId && filterData[thisDataId].chargeId.length > 0) {
+          if (filterData[thisDataId].financialYear != openFinancialYear) {
+            if (filterData[thisDataId].chargeId && filterData[thisDataId].chargeId.length > 0) {
+              // TODO: Check chargeId = must be null
+              console.log("WHAT IS WRONG WITH:", thisDataId, filterData[thisDataId]);
+            }
             delete filterData[thisDataId];
           }
         }
@@ -347,8 +353,6 @@ app.use('/', authRouter)
       openLedgers[key] = filterData;
     })
     rowdata.openLedgers = openLedgers;
-
-
     
     // combine database data with supplimentary game data and render the page
     var nextMonday = getDateNextMonday();
@@ -358,6 +362,23 @@ app.use('/', authRouter)
       console.log("User is logged in: ", JSON.stringify(req.user));
       pageData.user = req.user;
     }
+
+
+    // get the latest bank holidays if not already cached
+    if (bankHolidaysCache && Object.keys(bankHolidaysCache).length === 0) {
+      try {
+        bankHolidaysCache = await downloadPage("https://www.gov.uk/bank-holidays.json");
+        delete bankHolidaysCache["scotland"];
+        delete bankHolidaysCache["northern-ireland"];
+        console.log("Got NEW bank holidays: " + Object.keys(bankHolidaysCache).length);
+      } catch (err) {
+        bankHolidaysCache = {};
+        console.log("ERROR retrieving NEW bank holidays - proceeding without them...", err)
+      }
+    } else {
+      console.log("Using CACHED bank holidays: " + Object.keys(bankHolidaysCache).length)
+    }
+    rowdata.bankHolidayEvents = bankHolidaysCache["england-and-wales"].events;
 
     // render the page and pass some json with stringified value
     res.render('pages/admin-payments-ledger', { pageData: JSON.stringify(pageData) });
@@ -918,7 +939,7 @@ app.use('/', authRouter)
                 team2goals += Number(goalsScored);
               }
             }
-            //console.log("Line", i, cleanName, officialPlayerName, goalsScored)
+            //console.log("Line", i, cleanName,addPlayer officialPlayerName, goalsScored)
           }
           if ((team1goals > 0) || (team2goals > 0)) {
             scores = { "team1goals": team1goals, "team2goals": team2goals};
@@ -1074,11 +1095,15 @@ app.use('/', authRouter)
     if (req.query.tab) {
       tabName = req.query.tab;
     }
+    var dateRange = "";
+    if (req.query.dateRange) {
+      dateRange = req.query.dateRange;
+    }
 
     //var allCollectionDocs = JSON.parse(allCollectionDocsJson);
 
     // combine database data with any additional page data
-    var pageData = { data: rowdata, selectTab: tabName, "environment": environment };
+    var pageData = { data: rowdata, selectTab: tabName, selectDateRange: dateRange, "environment": environment };
     res.render('pages/stats-all', { pageData: JSON.stringify(pageData) });
   } catch (err) {
     console.error(err);
@@ -1129,6 +1154,8 @@ app.use('/', authRouter)
     if (bankHolidaysCache && Object.keys(bankHolidaysCache).length === 0) {
       try {
         bankHolidaysCache = await downloadPage("https://www.gov.uk/bank-holidays.json");
+        delete bankHolidaysCache["scotland"];
+        delete bankHolidaysCache["northern-ireland"];
         console.log("Got NEW bank holidays: " + Object.keys(bankHolidaysCache).length);
         clearExpiredExpressSessions(); // clear expired express-sessions too
       } catch (err) {
@@ -1584,23 +1611,45 @@ app.use('/', authRouter)
       return;
     }
 
+    // get any additional text from the preferences
+    playersPreviewData.emailTeamsPrefix = preferences.emailTeamsPrefix;
+    playersPreviewData.emailIncludePayment = preferences.emailIncludePayment;
+
     // get the list of people on the email list
     var playerEmailMaps = await getDefinedPlayerEmailMaps();
     var emailTo = Object.values(playerEmailMaps.activeEmailList);
     // now generate the email text and send it
     var gameNextMondayDate = getDateNextMonday();
     var emailDetails = teamUtils.generateTeamsEmailText(playersPreviewData, gameNextMondayDate);
+
+    // now add any outstanding payments to the email and convert to html
+    var outstandingPayments = await queryDatabaseAndBuildOutstandingPayments();
+    const { JSDOM } = jsdom;
+    const dom = new JSDOM(`<!DOCTYPE html>`);
+    const document = dom.window.document;
+    var panelcontentouter = document.createElement("DIV");
+    var paymentsDiv = teamUtils.addPaymentsTableRows(outstandingPayments, true, false, document, panelcontentouter);
+    emailDetails.emailBody = emailDetails.emailBody.replace("***PAYMENTS WILL GO HERE - DO NOT DELETE THIS LINE***"
+      , "Also, outstanding payments..." + paymentsDiv.innerHTML).replaceAll("\n", '<br>');``
+
     var mailOptions = {
       from: GOOGLE_MAIL_FROM_NAME,
       to: emailTo,
       subject: emailDetails.emailSubject,
-      text: emailDetails.emailBody
+      html: emailDetails.emailBody
     };
     console.log(mailOptions);
     var emailResult = teamUtils.sendEmailToList(mailOptions, req.hostname);
 
     // finally delete the old gameweek preview - email has been sent
     //await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
+
+    // clear the text prefix - assumed it is only needed for one email
+    if (preferences.emailTeamsPrefix) {
+      preferences.emailTeamsPrefix = "";
+      const preferencesDocRef = firestore.collection("ADMIN").doc("_preferences");
+      await preferencesDocRef.set(preferences, { merge: true });
+    }
 
     res.json({'result': 'OK'});
   } else {
@@ -1767,6 +1816,23 @@ app.use('/', authRouter)
     res.send("Error " + err);
   }
 })
+.post('/services/create-new-database-doc', async (req, res) => {
+  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  console.log('POST /services/create-new-database-doc', ip, req.body);
+
+  var collectionId = req.body.collectionId;
+  var documentId = req.body.documentId;
+  var documentData = req.body.documentData;
+
+  const docRef = firestore.collection(collectionId).doc(documentId);
+  try {
+    docRef.set(documentData);
+    res.json({'result': {} });
+  } catch (err) {
+    console.error(err);
+    res.sendStatus(400);
+  }
+})
 .post('/services/delete-database-doc', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('POST /services/delete-database-doc', ip, req.body);
@@ -1780,7 +1846,7 @@ app.use('/', authRouter)
     res.json({'result': {} });
   } catch (err) {
     console.error(err);
-    res.sendStatus(404);
+    res.sendStatus(400);
   }
 })
 .post('/services/rename-database-doc', async (req, res) => {
@@ -1806,7 +1872,7 @@ app.use('/', authRouter)
     res.json({'result': newDoc.data()});
   } catch (err) {
     console.error(err);
-    res.sendStatus(404);
+    res.sendStatus(400);
   }
 })
 .listen(PORT, () => console.log(`Listening on ${ PORT }`))

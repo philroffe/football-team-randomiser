@@ -68,9 +68,9 @@
         <div id="response"></div>
       </div>
     <div style="width:100%;display:flex;">
-      <div id="emailEntryDiv" style="display:inline;width:55%">
+      <div id="emailEntryDiv" style="display:inline;width:45%">
         <select id="paymentsSelect" onchange="updateEmailText(this.value)" >
-        <option> ---Select Failed Email--- </option>  
+        <option class="btn-danger"> ---Select Failed Email--- </option>  
         </select>
         <button id="addAdminCost" style="background-color: #90EE90;" type="button" onclick="addAdminCost();">Add Admin Cost</button><br>
         <button id="parseEmail" style="background-color: #90EE90;" type="button" onclick="parseEmail();">Parse Email</button><br>
@@ -111,6 +111,8 @@
     if (!openLedgers) { openLedgers = {}; }
     var allCollectionDocs = pagedata.data.allCollectionDocs;
     if (!allCollectionDocs) { allCollectionDocs = {}; }
+    var bankHolidayEvents = pagedata.data.bankHolidayEvents;
+    if (!bankHolidayEvents) { bankHolidayEvents = {}; }
     document.getElementById("payeeTransactionDate").value = new Date().toISOString().split('T')[0];
 
     // collate the aliases
@@ -198,6 +200,8 @@
     var totalGamesPlayed = 0;
     var gamesPlayedDates = [];
     var totalGamesMissed = 0;
+    var totalGamesBankHols = 0;
+    var totalGamesCancelled = 0;
     for (const collectionId in allCollectionDocs) {
       //console.log(collectionId);
       var currentAttendance = allCollectionDocs[collectionId];
@@ -213,27 +217,71 @@
           var docData = allCollectionDocs[collectionId][docId].data;
           for (var weekNumber = 0; weekNumber <= 5; weekNumber ++) {
             var playerList = docData[weekNumber];
-            if (playerList && playerList.scores) {
-              if (playerList.scores.team1goals > -1) {
-                totalGamesPlayed++;
-                gamesPlayedDates.push(collectionId + " " + weekNumber);
-                var exactDate = getExactDateFromMonthAndIndex(collectionId.replace("games_", ""), weekNumber);
-                //console.log(collectionId, weekNumber, exactDate);
-                document.getElementById("pitchCostSummary").innerHTML += exactDate.toISOString().split('T')[0] + "<br>";
+            var exactDate = getExactDateFromMonthAndIndex(collectionId.replace("games_", ""), weekNumber);
+            if (exactDate) {
+              // check if there is a corresponding charge
+              var pitchCostAmount = 0;
+              var exactDateString = getStandardReverseDateFormat(exactDate); //returns "2025-12-08"
+              var pitchCost = closedLedgers["Admin - Pitch Costs"]["charge_pitch_" + exactDateString];
+              if (pitchCost) { pitchCostAmount = pitchCost.amount; }
+              // it's a real date so continue
+              if (isBankHoliday(exactDate)) {
+                totalGamesBankHols++;
+                //console.log(collectionId, weekNumber, exactDate, "BANKHOL", pitchCostAmount);
               } else {
-                totalGamesMissed++;
+                if (playerList && playerList.scores) {
+                  //var exactDate = getExactDateFromMonthAndIndex(collectionId.replace("games_", ""), weekNumber);
+                  if (playerList.scores.team1goals > -1) {
+                    totalGamesPlayed++;
+                    gamesPlayedDates.push(collectionId + " " + weekNumber);
+                    //console.log(collectionId, weekNumber, exactDate, "PLAYED", pitchCostAmount);
+                    document.getElementById("pitchCostSummary").innerHTML += exactDate.toISOString().split('T')[0] + "<br>";
+                  } else {
+                    if (playerList.status.status == "CANCELLED") {
+                      totalGamesCancelled++;
+                      //console.log("CANCELLED:", collectionId, weekNumber, exactDate);
+                      //console.log(collectionId, weekNumber, exactDate, "CANCELLED", pitchCostAmount);
+                    } else {
+                      totalGamesMissed++;
+                      //console.log("MISSED:", collectionId, weekNumber, exactDate);
+                      //console.log(collectionId, weekNumber, exactDate, "MISSED", pitchCostAmount);
+                    }
+                  }
+                  //console.log("--", collectionId, weekNumber, playerList.scores);
+                }
               }
-              //console.log("--", collectionId, weekNumber, playerList.scores);
             }
           }
         }
       }
     }
-    //////////////////////
-    /////// TODO: FIX THIS
-    //////////////////////
-    var overallTotalGamesCost = (totalGamesPlayed+totalGamesMissed)*-37;
-    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>PITCH-COST\t  #GAMES\t  MISSED\t   TOTAL</pre>";
+
+    function isBankHoliday(thisDate) {
+      var isBankHoliday = false;
+      for (var j = 0; j < bankHolidayEvents.length; j++) {
+        var bankHolDate = new Date(bankHolidayEvents[j].date);
+        if (bankHolDate.toISOString().split('T')[0] == thisDate.toISOString().split('T')[0]) {
+          isBankHoliday = true;
+        }
+      }
+      //console.log("Checked if bank holiday:", thisDate, isBankHoliday);
+      return isBankHoliday;
+    }
+
+    var overallTotalGamesCost = 0;
+    var totalGamesCharged = 0;
+    //var totalGamesMissed = 0;
+    for (const chargeId in closedLedgers["Admin - Pitch Costs"]) {
+      if (chargeId.startsWith("charge_pitch_")) {
+        overallTotalGamesCost += closedLedgers["Admin - Pitch Costs"][chargeId].amount;
+        totalGamesCharged++;
+      }
+    }
+    var averagePitchCost = (overallTotalGamesCost / totalGamesCharged).toFixed(2);
+    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>AVG-PITCH-COST\t\t  #GAMES\t  CANCELLED\t  MISSED\t BANKHOL\tTOTAL</pre>";
+
+    // TODO - THESE NUMBERS SHOULD BE EQUAL.  IF NOT THERE IS A PAYMENT ERROR
+    //totalGamesCharged == totalGamesPlayed
 
     //// TODO - Calc pitch-costs in ADMIN and update the overallTotalGamesCost calculation
     // total games costs = CLOSED_LEDGER/Admin/charge_pitch_2024_xx_xx (exact monday date)
@@ -241,10 +289,12 @@
     // total games missed-but-charged = costs - played
     // total games missed-and-cancelled = availability-loop - played - missed
     //console.log("-DONE-", totalGamesPlayed, totalGamesMissed, overallTotalGamesCost);
-      document.getElementById("paymentsSummaryDiv").innerHTML += "<div id='toggleTotalGamesList' class='expandable' onclick='toggleVisbility(this);''><pre>  £-37" + "\t" 
-                                                        + String(totalGamesPlayed).padStart(8, ' ') + "\t" 
-                                                        + String(totalGamesMissed).padStart(8, ' ') + "\t" 
-                                                        + String(String("£" + overallTotalGamesCost).padStart(8, ' ')) + "</pre></div>"
+      document.getElementById("paymentsSummaryDiv").innerHTML += "<div id='toggleTotalGamesList' class='expandable' onclick='toggleVisbility(this);''><pre>  £" + averagePitchCost + "\t  " 
+                                                        + String(totalGamesCharged).padStart(8, ' ') + "\t " 
+                                                        + String(totalGamesCancelled).padStart(8, ' ') + "\t " 
+                                                        + String(totalGamesMissed).padStart(8, ' ') + "\t " 
+                                                        + String(totalGamesBankHols).padStart(8, ' ') + "\t " 
+                                                        + String(String("  £" + overallTotalGamesCost.toFixed(2)).padStart(8, ' ')) + "</pre></div>"
 
 
       function toggleVisbility(e) {
@@ -280,7 +330,10 @@
     var overallTotalPayments = 0;
     var overallTotalCost = 0;
     var totalPlayerGamesPaid = 0;
+    var totalErrorPlayerGamesPaid = 0;
     var totalPlayerGamesOwed = 0;
+    var totalPlayerAmountOwed = 0;
+    var totalPlayerAmountPaid = 0;
     let cloneClosedLedgers = Object.assign({}, closedLedgers)
     // add in the unpaid players in openLedger if they don't already exist
     for (var unpaidPlayerName in openLedgers) {
@@ -325,6 +378,7 @@
               amountLeft += chargeAmount;
               payments[paymentsKey].accountedFor = true;
               totalPlayerGamesPaid++;
+              totalPlayerAmountPaid += chargeAmount;
             }
           });
 
@@ -332,6 +386,8 @@
             console.log("AMOUNT_LEFT", key, amountLeft)
             paymentError = true;
             playerAccounts += "^^^"
+            totalErrorPlayerGamesPaid += (amountLeft/4);
+
           }
         }
       });
@@ -351,6 +407,7 @@
           hasOutstandingPayments = true;
           totalCost += chargeAmount;
           totalPlayerGamesOwed++;
+          totalPlayerAmountOwed -= chargeAmount;
           //console.log("-------", key)
         });
       }
@@ -394,18 +451,23 @@
         }
       }
 
-      var totalDifference = totalPayments + totalCost;
+      if (totalPayments && totalPayments % 1 != 0) { totalPayments = totalPayments.toFixed(2); }
+      if (totalCost && totalCost % 1 != 0) { totalCost = totalCost.toFixed(2); }
+      if (totalDifference && totalDifference % 1 != 0) { totalDifference = totalDifference.toFixed(2); }
+
+      var totalDifference = Number(totalPayments) + Number(totalCost);
       //console.log("Checking chargeError:", key.replace(/'/g, ""), chargeError);
-      document.getElementById(key.replace(/'/g, "") + "PaymentDiv").innerHTML = "<pre style='" + rowStyle + "'> &#12297; " + key.padEnd(12, '.') + String("£" + totalPayments).padStart(4, ' ') + "  | " + String("£" + totalCost).padStart(5, ' ') + "  | " + String("£" + totalDifference).padStart(4, ' ');
+      document.getElementById(key.replace(/'/g, "") + "PaymentDiv").innerHTML = "<pre style='" + rowStyle + "'> &#12297; " + key.replace(/Admin - /g, "").padEnd(12, '.') + String("£" + totalPayments).padStart(4, '') + "  | " + String("£" + totalCost).padStart(5, ' ') + "  | " + String("£" + totalDifference).padStart(4, ' ');
 
       overallTotalPayments += totalPayments;
       overallTotalCost += totalCost;
     });
 
-    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>PER-PLAYER\t#PLAYERGAMES\t\t\t   TOTAL</pre>";
-    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>        £4" + "\t" 
-                                                        + String(totalPlayerGamesPaid).padStart(8, ' ') + "\t\t\t" 
-                                                        + String("£" + overallTotalPayments).padStart(8, ' ') + "</pre>";
+    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>PER-PLAYER\t\t  #PLAYERGAMES\t\t#ERRORGAMES\t\t\t\tTOTAL</pre>";
+    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>        £4" + "\t      " 
+                                                        + String(totalPlayerGamesPaid).padStart(8, ' ') + "\t\t      " 
+                                                        + String(totalErrorPlayerGamesPaid).padStart(8, ' ') + "\t\t\t\t      " 
+                                                        + String("£" + overallTotalPayments.toFixed(2)).padStart(8, ' ') + "</pre>";
     // calculate kitty
     var adminCharge = 0;
     Object.keys(cloneClosedLedgers["Admin"]).forEach(function(transactionKey) {
@@ -414,12 +476,16 @@
         adminCharge += transaction.amount;
       }
     });
-    var kitty = overallTotalPayments + overallTotalGamesCost + adminCharge;
-    // 
-    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>(UNPAID: " + totalPlayerGamesOwed + " payments = £" + totalPlayerGamesOwed*4 + ")</pre>"
-    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>\t\t\t\t(ADMIN COSTS)\t   KITTY</pre>";
-    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>\t\t\t\t" + String(adminCharge.toFixed(2)).padStart(8, ' ') + "\t" + String("£" + kitty.toFixed(2)).padStart(8, ' ') + "</pre>";
-    //console.log("-OVERALLS-", overallTotalPayments, overallTotalCost, kitty);
+    var currentKitty = overallTotalPayments + overallTotalGamesCost + adminCharge;
+    var futurekitty = currentKitty + totalPlayerAmountOwed;
+    //console.log("Costs Debug", overallTotalPayments, overallTotalGamesCost, adminCharge, totalPlayerAmountOwed);
+
+    //
+    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>\t\t\t\t   (RECEIVED: £" + totalPlayerAmountPaid + "\tUNPAID: " + totalPlayerGamesOwed + " payments = £" + totalPlayerAmountOwed + ")</pre>"
+    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>\t\t\t\t\t\t   ADMIN COSTS: £" + String(adminCharge.toFixed(2)) + "</pre>"
+    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>\t\t\t\tKITTY(Current)    KITTY(After all payments)</pre>";
+    document.getElementById("paymentsSummaryDiv").innerHTML += "<pre>\t\t\t\t" + String("£" + currentKitty.toFixed(2)).padStart(8, ' ') + "\t" + String("£" + futurekitty.toFixed(2)).padStart(8, ' ') + "</pre>";
+    //console.log("-OVERALLS-", overallTotalPayments, overallTotalCost, currentKitty, futurekitty);
 
     function updateEmailText(text) {
       var emailBody = inboundEmails[EMAIL_DOC_PREFIX + text].data;

@@ -373,9 +373,10 @@
   }
 
   function generateAvailabilityEmailText() {
-    document.getElementById("paymentsEntryDiv").innerHTML = '<p>';
+    var panelcontentouter = document.getElementById("paymentsEntryDiv");
+    panelcontentouter.innerHTML = '<p>';
     var showExpandedDates = document.getElementById("showDatesInPayments").checked;
-    addPaymentsTableRows(outstandingPayments, true, showExpandedDates);
+    addPaymentsTableRows(outstandingPayments, true, showExpandedDates, document, panelcontentouter);
 
     var dateText = monthDateLongFormat.format(nextMondayDate) + " " + nextMondayDate.getFullYear();
     var emailSubject = "Availability for " + dateText + " [Footie, Goodwin, 6pm Mondays]"
@@ -417,8 +418,9 @@
   }
   
   function generatePaymentsEmailText() {
-    document.getElementById("paymentsEntryDiv").innerHTML = '<p>';
-    addPaymentsTableRows(outstandingPayments, true, false);
+    var panelcontentouter = document.getElementById("paymentsEntryDiv");
+    panelcontentouter.innerHTML = '<p>';
+    addPaymentsTableRows(outstandingPayments, true, false, document, panelcontentouter);
 
     var emailSubject = "Payments for Monday Footie Please [Footie, Goodwin, 6pm Mondays]"
     var emailBody = "Hi all,\n\nOutstanding payments for games over the last few months when you get a sec please...\n\n"
@@ -460,7 +462,8 @@
     var emailSubject = document.getElementById("emailTitle").value;
     var emailBody = document.getElementById("emailBody").value;
     emailBody = emailBody.replaceAll("\n", '<br>');
-    emailBody = emailBody.replace("***PAYMENTS WILL GO HERE - DO NOT DELETE THIS LINE***", document.getElementById("paymentsEntryDiv").innerHTML);
+    var paymentsHTML = document.getElementById("paymentsEntryDiv").innerHTML;
+    emailBody = emailBody.replace("***PAYMENTS WILL GO HERE - DO NOT DELETE THIS LINE***", paymentsHTML);
     var emailDetails = { 'emailSubject': emailSubject, 'emailBody': emailBody, 'emailTo': emailTo };
     // now send the POST request with the data
     console.log(emailDetails)

@@ -78,7 +78,13 @@
         <div id="tempPasswordOKDiv" hidden>
           <div id="scoreHeader" class="gameheader"></div>
 
+      <div style="clear:both;"></div>
+      <button id="addAttendancePlayer" style="background-color: #90EE90;" type="button"
+        onclick="addPlayer(null, {}, null, 'attendance');">(+) Add Player</button>
+      <button id="cancelAttendanceEdit" onclick="location.reload()" disabled>Cancel</button>
+      <p>
           <div id="copyFromPreview">
+            Note: To add a player, go to the Availability tab, add and save player, then return here<br>
             <button id="copyAttendanceFromPreviewButton" onclick="copyAttendanceFromPreview()" disabled>Copy from Preview</button>
           </div>
 
@@ -118,6 +124,7 @@
 <%- include ("./admin-payments.ejs") %>
 
   <script>
+  <%- include ("./generate-teams-utils.js") %>
     document.getElementById("cancelCheckboxDiv").hidden = true;
 
     const AVAILABILITY = "availability";
@@ -612,7 +619,10 @@ function addPlayerListToTab(tabName) {
         if (tabName == "attendance") {
           // use a custom attribute as attendance can be 3 values 
           //(team1 or team2, not played)
-          if (playerName) {
+          //console.log("attendance", playerName)
+          //if (playerName) {
+            newPlayerWeek.onclick = function(e) {toggleTeamShirt(e)};
+            newPlayerWeekGoals.onclick = function(e) {toggleTeamShirt(e)};
             switch(availabilityMap[i]) {
               case 1:
                 updateTeamShirt(newPlayerWeek, 1);
@@ -627,9 +637,7 @@ function addPlayerListToTab(tabName) {
                 } else {
                   updateTeamShirt(newPlayerWeek, 0);
                 }
-            }
-            newPlayerWeek.onclick = function(e) {toggleTeamShirt(e)};
-            newPlayerWeekGoals.onclick = function(e) {toggleTeamShirt(e)};
+            //}
           }
 
           // add ability to increase # of goals

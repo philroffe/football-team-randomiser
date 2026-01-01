@@ -18,6 +18,7 @@
         <input id="newDocName" type="text" placeholder="<New Doc Name>" data-lpignore=true>
         <button id="renameDoc" type="button" onclick="renameSelectedDocument();">Rename</button>
         <button id="deleteDoc" type="button" onclick="deleteSelectedDocument();">Delete</button>
+        <button id="createNewDoc" type="button" onclick="createNewDocument();">Create</button>
       </div>
       <div id="databaseDiv" style="display:inline;width:45%">
         <button id="updateDoc" type="button" onclick="updateSelectedDocument();">Update</button>
@@ -25,7 +26,7 @@
     </div> 
 
     <div style="width:100%;display:flex;">
-      <div id="databaseDiv" style="display:inline;width:20%">Collection<br><select name="dbCollections" id="dbCollections" multiple onclick="clickCollection(this.value);" style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></select></div>
+      <div id="databaseDiv" style="display:inline;width:20%">Collection<br><select name="dbCollections" id="dbCollections" onselect="clickCollection(this.value);" multiple onclick="clickCollection(this.value);" style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></select></div>
       <div id="databaseDiv" style="display:inline;width:35%">Document<br><select name="dbDocuments" id="dbDocuments" multiple onclick="clickDocument(this.value);" style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></select></div>
       <div id="databaseDiv" style="display:inline;width:45%">Fields<br><textarea name="dbFields" id="dbFields" multiple style="width:95%;height:850px;font-size: 90%;margin-top:10px" ></textarea></div>
     </div> 
@@ -43,6 +44,8 @@
       var useCache = false;
 
       var dbCollectionsElement = document.getElementById('dbCollections');
+      dbCollectionsElement.addEventListener("touchstart", touchCollection, false)
+
       var dbDocumentsElement = document.getElementById('dbDocuments'); 
       var dbFieldsElement = document.getElementById('dbFields');
 
@@ -70,8 +73,14 @@
       }
 
       // functions
+      function touchCollection(touchEvent) {
+        console.log('Collection touch', touchEvent);
+        //var collectionId = touchEvent.option.value;
+        //clickCollection(collectionId);
+      }
+      // functions
       function clickCollection(collectionId) {
-        //console.log('Collection click', collectionId);
+        console.log('Collection click', collectionId);
         var documentList = Object.keys(database[collectionId]);
         // clear previous field details
         while (dbDocumentsElement.lastElementChild) {
@@ -149,6 +158,43 @@
         }
       }
 
+      function createNewDocument() {
+        var collectionId = dbCollectionsElement.value;
+        var newDocumentName = document.getElementById('newDocName').value;
+        var newDocumentData = {};
+        if (!newDocumentName) { alert('Error: Doc Name cannot be blank.') }
+        // check file doesn't already exist
+        for (var file in database[collectionId]) {
+          if (database[collectionId][file].id == newDocumentName) {
+            alert('Error: Doc with this name already exists: ' + newDocumentName);
+            return;
+          }
+        }
+
+        if (!confirm('This will CREATE a file called: ' + newDocumentName + ' \nAre you sure?')) return;
+
+        var body = { "collectionId": collectionId, "documentId": newDocumentName, "documentData": newDocumentData };
+        console.log("GETTING DOC:" + JSON.stringify(body));
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            console.log("Saved response", this.responseText);
+            // now create a new row in the table for the new doc
+            var opt = document.createElement('option');
+            opt.value = newDocumentName;
+            opt.innerHTML = newDocumentName;
+            dbDocumentsElement.appendChild(opt);
+            database[collectionId][newDocumentName] = { "id": newDocumentName, "data": newDocumentData };
+            //now select the new doc
+            dbDocumentsElement.value = newDocumentName;
+            clickDocument(newDocumentName);
+          }
+        };
+        xmlhttp.open("POST", "/services/create-new-database-doc");
+        xmlhttp.setRequestHeader("Content-Type", "application/json");
+        xmlhttp.send(JSON.stringify(body));
+      }
+
       function deleteSelectedDocument() {
         // now send the POST request with the data
         if (!dbDocumentsElement.options[dbDocumentsElement.selectedIndex]) {
@@ -166,7 +212,7 @@
         xmlhttp.onreadystatechange = function() {
           if (this.readyState == 4 && this.status == 200) {
             console.log("Saved response", this.responseText);
-            // now update the dable with the data
+            // now update the table with the data
             var updatedData = JSON.parse(this.responseText);
             delete database[collectionId][documentKey];
             dbFieldsElement.value = "Deleted document: " + documentName + "...\n" + JSON.stringify(updatedData, null, "\t");

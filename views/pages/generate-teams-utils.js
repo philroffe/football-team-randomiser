@@ -72,6 +72,19 @@ if (typeof module != "undefined") {
       first.getDate() === second.getDate();
   }
 
+  // returns a string of the date in format YYYY-MM-DD
+  function getStandardReverseDateFormat(thisDate) {    
+    var dayString = "" + exactDate.getDate();
+    //var dayString = exactDate.getDate().toString();
+    if (dayString.length == 1) { dayString = "0" + dayString; }
+    //dayString.padStart(2, "0"); // pad single digit (e.g. 5) with a leading zero (05)
+    var monthString = "" + (exactDate.getMonth()+1);
+    if (monthString.length == 1) { monthString = "0" + monthString; }
+    
+    var exactDateString = exactDate.getFullYear() + "-" + monthString + "-" + dayString;
+    return exactDateString;
+  }
+
   // get exact Monday date for a given month (2024-07-01) and index (3 = fourth Monday)
   function getExactDateFromMonthAndIndex(monthDate, mondayIndex) {
     // ensure it's a date
@@ -695,6 +708,9 @@ function generateTeamsEmailText(generatedTeams, nextMondayDate) {
   var bluePlayers = generatedTeams.bluePlayers
   var standbyPlayers = generatedTeams.standbyPlayers
   var ratios = generatedTeams.ratios;
+  var emailTeamsPrefix = generatedTeams.emailTeamsPrefix;
+  var emailIncludePayment = generatedTeams.emailIncludePayment;
+  
   //////////////////////
   // generate email text
   //////////////////////
@@ -738,6 +754,10 @@ function generateTeamsEmailText(generatedTeams, nextMondayDate) {
     emailSubject = "Teams"
   }
 
+  if (emailTeamsPrefix) {
+    emailHeader = emailTeamsPrefix + "\n\n" + emailHeader;
+  }
+
   fullEmailSubject = emailSubject + " - Mon " + dayDateFormat.format(nextMondayDate) + " " + monthDateFormat.format(nextMondayDate) + " [Footie, Goodwin, 6pm Mondays]\n"
   fullEmailText = "Hi all,\n\n" + emailHeader + "\n\nTeams below...\n\n"
 
@@ -764,6 +784,11 @@ function generateTeamsEmailText(generatedTeams, nextMondayDate) {
       fullEmailText += i+1 + " " + standbyPlayers[i] + "\n"
     }
   }
+
+  if (emailIncludePayment) {
+    fullEmailText += "\n***PAYMENTS WILL GO HERE - DO NOT DELETE THIS LINE***";
+  }
+
   fullEmailText += "\nCheers,\nPhil\n"
   fullEmailText += "\nMobile: 07960951917\n"
   fullEmailText += pollLink + "\n"
@@ -1012,6 +1037,7 @@ function sendEmailToList(mailOptions, hostname) {
     }
   }
 
+
   transporter.sendMail(mailOptions, function(error, info){
     console.log('Trying to send admin email: ', mailOptions);
     if (error) {
@@ -1033,6 +1059,155 @@ function checkNotProto(key) {
   return true;
 }
 
+function addPaymentsTableRows(paymentsMap, showEditTotals = true, showExpandableWeekCharges = false, document, divElement) {
+  var overallGamesTotal = 0;
+  var overallOwesTotal = 0;
+  var overallPaidTotal = 0;
+  var currentPlayerNumber = 0;
+
+  var panelcontentouter = divElement;
+  //var panelcontentouter = document.getElementById("paymentsEntryDiv");
+  const tbl = document.createElement('table');
+  //tbl.style.width = '100%';
+  const trHeader = tbl.insertRow();
+  trHeader.insertCell()
+  // games total
+  const tdGamesHeader = trHeader.insertCell();
+  tdGamesHeader.style.textAlign = 'center';
+  tdGamesHeader.appendChild(document.createTextNode("Games"));
+  // owes total
+  const tdOwesHeader = trHeader.insertCell();
+  tdOwesHeader.style.textAlign = 'center';
+  tdOwesHeader.appendChild(document.createTextNode("Owes"));
+  // paypal total
+  const tdPaypalHeader = trHeader.insertCell();
+  tdPaypalHeader.style.textAlign = 'center';
+  tdPaypalHeader.appendChild(document.createTextNode("PayPal Link"));
+  // paid total
+  //const tdPaidHeader = trHeader.insertCell();
+  //tdPaidHeader.style.textAlign = 'center';
+  //tdPaidHeader.appendChild(document.createTextNode("Paid (£)"));
+  panelcontentouter.appendChild(tbl);
+
+  Object.keys(paymentsMap).forEach(function(playerName) {
+    // create new row for table
+    var numberOfGames = paymentsMap[playerName]["numberOfGames"];
+    if (numberOfGames > 0) {
+      const tr = tbl.insertRow();
+      var amountOwed = paymentsMap[playerName]["amountOwed"];
+      var amountPaid = paymentsMap[playerName]["amountPaid"];
+      var outstandingBalance = paymentsMap[playerName]["outstandingBalance"];
+
+      // add table cell
+      const tdName = tr.insertCell();
+      tdName.appendChild(document.createTextNode(playerName));
+      tdName.setAttribute("id", "player" + showEditTotals + playerName + "NamePayment");
+      if (showExpandableWeekCharges) {
+        // add the list of charges as an expandable div
+        var paymentDiv = document.createElement("div");
+        paymentDiv.setAttribute("id", "player" + showEditTotals + playerName + "NamePaymentList");
+        var charges = paymentsMap[playerName]["charges"];
+        for (let i = 0; i < charges.length; i++) {
+          paymentDiv.appendChild(document.createTextNode(charges[i]));
+          paymentDiv.appendChild(document.createElement("br"));
+        }
+        paymentDiv.hidden = true;
+        tdName.appendChild(paymentDiv);
+        tdName.addEventListener("click", togglePaymentVisbility);
+        tdName.className = "expandable";
+      }
+
+      // add table cell
+      const tdGames = tr.insertCell();
+      tdGames.style.textAlign = 'center';
+      tdGames.appendChild(document.createTextNode(numberOfGames));
+
+      // add table cell
+      const tdOwed = tr.insertCell();
+      tdOwed.id = "player" + showEditTotals + playerName + "OwedPayment";
+      tdOwed.style.textAlign = 'center';
+      tdOwed.appendChild(document.createTextNode("£" + amountOwed));
+
+      var paymentLinkElement = document.createElement("a");
+      paymentLinkElement.setAttribute("id", "player" + showEditTotals + currentPlayerNumber + "LinkPayment"); 
+      if (outstandingBalance > 0) {
+        var paymentLink = "https://www.paypal.me/philroffe/" + outstandingBalance;
+        var linkText = document.createTextNode("(PayPal £" + outstandingBalance + ")");
+        paymentLinkElement.appendChild(linkText);
+        paymentLinkElement.href = paymentLink;
+        paymentLinkElement.style.color = "darkblue";
+      }
+      // add table cell
+      const tdLink = tr.insertCell();
+      tdLink.style.textAlign = 'center';
+      tdLink.appendChild(paymentLinkElement);
+
+      // add input field for amount paid
+      var playerPaymentAmountElement = document.createElement("input"); 
+      playerPaymentAmountElement.setAttribute("type", "text"); 
+      if (showEditTotals) {
+        playerPaymentAmountElement.setAttribute("id", "player" + currentPlayerNumber + "AmountPayment"); 
+        playerPaymentAmountElement.setAttribute("name", currentPlayerNumber + "myPayments[]"); 
+      }
+      playerPaymentAmountElement.value = amountPaid;
+      playerPaymentAmountElement.hidden = true;
+      playerPaymentAmountElement.style.maxHeight = "22px";
+      playerPaymentAmountElement.style.maxWidth = "40px";
+      playerPaymentAmountElement.style.padding = "0px 0px 0px 5px";
+      // add text for amount paid
+      var paidElement = document.createElement("text");
+      paidElement.setAttribute("id", "player" + currentPlayerNumber + "PaidPayment"); 
+      if (amountPaid > 0) {
+        var text = "£" + amountPaid;
+        if (outstandingBalance == 0) {
+          text += " &#10003;";
+        } else if (outstandingBalance < 0) {
+          text += " &#10003; £" + outstandingBalance;
+        } else {
+          text += " (?) £" + outstandingBalance;
+        }
+        paidElement.innerHTML = text;
+      }
+      // add table cell
+      //const tdPaid = tr.insertCell();
+      //tdPaid.style.textAlign = 'center';
+      //tdPaid.appendChild(paidElement);
+      //tdPaid.appendChild(playerPaymentAmountElement);
+      
+      overallGamesTotal += numberOfGames;
+      overallOwesTotal += amountOwed;
+      overallPaidTotal += amountPaid;
+
+      currentPlayerNumber++;
+    }
+  })
+
+  // create new row for table
+  const tr = tbl.insertRow();
+  const tdNameTotal = tr.insertCell();
+
+  // games total
+  const tdGamesTotal = tr.insertCell();
+  tdGamesTotal.setAttribute("id", "OverallGamesTotal" + showEditTotals);
+  tdGamesTotal.style.textAlign = 'center';
+  tdGamesTotal.appendChild(document.createTextNode(overallGamesTotal));
+  // owes total
+  const tdOwesTotal = tr.insertCell();
+  tdOwesTotal.setAttribute("id", "OverallOwesTotal" + showEditTotals);
+  tdOwesTotal.style.textAlign = 'center';
+  tdOwesTotal.appendChild(document.createTextNode("£" + overallOwesTotal));
+  // outstanding total
+  const tdOutstandingTotal = tr.insertCell();
+  tdOutstandingTotal.setAttribute("id", "OverallOutstandingTotal" + showEditTotals);
+  tdOutstandingTotal.style.textAlign = 'center';
+  tdOutstandingTotal.appendChild(document.createTextNode("£" + (overallOwesTotal - overallPaidTotal)));
+  // tdOutstandingTotal total
+  //const tdPaidTotal = tr.insertCell();
+  //tdPaidTotal.style.textAlign = 'center';
+  //tdPaidTotal.appendChild(document.createTextNode("£" + overallPaidTotal));
+  return panelcontentouter;
+}
+
 // workaround check as this file is included serverside as a module
 if (typeof module != "undefined") {
   module.exports = {
@@ -1041,11 +1216,13 @@ if (typeof module != "undefined") {
     generateTeamsEmailText,
     getOfficialNameFromAlias,
     mondaysInMonth,
+    getStandardReverseDateFormat,
     datesAreOnSameDay,
     checkIfBankHoliday,
     sendAdminEvent,
     sendEmailToList,
     checkNotProto,
-    parsePaypalEmail
+    parsePaypalEmail,
+    addPaymentsTableRows
   };
 }
