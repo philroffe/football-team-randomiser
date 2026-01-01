@@ -167,6 +167,7 @@
     if (!statChartParam) { statChartParam = "Won" };
     
     document.getElementById("dateRange").value = dateRangeParam;
+    var lastStatsDateRange = document.getElementById("dateRange").value;
     document.getElementById("statChartSelect").value = statChartParam;
     document.getElementById(tabParam).checked = true;
     document.getElementById("dateLabel").innerHTML = dateParam;
@@ -201,7 +202,8 @@
     //console.log("PLAYER NAME SUGGESTIONS:" + JSON.stringify(playerNameSuggestions));
 
     function changeTab(tabName) {
-      if (!tabName) { tabName = tabParam };
+      (!tabName) ? tabName = tabParam : tabParam = tabName;
+      //console.log("CHANGING TAB:", tabName, tabParam);
       // calculate updated URL
       var newURL = window.location.href;
       if (window.location.href.includes("tab=")) {
@@ -218,10 +220,10 @@
           createPlayerWinsLineRace("statsChartsDiv");
           break;
         case 'two':
-        calcRedBlueWinnersOptionData("totalRedBlueWinsContainer")
+          calcRedBlueWinnersOptionData("totalRedBlueWinsContainer")
           break;
         case 'three':
-          createHeadToHead("Sam B", "Will C", "playerHeadToHeadDiv");
+          createHeadToHead("Sam B", "Phil R", "playerHeadToHeadDiv");
           break;
         case 'four':
           calcPlayerStackChart('playerStackChartDiv')
@@ -243,6 +245,7 @@
         default:
           // code block
       }
+
     }
 
     // Generate win/lose/draw/team data for all players
@@ -590,6 +593,7 @@
     }
 
     function calcRedBlueWinnersOptionData(elementId) {
+      console.log("calcRedBlueWinnersOptionData", elementId);
       // loop through all of the costs and payments for this year
       var totalRedWins = 0;
       var totalBlueWins = 0;
@@ -951,12 +955,12 @@
         //filter to get players with 5 games or more
         //var filteredPlayers = playerNameSuggestions;
         var filteredPlayers = [];
-            console.log("Pl", playerCountMap)
+        //console.log("Pl", playerCountMap)
         for (let [playerName, value] of playerCountMap) {
-            console.log("Pl1", playerName, value.get("totalGames"))
+         //console.log("Pl1", playerName, value.get("totalGames"))
           if (value.get("totalGames") >= 5) {
             filteredPlayers.push(playerName);
-            console.log("Pl2", playerName)
+            //console.log("Pl2", playerName)
           }
         }
         echarts.util.each(filteredPlayers, function (playerName) {
@@ -1055,7 +1059,7 @@
     //createHeadToHead("Phil R", "Will C", "playerHeadToHeadDiv")
     var head2HeadInitialised = false;
     function createHeadToHead(player1, player2, elementId) {
-      //console.log(elementId, document.getElementById(elementId).hidden);
+      //console.log("CREATEHeadToHead", elementId, player1, player2);
       document.getElementById("player1HeadToHeadSelect").value = player1;
       document.getElementById("player2HeadToHeadSelect").value = player2;
       // loop through all of the costs and payments for this year
@@ -1263,6 +1267,28 @@
           filteredAllCollectionDocs[collectionId] = allCollectionDocs[collectionId];
         }
       }
+      //console.log("STATS", statsDateRange)
+      if (lastStatsDateRange != statsDateRange) {
+        lastStatsDateRange = statsDateRange;
+        updateURLWithDateRange(statsDateRange);
+        // force reload (ideally wouldn't need to do this, but reloading each canvas proved tricky)
+        window.location.reload(true);
+      }
+    }
+
+    function updateURLWithDateRange(statsDateRange) {
+      //update URL with new dateRange
+      //console.log("CHANGING DATERANGE:", statsDateRange);
+      // calculate updated URL
+      var newURL = window.location.href;
+      if (window.location.href.includes("dateRange=")) {
+        newURL = window.location.href.replace(/(dateRange=)\w+/g, 'dateRange=' + statsDateRange)
+      } else {
+        (window.location.href.includes("?")) ? newURL += "&" : newURL += "?";
+        newURL += "dateRange=" + statsDateRange;
+      }
+      // update the URL (without refreshing) to reflect tab change
+      window.history.pushState({}, 'unused', newURL);
     }
 
     // security check to ensure that user-controlled input cannot be used to modify Object.prototype
