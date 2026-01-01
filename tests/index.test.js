@@ -1143,7 +1143,8 @@ it ('40 - test weekly cron', async () => {
 
   var gameMonthString = "2050-06-01";
   var dateString = "2050-06-06";
-  var dateStringLocale = new Date(dateString).toLocaleDateString('en-GB', localeDateOptions).replace(',', '');
+  //var dateStringLocale = new Date(dateString).toLocaleDateString('en-GB', localeDateOptions).replace(',', '');
+  var dateStringLocale = new Date(dateString).toLocaleDateString('en-GB', localeDateOptions);
   var expectedRed = 6, expectedBlue = 6, expectedStandby = 2; // hardcoded for now
   var expectedTotal = expectedRed + expectedBlue + expectedStandby; 
 

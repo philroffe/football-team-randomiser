@@ -93,10 +93,22 @@ gcloud app deploy .app-prod.yaml --no-cache
 
 # if you want a weekly scheduled task then deploy the cron too...
 gcloud app deploy cron.yaml
+
 ```
 ```
 # you can clean up old deployments using this command (deletes everything except the latest 3)
 gcloud app versions list --format="value(version.id)" --sort-by="~version.createTime" | tail -n +4 | xargs -r gcloud app versions delete
+# and delete whole artifact repo (you will need to redeploy to auto create a new one)
+gcloud artifacts repositories delete gae-standard --location=europe-west2
+
+# get repo info
+gcloud artifacts repositories list --location=all
+gcloud artifacts repositories describe gae-standard --location=europe-west2
+
+#you can delete all files from here
+https://console.cloud.google.com/artifacts/docker/tensile-spirit-360708/europe-west2/gae-standard/app%2Fdefault?project=tensile-spirit-360708
+# then redeploy with no-cache...
+gcloud app deploy .app-prod.yaml --no-cache
 ```
 
 ## Setting up Google Cloud App Engine and Firebase

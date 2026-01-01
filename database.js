@@ -50,10 +50,14 @@ if (process.argv[2]) {
       console.log('Viewing DB...');
       viewDatabase();
       break;
+    case 'cleanDB':
+      console.log('Cleaning DB...');
+      cleanDatabase();
+      break;
     case 'datafix':
       console.log('Running datafix...');
       // change this to call the specific datafix you need
-      migrateAttendanceData_2025_03_23();
+      fixPitchCosts();
       break;
     default:
       console.log('Usage: npm run [backup|restore|addCharges|viewDatabase|datafix]');
@@ -196,6 +200,140 @@ async function viewDatabase() {
   */
 }
 
+async function cleanDatabase() {
+  // firstly, check using emulator (don't overwrite production data!)
+  if (process.env.FIRESTORE_EMULATOR_HOST) {
+    console.log("RESTORING TO LOCAL FIREBASE EMULATOR")
+  } else {
+    console.log("ERROR, RUNNING PRODUCTION SO ABORTING");
+    return;
+  }
+
+  ////////
+  //////// THIS DOES NOT WORK!!!!
+  ////////
+
+  var allCollections = [];
+  // get a list of all collections
+  await firestore.listCollections().then(snapshot=>{
+    snapshot.forEach(snaps => {
+      allCollections.push(snaps["_queryOptions"].collectionId);
+    })
+  })
+  .catch(error => console.error(error));
+
+  // loop through each collection and get the docs
+  var allCollectionDocs = {};
+  //allCollections.length
+  for (var i=0; i<allCollections.length; i++) {
+    var collectionId = allCollections[i];
+    console.log("Deleting docs from:", collectionId);
+
+    const collection = await firestore.collection(collectionId)
+    var allDocs = {};
+    await collection.get().then((querySnapshot) => {
+      const tempDoc = querySnapshot.docs.map((doc) => {
+        var obj = { "id": doc.id, "data": doc.data() }
+        collection.doc(doc.id)
+        return obj;
+      })
+      //allDocs[tempDoc.id] = tempDoc;
+      console.log("ALL DOCS", tempDoc);
+      allCollectionDocs[collectionId] = tempDoc;
+      //const docRef = collection.doc(tempDoc.id);
+    })
+  }
+  //console.log(allCollectionDocs);
+
+    //for (var j=0; j<allDocs.length; j++) {
+    for (const docId in allCollectionDocsBROKEN) {
+      const collection = await firestore.collection(collectionId)
+      const docRef = await collection.doc(docId);
+      console.log("Deleted", docId);
+      docRef.delete();
+    }
+}
+
+
+async function fixPitchCosts() {
+  // firstly, check using emulator (don't overwrite production data!)
+  if (process.env.FIRESTORE_EMULATOR_HOST) {
+    console.log("RUNNING DATAFIX TO LOCAL FIREBASE EMULATOR")
+  } else {
+    console.log("ERROR, RUNNING PRODUCTION SO ABORTING");
+    return;
+  }
+
+  const playerClosedLedgerDocRef = await firestore.collection("CLOSED_LEDGER").doc("Admin - Pitch Costs");
+  var playerClosedLedgerDoc = await playerClosedLedgerDocRef.get();
+  var playerClosedLedger = playerClosedLedgerDoc.data();
+  for (const chargePitchId in playerClosedLedger) {
+    if (playerClosedLedger[chargePitchId].amount > 0) {
+      console.log("FOUND", chargePitchId, playerClosedLedger[chargePitchId].amount)
+      playerClosedLedger[chargePitchId].amount = playerClosedLedger[chargePitchId].amount * -1;
+    }
+
+  }
+  firestore.collection("CLOSED_LEDGER").doc("Admin - Pitch Costs").set(playerClosedLedger);
+}
+
+async function fixFinancialYear() {
+  // firstly, check using emulator (don't overwrite production data!)
+  if (process.env.FIRESTORE_EMULATOR_HOST) {
+    console.log("RUNNING DATAFIX TO LOCAL FIREBASE EMULATOR")
+  } else {
+    console.log("ERROR, RUNNING PRODUCTION SO ABORTING");
+    return;
+  }
+
+    const playerClosedLedgerDocRef = await firestore.collection("CLOSED_LEDGER").doc("Admin - Pitch Costs");
+    var playerClosedLedgerDoc = await playerClosedLedgerDocRef.get();
+    var playerClosedLedger = playerClosedLedgerDoc.data();
+    for (const chargePitchId in playerClosedLedger) {
+      if (!playerClosedLedger[chargePitchId].financialYear) {
+        console.log("FOUND MISSING FY", chargePitchId)
+        playerClosedLedger[chargePitchId].financialYear = 2025;
+      }
+    }
+    delete playerClosedLedger["charge_pitch_2025-08-11"];
+    delete playerClosedLedger["charge_pitch_2025-04-07"];
+    if (!playerClosedLedger["charge_pitch_2025-04-28"]) {
+      playerClosedLedger["charge_pitch_2025-04-28"] = {"payeeName": "Admin Pitch Organiser"
+        , "amount": 37.5, "gameDate": "2025-04-28","financialYear": 2025 }
+      playerClosedLedger["charge_pitch_2025-05-12"] = {"payeeName": "Admin Pitch Organiser"
+        , "amount": 37.5, "gameDate": "2025-05-12","financialYear": 2025 }
+      playerClosedLedger["charge_pitch_2025-05-19"] = {"payeeName": "Admin Pitch Organiser"
+        , "amount": 37.5, "gameDate": "2025-05-19","financialYear": 2025 }
+    }
+    firestore.collection("CLOSED_LEDGER").doc("Admin - Pitch Costs").set(playerClosedLedger);
+
+  
+    // read the completed payments ledger
+    const closedLedgerCollection = firestore.collection("CLOSED_LEDGER");
+    const allClosedLedgerDocs = await closedLedgerCollection.get();
+    var closedLedgers = {};
+    allClosedLedgerDocs.forEach(doc => {
+      var key = doc.id;
+      var data = doc.data();
+      data.amount = Number(data.amount);
+      closedLedgers[key] = data;
+    })
+
+    // fix incorrectly assigned financialYear
+    // loop through each player
+    for (const playerName in closedLedgers) {
+      // loop through each charge/payment
+      for (const chargeId in closedLedgers[playerName]) {
+        if (chargeId.startsWith("charge_2025-01") && closedLedgers[playerName][chargeId].financialYear == 2024) {
+          console.log("FOUND INCORRECT YEAR", playerName, chargeId, closedLedgers[playerName][chargeId].financialYear);
+          closedLedgers[playerName][chargeId].financialYear = 2025;
+          const playerLedgerDocRef = firestore.collection("CLOSED_LEDGER").doc(playerName);
+          var currentPlayerData = closedLedgers[playerName];
+          playerLedgerDocRef.set(currentPlayerData, { merge: true });
+        }
+      }
+    }
+  }
 
 async function addCharges() {
   // firstly, check using emulator (don't overwrite production data!)
