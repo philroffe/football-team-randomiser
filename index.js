@@ -2171,7 +2171,7 @@ async function getDefinedPlayerAliasMaps(includeNonSubscribers = false) {
   Object.keys(aliasesData).sort().forEach(function(key) {
     var officialName = key.trim();
     // create the player to alias map
-    if (!includeNonSubscribers || aliasesData[key].subscriptionStatus > 0) {
+    if (includeNonSubscribers || aliasesData[key].subscriptionStatus > 0) {
       playerToAliasMap[officialName] = aliasesData[key].aliases;
 
       // create a reverse lookup map from alias to official name
