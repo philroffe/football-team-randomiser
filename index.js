@@ -361,6 +361,9 @@ app.use('/', authRouter)
     if (req.isAuthenticated()) {
       console.log("User is logged in: ", JSON.stringify(req.user));
       pageData.user = req.user;
+    } else {
+      res.redirect(302, "/login?redirect=/admin");
+      return;
     }
 
 
@@ -414,7 +417,7 @@ app.use('/', authRouter)
   var amount = Number(amountReceived.split(' ')[0].replace(/£/, ''));
 
   // save the details
-  var saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+  var saveSuccess = await receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
   if (saveSuccess) {
     res.json({'result': 'OK'})
   } else {
@@ -447,7 +450,7 @@ app.use('/', authRouter)
     if (transactionType == "payment") {
       if (action == "ADD") {
         if (transactionDate && transactionId && payeeName && amount) {
-          saveSuccess = receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+          saveSuccess = await receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
         }
       } else if (action == "REFUND") {
         if (transactionId) {
@@ -2156,7 +2159,7 @@ function buildPlayerUniqueList(dbresult) {
 }
 
 // check for unique player name
-async function getDefinedPlayerAliasMaps() {
+async function getDefinedPlayerAliasMaps(includeNonSubscribers = false) {
   var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
   var aliasesData = aliasesDoc.data();
   if (!aliasesData) {
@@ -2168,7 +2171,7 @@ async function getDefinedPlayerAliasMaps() {
   Object.keys(aliasesData).sort().forEach(function(key) {
     var officialName = key.trim();
     // create the player to alias map
-    if (aliasesData[key].subscriptionStatus > 0) {
+    if (!includeNonSubscribers || aliasesData[key].subscriptionStatus > 0) {
       playerToAliasMap[officialName] = aliasesData[key].aliases;
 
       // create a reverse lookup map from alias to official name
@@ -2394,7 +2397,7 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
   console.log("openFinancialYear", openFinancialYear)
 
   // read the list of players and aliases
-  var playerAliasMaps = await getDefinedPlayerAliasMaps();
+  var playerAliasMaps = await getDefinedPlayerAliasMaps(true);
   var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
   var officialPlayerName = teamUtils.getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
 
