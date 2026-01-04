@@ -465,7 +465,7 @@ app.use('/', authRouter)
     if (saveSuccess) {
       res.json({'result': 'OK'})
     } else {
-      console.error("ERROR: Failed to save manual payment - discarding", action, payeeName, amount, transactionId, transactionDate);
+      console.error("ERROR: Failed to save manual payment - discarding...\n" + JSON.stringify(req.body));
       res.sendStatus(400);
     }
     
@@ -539,7 +539,7 @@ app.use('/', authRouter)
     if (saveSuccess) {
       res.json({'result': 'OK'})
     } else {
-      console.error("ERROR: Failed to save manual admin cost - discarding", errorMessage);
+      console.error("ERROR: Failed to save manual admin cost - discarding\n" + errorMessage);
       res.sendStatus(400);
     }
 
@@ -1892,6 +1892,19 @@ process.on('uncaughtException', function(err) {
   console.log('This will not run.');
 });
 
+(function(){
+  var _error = console.error;
+  //var _log = console.log;
+  //var _warning = console.warning;
+
+  console.error = function(errMessage){
+    // override the error function to allow alert of the error by email
+    teamUtils.sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "Footie App Error", errMessage);
+   _error.apply(console,arguments);
+  };
+  
+})();
+
 function getDateNextMonday(fromDate = new Date()) {
   // Get the date next Monday
   nextMonday = fromDate;
@@ -2410,7 +2423,7 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
     if (playerClosedLedgerDoc.data() && playerClosedLedgerDoc.data()[playerTransactionName]) {
       console.warn("transaction already exists, skipping to avoid double counting...", playerTransactionName);
       //res.send({'result': 'Already exists: ' + playerTransactionName});
-      return true;
+      return false;
     }
     var playerTransactionSavedata = {};
     playerTransactionSavedata[playerTransactionName] = { "amount": amount, "paypalTransactionId": transactionId, "financialYear": openFinancialYear };
