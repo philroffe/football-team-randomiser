@@ -169,9 +169,7 @@
     playersPreviewData = pagedata.data.playersPreviewData;
     if (!playersPreviewData) { playersPreviewData = {}; }
 
-    //pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
-    pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear);
-    //console.log(pollDate);
+    pollDate = new Date("01 " + monthDateFormat.format(todayDate) + " " + gameYear + " 12:00");
     var gameMonthString = monthDateFormat.format(todayDate);
 
     //console.log("allAttendanceData=", allAttendanceData);
@@ -239,7 +237,7 @@
     var optionDates = "Dates";
     Object.keys(mondaysDates).forEach(function(key) {
       // Generate the text for the options (with next Monday in bold)
-      optionDate = new Date(mondaysDates[key] + " " + monthDateFormat.format(nextMondayDate) + " " + nextMondayDate.getFullYear());
+      optionDate = new Date(nextMondayDate.getFullYear() + "-" + Number(nextMondayDate.getMonth()+1) + "-" + mondaysDates[key] + " 12:00");
       optionDateText = dayDateFormat.format(optionDate) + " " + monthDateFormat.format(optionDate);
       if (datesAreOnSameDay(optionDate, nextMondayDate)) {
         optionDates += " : <b><u>" + optionDateText + " </u></b>"

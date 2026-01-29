@@ -160,8 +160,8 @@
         originalState.gameWeek = gameWeek;
 
         if (gameWeek) {
-          var gameWeekDate = new Date(gameWeek);
-          gameWeekDate.setHours(18);
+          var gameWeekDate = new Date(gameWeek + " 12:00");
+          //gameWeekDate.setHours(18);
           //var gameWeekString = gameWeekDate.toISOString().split('T')[0];
           var gameWeekString = gameWeekDate.toLocaleDateString('en-GB', localeDateOptions);
           document.getElementById("teamTitle").innerHTML = "<H3>" + pagedata.playersPreviewData.status + ": " + gameWeekString + "</H3>"; 

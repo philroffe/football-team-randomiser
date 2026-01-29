@@ -1136,7 +1136,7 @@ app.use('/', authRouter)
       }
     }
 
-    console.log('Rendering POLL page with data' + req.query.date);
+    console.log('Rendering POLL page with data', req.query);
     var rowdata = await queryDatabaseAndBuildPlayerList(req.query.date);
     //console.log('SCORES POLL page with data' + JSON.stringify(rowdata.scores));
 
@@ -1914,6 +1914,7 @@ function getDateNextMonday(fromDate = new Date()) {
     console.log('Currently a Monday after kick-off so adding a day to:' + nextMonday.toISOString());
   }
   nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
+  nextMonday.setHours(12);
   console.log('Next Monday:' + nextMonday.toISOString());
   return nextMonday;
 }
@@ -2022,7 +2023,7 @@ async function queryDatabaseAndBuildPlayerList(reqDate, filterType = PLAYER_UNIQ
       console.log('Currently a Monday after kick-off so adding a day to:' + nextMonday.toISOString());
     }
     nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
-    console.log('Next Monday:' + nextMonday.toISOString());
+    console.log('Querying database for next Monday:' + nextMonday.toISOString());
 
     var requestedDate = new Date();
     var requestedDate = nextMonday;
@@ -2712,7 +2713,7 @@ async function getGameWeekPreviewTeams() {
   // read the teams from the playersPreviewData
   var playersPreviewDoc = await firestore.collection("ADMIN").doc("GameWeekPreview").get();
   var playersPreviewData = playersPreviewDoc.data();
-  console.log("SAVED PREVIEW", playersPreviewData);
+  //console.log("SAVED PREVIEW", playersPreviewData);
   if (!playersPreviewData) {
     // not yet available so create empty object
     playersPreviewData = {};

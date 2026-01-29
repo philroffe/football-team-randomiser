@@ -154,7 +154,7 @@
     }
 
     var bankHolidaysJson = pagedata.bankHolidays;
-    var selectedMonthDate = new Date(pagedata.data.gameid);
+    var selectedMonthDate = new Date(pagedata.data.gameid + " 12:00");
     var gameMonth = monthDateNumericFormat.format(selectedMonthDate);
     var gameYear = selectedMonthDate.getFullYear();
     var nextMonday = pagedata.data.nextMonday;
