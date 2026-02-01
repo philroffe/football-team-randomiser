@@ -181,7 +181,7 @@
             // loop through all the unpaid games for the player
             if (openLedgers[playerName]) {
               Object.keys(openLedgers[playerName]).sort().forEach(function(chargesKey) {
-                outstandingCharges += openLedgers[playerName][chargesKey].amount;
+                outstandingCharges -= openLedgers[playerName][chargesKey].amount;
               });
             }
             option.text += " (Owes: £" + outstandingCharges + ")";
