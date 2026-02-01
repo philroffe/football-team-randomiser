@@ -988,7 +988,8 @@ app.use('/', authRouter)
           requestedDate = new Date(req.query.date);
         }
         console.log('Generating TEAMS page with data for date: ', requestedDate);
-        var rowdata = await queryDatabaseAndBuildPlayerList(requestedDate);
+        var nextMonday = getDateNextMonday(requestedDate);
+        var rowdata = await queryDatabaseAndBuildPlayerList(nextMonday);
         
         // read the list of aliases
         var playerAliasMaps = await getDefinedPlayerAliasMaps();
@@ -999,10 +1000,10 @@ app.use('/', authRouter)
         rowdata.playerToEmailMap = playerEmailMaps["playerToEmailMap"];
         rowdata.activeEmailList = playerEmailMaps["activeEmailList"];
 
-        var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(requestedDate);
+        
+        var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(nextMonday);
         rowdata.allAttendanceData = allAttendanceData;
 
-        var nextMonday = getDateNextMonday(requestedDate);
         var calcPaymentsFromDate = nextMonday;
         if (req.query.date) {
           calcPaymentsFromDate = req.query.date;
@@ -1189,7 +1190,7 @@ app.use('/', authRouter)
         var nextMonday = getDateNextMonday();
         // combine database data with supplimentary game data and render the page
         var pageData = { data: rowdata, nextMonday: nextMonday.toISOString(), "environment": environment };
-        res.render('pages/poll-log', { pageData: pageData} );
+        res.render('pages/poll-log', { pageData: JSON.stringify(pageData) } );
       } catch (err) {
         console.error(err);
         res.send("Error " + err);
@@ -2123,13 +2124,9 @@ function buildPlayerLogList(dbresult) {
   dbresult.forEach((doc) => {
     if (!doc.id.startsWith("_")) {
       //console.log(doc.id, '=>', doc.data());
-      playerName = new Date(doc.data().timestamp.seconds*1000).toISOString().replace(/T|\..*Z/g, ' ') + " " + doc.data().playerName + "\\t" + doc.data().saveType;
-      playerData = doc.data().playerAvailability;
-      if (doc.data().originalPlayerName) {
-        //console.log("FOUND originalPlayerName:" + originalPlayerName);
-        playerData["originalName"] = doc.data().originalPlayerName;
-      }
-      playerdata[playerName] = playerData;
+      logId = new Date(doc.data().timestamp.seconds*1000).toISOString() + " " + doc.data().playerName;
+      playerData = doc.data()//.playerAvailability;
+      playerdata[logId] = playerData;
     }
   });
   return playerdata;

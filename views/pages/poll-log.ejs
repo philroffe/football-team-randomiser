@@ -30,7 +30,7 @@
         nextMondayText = dayDateFormat.format(nextMonday) + " " + monthDateFormat.format(nextMonday);
 
         // annoying workaround to some mumbo-jumbo to convert a valid object client-side ()
-        var pagedata =  JSON.parse("<%= JSON.stringify(pageData) %>".replace(/&#34;/g, '"'));
+        var pagedata = JSON.parse(JSON.stringify(<%- pageData %>));
         //console.log('Data=' + JSON.stringify(pagedata));
 
         var selectedMonthDate = new Date(pagedata.data.gameid);
@@ -58,9 +58,13 @@
         if (!players) { players = {}; }
         Object.keys(players).sort().forEach(function(key) {
           //console.log('player=' + key + "___" + JSON.stringify(players[key]));
-          playerName = key
-          playerAvailability = players[key]
-          logarea.innerHTML = playerName + "\t" + JSON.stringify(playerAvailability) + "\n" + logarea.innerHTML;
+          data = players[key]
+          date = new Date(data.timestamp._seconds*1000).toISOString().replace(/T|\..*Z/g, ' ');
+          info = data.playerAvailability;
+          if (data.saveType == "RENAME") {
+            info.originalPlayerName = data.originalPlayerName;
+          }
+          logarea.innerHTML = date + "  " + data.playerName + "  " + data.saveType.padEnd(4, " ") + "  " + JSON.stringify(info).replaceAll('"', "") + "\n" + logarea.innerHTML;
         });
 
         

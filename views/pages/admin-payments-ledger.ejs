@@ -62,15 +62,15 @@
         <br><input type="text" id="payeeTransactionId" placeholder="Transaction ID" data-lpignore=true>
         <br><input type="text" id="payeeTransactionDate" placeholder="Transaction Date (YYYY-MM-DD)" data-lpignore=true>
         <!-- Buttons -->
-        <br><button id="submit" style="background-color: #90EE90;float:left;" type="button" onclick="addManualPayment();">Add</button>
-        <button id="submit" style="background-color: #90EE90;float:left;" type="button" onclick="refundPayment();">Refund</button>
-        <button id="submit" style="background-color: #90EE90;float:left;" type="button" onclick="splitPayment();">Split</button>
+        <br><button id="addManualPaymentButton" style="background-color: #90EE90;float:left;" type="button" onclick="addManualPayment();">Add</button>
+        <button id="refundPaymentButton" style="background-color: #90EE90;float:left;" type="button" onclick="refundPayment();">Refund</button>
+        <button id="splitPaymentButton" style="background-color: #90EE90;float:left;" type="button" onclick="splitPayment();">Split</button>
         <div id="response"></div>
       </div>
     <div style="width:100%;display:flex;">
       <div id="emailEntryDiv" style="display:inline;width:45%">
         <select id="paymentsSelect" onchange="updateEmailText(this.value)" >
-        <option class="btn-danger"> ---Select Failed Email--- </option>  
+        <option class="btn-danger"> ---Select Email--- </option>  
         </select>
         <button id="addAdminCost" style="background-color: #90EE90;" type="button" onclick="addAdminCost();">Add Admin Cost</button><br>
         <button id="parseEmail" style="background-color: #90EE90;" type="button" onclick="parseEmail();">Parse Email</button><br>
@@ -185,6 +185,12 @@
               });
             }
             option.text += " (Owes: £" + outstandingCharges + ")";
+
+            if (parsedData.amount == outstandingCharges) {
+              option.style.background = "lightgreen";
+            } else {
+              option.style.background = "yellow";
+            }
 
             // remove the prefix (probably a nicer way to do this, but it does the job)
             option.text = option.text.replace('PAYPAL_EMAIL_', '');

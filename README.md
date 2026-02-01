@@ -97,7 +97,7 @@ gcloud app deploy cron.yaml
 ```
 ```
 # you can clean up old deployments using this command (deletes everything except the latest 3)
-gcloud app versions list --format="value(version.id)" --sort-by="~version.createTime" | tail -n +4 | xargs -r gcloud app versions delete
+gcloud app versions list --format="value(version.id)" --sort-by="~version.createTime" | tail -n +3 | xargs -r gcloud app versions delete
 # and delete whole artifact repo (you will need to redeploy to auto create a new one)
 gcloud artifacts repositories delete gae-standard --location=europe-west2
 

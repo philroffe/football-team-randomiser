@@ -581,6 +581,42 @@ for (var gameWeek = 0; gameWeek < 4; gameWeek++) {
   expect(isChecked).toEqual(true);
 
 }
+
+it ('06a - test editing player', async () => {
+  if (!enabledTests) { return };
+  const thisAttendanceURL = rootURL + '/poll?date=' + testYearMonth + '-01&tab=one';
+  await driver.get(thisAttendanceURL);
+
+  // toggle it player availability once, check it worked, then toggle it back
+  for (i=0; i<2; i++) {
+    // edit player and toggle availability
+    var editPlayerIndex = 0;
+    await driver.findElement(By.id('player' + editPlayerIndex + 'Editavailability')).click();
+    //await driver.findElement(By.id('player' + editPlayerIndex + 'availability')).sendKeys(testData.playerAvailability[i].name); // add name
+    gameWeek=0
+    await driver.findElement(By.id('player' + editPlayerIndex + 'Week' + gameWeek + 'availability')).click(); // uncheck week 
+    await driver.findElement(By.id('player' + editPlayerIndex + 'Editavailability')).click(); // now save
+
+    await new Promise(r => setTimeout(r, 500)); // sleep 0.5s
+    // refresh page and check save worked
+    await driver.get(thisAttendanceURL);
+    const anchor = await querySelector("[id=\'player" + editPlayerIndex + "availability\']", driver)
+    const actual = await anchor.getAttribute("value")
+    const expected = testData.playerAvailability[editPlayerIndex].name;
+    expect(actual).toEqual(expected)
+    newPlayerIndex++;
+  }
+
+  const thisPollLogURL = rootURL + '/poll-log?date=' + testYearMonth + '-01';
+  await driver.get(thisPollLogURL);
+  var log =  await driver.findElement(By.id('logarea')).getAttribute("textContent"); 
+  expect(log).toContain("UnitTest 00  NEW   {0:true,1:true,2:false,3:true,4:false}");
+  expect(log).toContain("UnitTest 00  EDIT  {0:false,1:true,2:false,3:true,4:false}");
+  expect(log).toContain("UnitTest 00  EDIT  {0:true,1:true,2:false,3:true,4:false}");
+
+}, 20000)
+
+
 it ('07 - test this month payments (pre-month close)', async () => {
   if (!enabledTests) { return };
   // check payments are showing in THIS MONTHS tally

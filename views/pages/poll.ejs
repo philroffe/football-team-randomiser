@@ -50,7 +50,7 @@
       <div style="clear:both;"></div>
       <button id="addPlayer" style="background-color: #90EE90;" type="button" onclick="addPlayer();">(+) Add Player</button>
       <button id="cancelEdit" onclick="location.reload()" disabled>Cancel</button>
-      <p><p>Finished? <a href="/teams">Generate teams and email</a>, or view the <a href="/poll-log">log of poll entries.</a>.
+      <p><p>Finished? <a href="/teams">Generate teams and email</a>, or view the <a id="poll-log-link" href="/poll-log">log of poll entries.</a>.
     </div>
   </div>
 
@@ -152,6 +152,7 @@
     if (document.getElementById(tabName)) {
       document.getElementById(tabName).checked = true;
     }
+    document.getElementById("poll-log-link").href = "/poll-log?date=" + pagedata.data.gameid;
 
     var bankHolidaysJson = pagedata.bankHolidays;
     var selectedMonthDate = new Date(pagedata.data.gameid + " 12:00");
@@ -930,6 +931,8 @@ function addPlayerListToTab(tabName) {
       // disable the addPlayer botton
       document.getElementById("addPlayer").disabled = true; 
       document.getElementById("addPlayer").style.backgroundColor = "lightgrey";
+      // enable edit of the player name
+      document.getElementById(chosenPlayer + "availability").readOnly = false;
 
       // button currently as Edit, so toggle to "save" mode
       newPlayerEditButton.innerHTML = "Save";
@@ -1103,7 +1106,7 @@ function addPlayerListToTab(tabName) {
         var allPlayerDetails = {};
         var saveType = "UNKNOWN"
         // check if player is new, edited, or deleted
-        console.log("LOOKUP: " + playerId + " Original Name: " + originalPlayerName);
+        //console.log("LOOKUP: " + playerId + " Original Name: " + originalPlayerName);
         if (originalPlayerName) {
           console.log("EDITED: " + playerId + " Original Name: " + originalPlayerName);
           // if playername is empty then prefix the original name for deletion upon save
@@ -1116,16 +1119,8 @@ function addPlayerListToTab(tabName) {
             saveType = "EDIT"
           }
         } else {
-          // if playername is empty then prefix the original name for deletion upon save
-          if (playerName == "") {
-            saveType = "DELETE"
-            playerName = originalPlayerName;
-          } else if (playerName != originalPlayerName) {
-            saveType = "RENAME"
-          } else {
-            saveType = "NEW"
-            console.log("NEW: " + playerId + " Original Name: " + originalPlayerName);
-          }
+          saveType = "NEW"
+          console.log("NEW: " + playerId + " Original Name: " + originalPlayerName);
         }
 
         var playerAvailability = {};
