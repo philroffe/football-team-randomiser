@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
   <%- include ("../partials/header.ejs") %>
+
+  <style>
+    .highlight{
+      font-weight:bold;
+      color:red;
+      text-decoration: underline;
+    }
+  </style>
 </head>
 
 <body class="w3-light-grey">
@@ -37,7 +45,7 @@
         var nextMondayDate = new Date(nextMonday);
         var gameYear = selectedMonthDate.getFullYear();
         var pollDate = new Date("01 " + monthDateFormat.format(selectedMonthDate) + " " + gameYear);
-        console.log(pollDate);
+        //console.log(pollDate);
         var gameMonthString = monthDateFormat.format(nextMondayDate);
         var newMaxDate = new Date(nextMondayDate).setMonth(nextMondayDate.getMonth()+1)
         var gameMonth = monthDateNumericFormat.format(selectedMonthDate);
@@ -54,6 +62,7 @@
 
         // now loop through all the logs from the players and add them to the logarea
         var allOriginalPlayers = {}
+        var lastPlayerLog = {}
         var players = pagedata.data.players;
         if (!players) { players = {}; }
         Object.keys(players).sort().forEach(function(key) {
@@ -64,10 +73,46 @@
           if (data.saveType == "RENAME") {
             info.originalPlayerName = data.originalPlayerName;
           }
-          logarea.innerHTML = date + "  " + data.playerName + "  " + data.saveType.padEnd(4, " ") + "  " + JSON.stringify(info).replaceAll('"', "") + "\n" + logarea.innerHTML;
+
+          var lastPlayerName = data.playerName;
+          if (data.originalPlayerName) {
+            lastPlayerName = data.originalPlayerName;
+          }
+          if (lastPlayerLog[lastPlayerName]) {
+            var oldValue = lastPlayerLog[lastPlayerName];
+            var newValue = JSON.stringify(info).replaceAll('"', "");
+            var newValue = info;
+            var highlightedText = highlightDifferences(newValue,oldValue);
+            var newLogLine = data.playerName.padEnd(12) + "  " + data.saveType.padEnd(6, " ") + "  " + highlightedText.replaceAll('"', "");
+          } else {
+            var newLogLine = data.playerName.padEnd(12) + "  " + data.saveType.padEnd(6, " ") + "  " + JSON.stringify(info).replaceAll('"', "");
+          }
+          lastPlayerLog[data.playerName] = info;
+
+          logarea.innerHTML = date + "  " + newLogLine + "\n" + logarea.innerHTML;
         });
 
-        
+        function highlightDifferences(newValue, oldValue) {
+          var highlightedCharacter = ""; // returnText will be modifed below
+          var returnString = {};
+
+          for (var weekNumber = 0; weekNumber < 5; weekNumber ++) {
+            //console.log(newValue[weekNumber], oldValue[weekNumber]);
+            if ((newValue[weekNumber] == oldValue[weekNumber])) {
+              returnString[weekNumber] = newValue[weekNumber]
+            } else {
+              highlightedCharacter = '<span class=highlight>' + newValue[weekNumber] + '</span>';
+              returnString[weekNumber] = highlightedCharacter
+            }
+          }
+          if (newValue["originalPlayerName"] && (newValue["originalPlayerName"] != oldValue["originalPlayerName"])) {
+            highlightedCharacter = '<span class=highlight>' + newValue["originalPlayerName"] + '</span>';
+            returnString["originalPlayerName"] = highlightedCharacter
+          //} else {
+          //  returnString["originalPlayerName"] = oldValue["originalPlayerName"]
+          }
+          return JSON.stringify(returnString);
+        }
 
       </script>
   </div>

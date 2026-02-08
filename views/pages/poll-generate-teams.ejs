@@ -485,7 +485,7 @@
 
   // auto select the
   var algorithmIndex = new URL(document.location.href).searchParams.get("algorithm");
-  var selectAlgorithm = (algorithmIndex && algorithmIndex <= document.getElementById("algorithmChoice").length) ? algorithmIndex : 3;
+  var selectAlgorithm = (algorithmIndex && algorithmIndex <= document.getElementById("algorithmChoice").length) ? algorithmIndex : 6;
   document.getElementById("algorithmChoice").selectedIndex = selectAlgorithm;
   document.getElementById('algorithmChoice').dispatchEvent(new Event('change'));
   
