@@ -610,10 +610,10 @@ it ('06a - test editing player', async () => {
   const thisPollLogURL = rootURL + '/poll-log?date=' + testYearMonth + '-01';
   await driver.get(thisPollLogURL);
   var log =  await driver.findElement(By.id('logarea')).getAttribute("textContent"); 
-  expect(log).toContain("UnitTest 00  NEW   {0:true,1:true,2:false,3:true,4:false}");
-  expect(log).toContain("UnitTest 00  EDIT  {0:false,1:true,2:false,3:true,4:false}");
-  expect(log).toContain("UnitTest 00  EDIT  {0:true,1:true,2:false,3:true,4:false}");
-
+  expect(log).toContain("UnitTest 00   NEW     {0:true,1:true,2:false,3:true,4:false}");
+  expect(log).toContain("UnitTest 00   EDIT    {0:false,1:true,2:false,3:true,4:false}");
+  expect(log).toContain("UnitTest 00   EDIT    {0:true,1:true,2:false,3:true,4:false}");
+  
 }, 20000)
 
 

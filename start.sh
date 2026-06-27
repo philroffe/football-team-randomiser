@@ -13,8 +13,22 @@ if [ "$OPTION" = "stop" ] ; then
     echo "DB not running"
   fi
   exit 0
+elif [ "$OPTION" = "backup" ] ; then
+  . .env-local-proddb
+  npm run backup
+  exit 0
+elif [ "$OPTION" = "restore" ] ; then
+  . .env-local
+  npm run restore
+  exit 0
+elif [ "$OPTION" = "test" ] ; then
+  . .env-local
+  npm run test
+  exit 0
+else
+  echo "Command Options: [start|stop|backup|restore|test]"
+  echo "Running 'start' (default)"
 fi
-
 
 # start the database
 if [ "$DB_PID" == "" ] ; then
@@ -39,3 +53,4 @@ fi
 
 # now start node.js app
 npm start
+

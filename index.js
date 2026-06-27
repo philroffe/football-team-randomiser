@@ -24,8 +24,8 @@ const firestore = new Firestore({
   projectId: 'tensile-spirit-360708',
   keyFilename: './keyfile.json',
 });
-// Create express session store to persist sessions in a Firestore collection "express-sessions"
-const {FirestoreStore} = require('@google-cloud/connect-firestore');
+// Create express session store to persist sessions in a MemoryStore collection
+const MemoryStore = require('memorystore')(session)
 
 // this happens automatically, but add a message in the log as a reminder
 var environment = process.env.ENVIRONMENT;
@@ -96,9 +96,8 @@ app.use(express.static(path.join(__dirname, 'public')))
 .set('view engine', 'ejs')
 
 .use(session({
-  store: new FirestoreStore({
-    dataset: firestore,
-    kind: 'express-sessions',
+  store: new MemoryStore({
+    checkPeriod: 86400000 // prune expired entries every 24h
   }),
   secret: process.env.SESSION_SECRET,
   resave: false, // don't save session if unmodified
@@ -148,18 +147,6 @@ async function getUserRoles(user) {
     }
   }
   return userRoles;
-}
-
-async function clearExpiredExpressSessions() {
-  const sessionsCollection = firestore.collection("express-sessions");
-  const allSessionDocs = await sessionsCollection.get();
-  allSessionDocs.forEach(doc => {
-    var data = JSON.parse(doc.data().data);
-    if (!data.cookie || !data.cookie.expires || new Date(data.cookie.expires) < new Date()) {
-      //console.log("Deleting session...", doc.id, data.cookie.expires);
-      firestore.collection("express-sessions").doc(doc.id).delete();
-    }
-  })
 }
 
 // simple check to ensure a path is local - security measure to prevent Server-side URL redirect
@@ -1161,7 +1148,6 @@ app.use('/', authRouter)
         delete bankHolidaysCache["scotland"];
         delete bankHolidaysCache["northern-ireland"];
         console.log("Got NEW bank holidays: " + Object.keys(bankHolidaysCache).length);
-        clearExpiredExpressSessions(); // clear expired express-sessions too
       } catch (err) {
         bankHolidaysCache = {};
         console.log("ERROR retrieving NEW bank holidays - proceeding without them...", err)
