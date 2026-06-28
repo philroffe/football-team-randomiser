@@ -35,6 +35,9 @@
     "prettier": "^3.4.2",
     "selenium-webdriver": "^4.28.1"
   },
+  "overrides": {
+    "js-yaml": "^4.1.0"
+  },
   "devDependencies": {
     "depcheck": "^1.4.7",
     "got": "^14.4.1",
