@@ -3,6 +3,7 @@ const chrome = require('selenium-webdriver/chrome')
 //const EC = require('wdio-wait-for');
 const { querySelector } = require('./helpers')
 const indexDBUtils = require('./index-database-utils');
+var fs = require('fs');
 
 // See Jest docs here: 
 // https://jestjs.io/docs/expect
@@ -27,6 +28,25 @@ var testFinancialYear = 2050;
 var originalFinancialYear;
 const localeDateOptions = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', };
 
+async function createScreenshot(screenshotName) {
+  driver.takeScreenshot().then(
+    function(image, err) {
+      const timeStamp = (new Date()).toISOString().replace(/[^0-9]/g, '');
+      var filename = "out-" + timeStamp + "-" + screenshotName + ".png";
+      //console.log("Creating screenshot:", filename);
+
+      var dir = './screenshots/';
+      if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir);
+      }
+      fs.writeFile(dir + filename, image, 'base64', function(err) {
+        if (err) {
+          console.err(err);
+        }
+      });
+    }
+  );
+}
 
 async function waitUntilAfterHoldingText(element, holdingText) {
   try {
@@ -213,12 +233,15 @@ it ('01 - test fake user login', async () => {
   // perform login with fake/test user
   await driver.get(fakeLoginURL);
   await getElementByIdAfterWaitClick("authHeaderLarge"); // wait until page ready
+  createScreenshot('01 - test fake user login - before');
   // goto alias page, check logged in
   await driver.get(aliasURL);
   const anchor = await querySelector("[id=\'authHeaderLarge\']", driver);
+  createScreenshot('01 - test fake user login - after');
   const actual = await anchor.getText();
   const expected = "Fake User (Admin)";
   expect(actual).toEqual(expected);
+
 })
 
 it ('01a - set preferences to test year', async () => {
@@ -234,6 +257,7 @@ it ('01a - set preferences to test year', async () => {
   await driver.get(preferencesURL);
   //const anchor = await querySelector("[id=\'openFinancialYear\']", driver);
   const anchor = await getElementByIdAfterWaitClick("openFinancialYear");
+  createScreenshot('01a - set preferences to test year');
   const actual = Number(await anchor.getAttribute("value"));
   expect(actual).toEqual(testFinancialYear);
 })
@@ -270,6 +294,7 @@ it ('02 - test adding players to mailing list', async () => {
   await driver.findElement(By.id('saveAlias')).click();
   await driver.get(aliasURL);
   var saveAliasEl = await getElementByIdAfterWaitClick("saveAlias");
+  createScreenshot("02 - test adding players to mailing list")
 
   //////////////
   // now check that it saved correctly
@@ -319,6 +344,7 @@ it ('03 - test poll loads with correct month and no players', async () => {
   await driver.get(pollURL);
 
   const anchor = await querySelector("[id=\'gameMonthInput\']", driver);
+  createScreenshot('03 - test poll loads with correct month and no players')
   const actual = await anchor.getAttribute("value");
   const expected = testYearMonth;
   expect(actual).toEqual(expected);
@@ -354,6 +380,7 @@ it ('04 - test adding players to poll', async () => {
     // refresh page and check save worked
     await driver.get(pollURL);
     const anchor = await querySelector("[id=\'player" + newPlayerIndex + "availability\']", driver)
+    createScreenshot('04 - test adding players to poll');
     const actual = await anchor.getAttribute("value")
     const expected = testData.playerAvailability[i].name;
     expect(actual).toEqual(expected)
@@ -438,6 +465,7 @@ it ('05 - test team generator', async () => {
   await driver.get(rootURL + '/teams?date=' + testYearMonth + '-10' + '&algorithm=3');
   await new Promise(r => setTimeout(r, 500)); // sleep 0.5s
   var teams =  await driver.findElement(By.id('emailBody')).getAttribute("value"); 
+  createScreenshot('05 - test team generator - second game')
 
   var gameWeek = 1;
   expect(teams).toContain(testDataTotals.teamGenerator[gameWeek].attendanceTotal + " players");
@@ -447,7 +475,9 @@ it ('05 - test team generator', async () => {
 
   // third game of the Month should have no players
   await driver.get(rootURL + '/teams?date=' + testYearMonth + '-17' + '&algorithm=3');
+  createScreenshot('05 - test team generator - third game');
   await new Promise(r => setTimeout(r, 500)); // sleep 0.5s
+  createScreenshot('05 - test team generator');
   var teams =  await driver.findElement(By.id('emailBody')).getAttribute("value"); 
   expect(teams).toContain("0 players this week");
 })
@@ -455,6 +485,7 @@ it ('05 - test team generator', async () => {
 it ('06 - test adding attendace and goals', async () => {
   if (!enabledTests) { return };
   await addAttendanceAndTest(testData.weeklyAttendanceGoals, "2050-01-01");
+  createScreenshot('06 - test adding attendace and goals');
 }, 60000)
 
 async function findPlayerAttendanceIndex(playerName) {
@@ -610,6 +641,7 @@ it ('06a - test editing player', async () => {
   const thisPollLogURL = rootURL + '/poll-log?date=' + testYearMonth + '-01';
   await driver.get(thisPollLogURL);
   var log =  await driver.findElement(By.id('logarea')).getAttribute("textContent"); 
+  createScreenshot('06a - test editing player - poll-log');
   expect(log).toContain("UnitTest 00   NEW     {0:true,1:true,2:false,3:true,4:false}");
   expect(log).toContain("UnitTest 00   EDIT    {0:false,1:true,2:false,3:true,4:false}");
   expect(log).toContain("UnitTest 00   EDIT    {0:true,1:true,2:false,3:true,4:false}");
@@ -622,6 +654,7 @@ it ('07 - test this month payments (pre-month close)', async () => {
   // check payments are showing in THIS MONTHS tally
   await driver.get(paymentsURL);
   await new Promise(r => setTimeout(r, 500)); // sleep 0.5s
+  createScreenshot('07 - test this month payments (pre-month close)');
   for (const playerName in testDataTotals.chargeTotals) {
     var anchor = await querySelector("[id=\'playertrue" + playerName + "OwedPayment\']", driver);
     //var anchor = await getElementByIdAfterWaitClick("playertrue" + playerName + "OwedPayment", 2000, "TESTING PAYMENTS (T07) " + playerName);
@@ -649,11 +682,12 @@ it ('08 - test closing month and check ledger', async () => {
       retryCount++;
     }
   }
+  createScreenshot('8 - test closing month and check ledger - month close');
   expect(actual).toEqual("Month already closed");
 
   // now check payments are showing in OUTSTANDING BALANCE tally
   await driver.get(paymentsURL);
-
+  createScreenshot('8 - test closing month and check ledger - payments');
   for (const playerName in testDataTotals.chargeTotals) {
     var anchor = await querySelector("[id=\'playerfalse" + playerName + "OwedPayment\']", driver);
     var actual = await anchor.getText();
@@ -678,6 +712,7 @@ it ('22 - test closing second month and check ledger incremented appropriately',
 
   // reload and check it is already closed
   await driver.get(attendance2URL);
+  createScreenshot('22 - test closing second month and check ledger incremented appropriately');
   var actual = "";
   var retryCount = 0;
   while (retryCount < 10) {
@@ -689,10 +724,12 @@ it ('22 - test closing second month and check ledger incremented appropriately',
       retryCount++;
     }
   }
+  createScreenshot('22 - test closing second month and check ledger incremented appropriately - already closed');
   expect(actual).toEqual("Month already closed");
 
   // now check payments are showing in OUTSTANDING BALANCE tally
   await driver.get(payments2URL);
+  createScreenshot('22 - test closing second month and check ledger incremented appropriately - outstanding balance');
 
   var totalOwed = 0;
   for (const playerName in testDataTotals.chargeTotals) {
@@ -720,6 +757,7 @@ it ('22 - test closing second month and check ledger incremented appropriately',
   //////////////////
   // test teams/email generator includes the correct payments
   await driver.get(rootURL + '/teams?date=' + test2YearMonth + '-01' + '&algorithm=3&template=payments');
+  createScreenshot('22 - test closing second month and check ledger incremented appropriately - email generator payments');
   for (const playerName in testDataTotals.chargeTotals) {
     var element;
     try {
@@ -741,6 +779,7 @@ it ('22 - test closing second month and check ledger incremented appropriately',
   //////////////////
   // test teams/email generator includes the correct payments
   await driver.get(rootURL + '/teams?date=' + test2YearMonth + '-01' + '&algorithm=3&template=availability');
+  createScreenshot('22 - test closing second month and check ledger incremented appropriately - email generator availability');
   for (const playerName in testDataTotals.chargeTotals) {
     var element;
     try {
@@ -768,6 +807,7 @@ it ('23 - test payments are showing in OUTSTANDING BALANCE tally', async () => {
   await driver.get(payments2URL);
 
   var element = await querySelector("[id=\'OverallOutstandingTotalfalse\']", driver);
+  createScreenshot('23 - test payments are showing in OUTSTANDING BALANCE tally');
   var actual = await element.getText();
   expect(actual).not.toEqual("£0");
 })
@@ -894,6 +934,7 @@ it ('26 - test admin-team-preview', async () => {
   // check team preview
   await driver.get(rootURL + '/admin-team-preview?date=2050-06-01&algorithm=6');
   await getElementByIdAfterWaitClick("redPlayerSelect"); // wait until page ready
+  createScreenshot('26 - test admin-team-preview');
 
   // check player selected as either red, blue or standby
   var redList = [];
@@ -940,6 +981,7 @@ it ('30 - test historical games are correct', async () => {
   // check no availability data in 2019 (it was stored in doodle then)
   await driver.get(rootURL + '/poll?date=2019-08-01&tab=one');
   await getElementByIdAfterWaitClick("addPlayer"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - no availability 2019');
   try {
     var element = await driver.findElement(By.id('player0availability'));
     // should not get here - this element should not exist
@@ -951,6 +993,7 @@ it ('30 - test historical games are correct', async () => {
   // check attendance shows played but no teams in 2019
   await driver.get(rootURL + '/poll?date=2019-08-01&tab=two');
   await getElementByIdAfterWaitClick("player0attendance"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - attendance no teams 2019');
   var element = await driver.findElement(By.id('player0attendance'));
   var playerName = await element.getAttribute("value");
   expect(playerName).toEqual("Adam B");
@@ -975,6 +1018,7 @@ it ('30 - test historical games are correct', async () => {
   // check availability data in 2022 (app first replaced doodle)
   await driver.get(rootURL + '/poll?date=2022-03-01&tab=one');
   await getElementByIdAfterWaitClick("player0availability"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - availability in 2022');
   var element = await driver.findElement(By.id('player0availability'));
   var playerName = await element.getAttribute("value");
   expect(playerName).toEqual("Bower");
@@ -993,6 +1037,7 @@ it ('30 - test historical games are correct', async () => {
   // check attendance shows played but no teams in 2022
   await driver.get(rootURL + '/poll?date=2022-03-01&tab=two');
   await getElementByIdAfterWaitClick("player0attendance"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - attendance no teams 2022');
   var element = await driver.findElement(By.id('player0attendance'));
   var playerName = await element.getAttribute("value");
   expect(playerName).toEqual("Bower");
@@ -1015,6 +1060,7 @@ it ('30 - test historical games are correct', async () => {
   // check payment calculation still works in 2019
   await driver.get(rootURL + '/poll?date=2022-03-01&&tab=three');
   await getElementByIdAfterWaitClick("playertrue0LinkPayment"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - payment works 2019');
   var element = await driver.findElement(By.id('playertrueBowerNamePayment'));
   var playerName = await element.getText();
   expect(playerName).toEqual("Bower");
@@ -1025,6 +1071,7 @@ it ('30 - test historical games are correct', async () => {
   // check availability data in 2023 (same as before - also testing bank hols)
   await driver.get(rootURL + '/poll?date=2023-05-01&tab=one');
   await getElementByIdAfterWaitClick("player0availability"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - availability in 2023 inc bank hol');
   var element = await driver.findElement(By.id('player0availability'));
   var playerName = await element.getAttribute("value");
   expect(playerName).toEqual("Craig S");
@@ -1048,6 +1095,7 @@ it ('30 - test historical games are correct', async () => {
   // check attendance shows played but no teams in 2023
   await driver.get(rootURL + '/poll?date=2023-05-01&tab=two');
   await getElementByIdAfterWaitClick("player0attendance"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - attendance no teams 2023');
   var element = await driver.findElement(By.id('player0attendance'));
   var playerName = await element.getAttribute("value");
   expect(playerName).toEqual("Craig S");
@@ -1075,9 +1123,10 @@ it ('30 - test historical games are correct', async () => {
   element = await driver.findElement(By.id('player0Week3attendanceGoals'));
   var goals = await element.getText();
   expect(goals).toEqual("");
-  // check payment calculation still works in 2019
+  // check payment calculation still works in 2023
   await driver.get(rootURL + '/poll?date=2023-05-01&&tab=three');
   await getElementByIdAfterWaitClick("playertrue0LinkPayment"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - payment 2023');
   var element = await driver.findElement(By.id('playertrueCraig SNamePayment'));
   var playerName = await element.getText();
   expect(playerName).toEqual("Craig S");
@@ -1088,6 +1137,7 @@ it ('30 - test historical games are correct', async () => {
   // check availability data in 2025 - to test bank hols)
   await driver.get(rootURL + '/poll?date=2025-05-01&tab=one');
   await getElementByIdAfterWaitClick("player0availability"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - availability 2025 bank hol');
   var element = await driver.findElement(By.id('player0availability'));
   var playerName = await element.getAttribute("value");
   expect(playerName).toEqual("Billy B");
@@ -1101,6 +1151,7 @@ it ('30 - test historical games are correct', async () => {
   // check availability data in 2024 (same as before)
   await driver.get(rootURL + '/poll?date=2024-01-01&tab=one');
   await getElementByIdAfterWaitClick("player0availability"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - availability 2024');
   var element = await driver.findElement(By.id('player2availability'));
   var playerName = await element.getAttribute("value");
   expect(playerName).toEqual("Craig");
@@ -1121,9 +1172,10 @@ it ('30 - test historical games are correct', async () => {
   var element = await driver.findElement(By.id('player2Week4availability'));
   var isChecked = await element.isSelected();
   expect(isChecked).toEqual(true);
-  // check attendance shows played but no teams in 2023
+  // check attendance shows played and teams and goals in 2024
   await driver.get(rootURL + '/poll?date=2024-01-01&tab=two');
   await getElementByIdAfterWaitClick("player0attendance"); // wait until page ready
+  createScreenshot('30 - test historical games are correct - attendance teams goals2024');
   var element = await driver.findElement(By.id('player2attendance'));
   var playerName = await element.getAttribute("value");
   expect(playerName).toEqual("Craig S");
@@ -1195,6 +1247,7 @@ it ('40 - test weekly cron', async () => {
   // check it presents a GENERATED team list
   await driver.get(rootURL + '/admin-team-preview?date=' + dateString + '&algorithm=6');
   var title = await driver.findElement(By.id('teamTitle')).getText();
+  createScreenshot('40 - test weekly cron');
   expect(title).toEqual("Generated: " + dateStringLocale);
   var teamList = await driver.findElement(By.id('teamList')).getAttribute("value"); 
   expect(teamList).toContain("Total Players: " + expectedTotal);
@@ -1209,6 +1262,7 @@ it ('40 - test weekly cron', async () => {
   // check it retries a SAVED team list
   await driver.get(rootURL + '/admin-team-preview?date=' + dateString + '&algorithm=6');
   var title = await driver.findElement(By.id('teamTitle')).getText();
+  createScreenshot('40 - test weekly cron - retries saved team list');
   expect(title).toEqual("Saved: " + dateStringLocale);
   var teamList = await driver.findElement(By.id('teamList')).getAttribute("value"); 
   expect(teamList).toContain("Total Players: " + expectedTotal);
@@ -1237,6 +1291,7 @@ it ('40 - test weekly cron', async () => {
   // check it loads a GENERATED team list again
   await driver.get(rootURL + '/admin-team-preview?date=' + dateString + '&algorithm=6');
   var title = await driver.findElement(By.id('teamTitle')).getText();
+  createScreenshot('40 - test weekly cron - loads generated team again');
   expect(title).toEqual("Generated: " + dateStringLocale);
   var teamList = await driver.findElement(By.id('teamList')).getAttribute("value"); 
   expect(teamList).toContain("Total Players: " + expectedTotal);
