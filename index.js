@@ -1274,6 +1274,14 @@ app.use('/', authRouter)
                 playersPreviewData.bluePlayers.push(playersPreviewData.standbyPlayers.shift());
               }
             }
+            // now check if there are 11 players (if so, move one to standby)
+            if (playersPreviewData.redPlayers.length + playersPreviewData.bluePlayers.length == 11) {
+              if (playersPreviewData.redPlayers.length == 6) {
+                playersPreviewData.standbyPlayers.push(playersPreviewData.redPlayers.pop());
+              } else if (playersPreviewData.bluePlayers.length == 6) {
+                playersPreviewData.standbyPlayers.push(playersPreviewData.bluePlayers.pop());
+              }
+            }
           }
         }
 
@@ -1797,6 +1805,12 @@ app.use('/', authRouter)
     const docRef = firestore.collection(collectionId).doc(documentId);
     var existingDoc = await docRef.get();
     if (existingDoc && existingDoc.data()) {
+      if (documentData.timestamp) {
+        // timestamp object is lost in plain text - so recreate it
+        var newDate = new Date(1970, 0, 1); // Epoch
+        newDate.setSeconds(documentData.timestamp._seconds);
+        documentData.timestamp = newDate;
+      }
       await docRef.set(documentData);
     } else {
       res.sendStatus(404);
