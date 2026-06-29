@@ -1807,9 +1807,7 @@ app.use('/', authRouter)
     if (existingDoc && existingDoc.data()) {
       if (documentData.timestamp) {
         // timestamp object is lost in plain text - so recreate it
-        var newDate = new Date(1970, 0, 1); // Epoch
-        newDate.setSeconds(documentData.timestamp._seconds);
-        documentData.timestamp = newDate;
+        documentData.timestamp = new Date(documentData.timestamp._seconds*1000);
       }
       await docRef.set(documentData);
     } else {
