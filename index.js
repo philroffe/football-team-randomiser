@@ -243,6 +243,16 @@ app.use('/', authRouter)
         }
       }
     }
+
+    // delete any GameWeekPreviews from this month
+    const allAdminDocs = await firestore.collection("ADMIN").get();
+    for (const doc in allAdminDocs) {
+      if (doc.id.startsWith("GameWeekPreview_" + gameYear + "-" + gameMonth)) {
+        await firestore.collection("ADMIN").doc(doc.id).delete();
+        console.log("Deleting:", doc.id);
+      }
+    }
+
     res.json({'result': 'OK'})
   } catch (err) {
     console.error(err);
@@ -404,8 +414,8 @@ app.use('/', authRouter)
   var amount = Number(amountReceived.split(' ')[0].replace(/£/, ''));
 
   // save the details
-  var saveSuccess = await receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
-  if (saveSuccess) {
+  var returnStatus = await receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+  if (returnStatus.status) {
     res.json({'result': 'OK'})
   } else {
     res.sendStatus(400);
@@ -418,8 +428,7 @@ app.use('/', authRouter)
   if (req.isAuthenticated()) {
     console.log("User is logged in: ", JSON.stringify(req.user));
   } else {
-    console.log("User NOT logged in - rejecting");
-    res.sendStatus(400);
+    res.status(401).send({'result': 'Denied. User not logged in...'});
     return;
   }
 
@@ -431,29 +440,85 @@ app.use('/', authRouter)
     var transactionType = req.body.transactionType;
     var transactionId = req.body.transactionId;
     var transactionDate = new Date(req.body.transactionDate);
+    if (isNaN(transactionDate)) {
+      //console.log("transactionDate is not a valid date!");
+      res.status(400).send({success: false, error: {message: 'transactionDate is not a valid date!'}});
+      return;
+    }
+    var paypalEmailParsedData = {};
+    if (req.body.paypalEmailParsedData) {
+      try {
+        paypalEmailParsedData = JSON.parse(req.body.paypalEmailParsedData);
+      } catch (err) {
+        // do nothing - must be a manual payment rather than via paypal
+      }
+    }
 
     // save the details
-    var saveSuccess = false;
+    var returnStatus = {"status": false};
     if (transactionType == "payment") {
       if (action == "ADD") {
         if (transactionDate && transactionId && payeeName && amount) {
-          saveSuccess = await receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
+          returnStatus = await receivePaymentEmail(payeeName, amount, transactionId, transactionDate);
         }
       } else if (action == "REFUND") {
         if (transactionId) {
           console.log('REFUNDING...:', transactionId);
-          saveSuccess = await refundPayment(transactionId);
+          returnStatus.status = await refundPayment(transactionId);
         }
       }
     } else if (transactionType == "charge") {
         console.log('Charge...:', payeeName, transactionDate);
     }
 
-    if (saveSuccess) {
+    if (returnStatus.status) {
+      //send email to player
+      //var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+      //var aliasesData = aliasesDoc.data();
+      // read the list of players and aliases
+      var playerAliasMaps = await getDefinedPlayerAliasMaps();
+      var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+      var playerEmailMaps = await getDefinedPlayerEmailMaps();
+      var playerToEmailMap = playerEmailMaps["playerToEmailMap"];
+
+      // now send the email
+      //var playerName = payeeName;
+      var playerName = teamUtils.getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
+      var email = playerToEmailMap[playerName]; 
+      var token = await getPlayerToken(playerName);
+      if (email && playerName) {
+        var emailSubject = "Payment Received [Footie, Goodwin, 6pm Mondays]";
+        var paymentHistoryLink = "https://tensile-spirit-360708.nw.r.appspot.com/payment-history?token=" + token;
+        var emailBody = "Hi " + playerName + ",";
+          emailBody += "<br><br>Your footie payment has been processed - thanks.";
+          if (paypalEmailParsedData.amount && paypalEmailParsedData.transactionId == transactionId) {
+            // came from paypal so add original amount
+            emailBody += "<br><br>Original Amount recieved: £" + paypalEmailParsedData.amount;
+          }
+          emailBody += "<br><br>Amount processed: £" + amount;
+          emailBody += "<br>Transaction ID: " + transactionId;
+          emailBody += "<br>Transaction Date: " + transactionDate.toLocaleDateString("en-GB");
+          emailBody += "<br><br>Games:<br>" + returnStatus.gameList.toString().replaceAll(",", " (paid)<br>") + " (paid)";
+          emailBody += "<br><br>To see all of your charges and payments history:<br>" + paymentHistoryLink + "<br>";
+          emailBody += "<br>Cheers,<br>Phil"
+          /////////////TODO//////////////////
+          //// Works. I've changed receivePaymentEmail() to return a map with status etc, need to do the same for other methods (refund, admin-charges etc)
+          ///////////////////////////////////
+          // BK14 HJF
+        var mailOptions = {
+          from: GOOGLE_MAIL_FROM_NAME,
+          to: email,
+          subject: emailSubject,
+          html: emailBody
+        };
+        // now send the email
+        var emailResult = teamUtils.sendEmailToList(mailOptions, req.hostname);
+      }
+
       res.json({'result': 'OK'})
     } else {
       console.error("ERROR: Failed to save manual payment - discarding...\n" + JSON.stringify(req.body));
-      res.sendStatus(400);
+      res.status(400).send({success: false, error: {message: 'ERROR: Failed to save manual payment - discarding...!'}});
     }
     
   } catch (err) {
@@ -470,13 +535,13 @@ app.use('/', authRouter)
     console.log("User is logged in: ", JSON.stringify(req.user));
   } else {
     console.log("User NOT logged in - rejecting");
-    res.sendStatus(400);
+    res.status(401).send({success: false, error: {message: 'User NOT logged in - rejecting'}});
     return;
   }
 
   if (!Array.isArray(req.body)) {
     console.log("Invalid request body - expected an array");
-    res.sendStatus(400);
+    res.status(400).send({success: false, error: {message: 'Invalid request body - expected an array'}});
     return;
   }
 
@@ -526,8 +591,9 @@ app.use('/', authRouter)
     if (saveSuccess) {
       res.json({'result': 'OK'})
     } else {
-      console.error("ERROR: Failed to save manual admin cost - discarding\n" + errorMessage);
-      res.sendStatus(400);
+      var errmsg = "ERROR: Failed to save manual admin cost - discarding\n" + errorMessage;
+      console.error(errmsg);
+      res.status(400).send({success: false, error: {message: errmsg}});
     }
 
   } catch (err) {
@@ -624,20 +690,8 @@ app.use('/', authRouter)
     // [5 Oct 2025] temporary admin event just to keep track of the new feature (delete at end of year)
     teamUtils.sendAdminEvent(EMAIL_TYPE_ADMIN_ONLY, "Payment history request", email + "=" + foundKey);
 
-    var token;
     if (foundKey) {
-      token = aliasesData[foundKey].token;
-      if (!token) {
-        console.log("No token found so generated new one for email:", email)
-        const crypto = require('crypto');
-        function generateToken() {
-          return crypto.randomBytes(32).toString('hex'); // 64-char random string
-        }
-        token = generateToken();
-        // now save the token
-        aliasesData[foundKey].token = token;
-        await firestore.collection("ADMIN").doc("_aliases").set(aliasesData); 
-      }
+      var token = await getPlayerToken(foundKey);
       console.log("Got token:", email, token)
 
       // now send the email
@@ -1000,7 +1054,7 @@ app.use('/', authRouter)
         console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
         
         // read the teams from the playersPreviewData
-        rowdata.playersPreviewData = await getGameWeekPreviewTeams();
+        rowdata.playersPreviewData = await getGameWeekPreviewTeams(nextMonday);
         
         // combine database data with supplimentary game data and render the page
         var pageData = { 'data': rowdata, 'nextMonday': nextMonday.toISOString(), "environment": environment };
@@ -1133,8 +1187,18 @@ app.use('/', authRouter)
     //console.log('OUTSTANDING PAYMENTS data' + JSON.stringify(outstandingPayments));
 
     // get player preview data
-    var playersPreviewData = await getGameWeekPreviewTeams();
+    var playersPreviewData = await getGameWeekPreviewTeams(nextMonday);
     rowdata.playersPreviewData = playersPreviewData;
+    // get any historic preview data (used to help pre-populate when editing attendance)
+    var playersPreviewDataHistoric = await getGameWeekPreviewTeamsHistoric();
+    rowdata.playersPreviewDataHistoric = playersPreviewDataHistoric;
+
+    // get preferences
+    var preferencesDoc = await firestore.collection("ADMIN").doc("_preferences").get();
+    var preferences = preferencesDoc.data();
+    if (!preferences) { preferences = {}; }
+    // get any combined payments
+    rowdata.combinePayments = (preferences.combinePayments) ? preferences.combinePayments : "";
 
     var tabName = "";
     if (req.query.tab) {
@@ -1155,8 +1219,10 @@ app.use('/', authRouter)
     } else {
       console.log("Using CACHED bank holidays: " + Object.keys(bankHolidaysCache).length)
     }
+
     // combine database data with any additional page data
-    var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, selectTab: tabName, "environment": environment  };
+    var pageData = { data: rowdata, bankHolidays: bankHolidaysCache, selectTab: tabName, 
+      "environment": environment };
 
     if (req.isAuthenticated()) {
       console.log("User is logged in: ", JSON.stringify(req.user));
@@ -1210,7 +1276,7 @@ app.use('/', authRouter)
 
       // check if preview of teams has already been generated
       var nextMonday = getDateNextMonday(new Date());
-      var playersPreviewData = await getGameWeekPreviewTeams();
+      var playersPreviewData = await getGameWeekPreviewTeams(nextMonday);
       var previewDate = new Date(playersPreviewData.gameWeek);
       if (teamUtils.datesAreOnSameDay(previewDate, nextMonday)) {
         // preview teams already generated - check if player was added/removed from this week
@@ -1288,7 +1354,7 @@ app.use('/', authRouter)
         if (teamsUpdateNeeded) {
           // save updated teams
           playersPreviewData.status = "Saved";
-          await firestore.collection("ADMIN").doc("GameWeekPreview").set(playersPreviewData);
+          await firestore.collection("ADMIN").doc("GameWeekPreview_" + playersPreviewData.gameDate).set(playersPreviewData);
           // send an admin email to inform that draft teams need updating
           //teamUtils.sendAdminEvent(EMAIL_TYPE_TEAMS_ADMIN, "[DRAFT TEAMS UPDATE NEEDED Event] " + playerName + EMAIL_TITLE_POSTFIX, playerName + "\n" + eventDetails);
           var emailPrefix = playerName + " - Playing?: " + playerAvailableThisWeek;
@@ -1501,21 +1567,6 @@ app.use('/', authRouter)
     res.sendStatus(400);
   }
 })
-.get('/schedule/delete-draft-list-for-admins', async (req, res) => {
-  var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  console.log("Deleting weekly teams GET", ip, req.get('X-Appengine-Cron'));
-  if ((req.get('X-Appengine-Cron') === 'true') 
-    && (ip.startsWith('0.1.0.2') || ip == '::1' || ip.endsWith('127.0.0.1'))) {
-    // delete any previous gameweekpreview
-    await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
-    console.log("DELETED", await firestore.collection("ADMIN").doc("GameWeekPreview").get())
-    res.json({'result': 'DELETED'});
-    return;
-  } else {
-    console.log("ERROR: Denied - internal endpoint only");
-    res.status(403).end();
-  }
-})
 .get('/schedule/generate-draft-list-for-admins', async (req, res) => {
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log("Scheduling weekly teams GET", ip, req.get('X-Appengine-Cron'));
@@ -1530,6 +1581,9 @@ app.use('/', authRouter)
     var nextMonday = getDateNextMonday(requestedDate);
     var bankHolidaysJson = await getBankHolidayJson();
     var dateString = nextMonday.toLocaleDateString('en-GB', localeDateOptions);
+    var gameDate = teamUtils.getStandardReverseDateFormat(nextMonday);
+    console.log("dateString", dateString);
+    console.log("gameDate", gameDate);
     var isBankHoliday = teamUtils.checkIfBankHoliday(bankHolidaysJson, nextMonday);
     if (isBankHoliday) {
       res.json({'result': 'Skipping - bank holiday'});
@@ -1550,12 +1604,13 @@ app.use('/', authRouter)
     var playersGamesPlayedRatio = await calculateNextGameTeams(nextMonday);
     var playersPreviewData = playersGamesPlayedRatio.generatedTeams;
     playersPreviewData.gameWeek = dateString;
+    playersPreviewData.gameDate = gameDate;
 
     // save the list for future
     console.log("SAVING", playersGamesPlayedRatio.generatedTeams, nextMonday);
     playersPreviewData.lastUpdated = "Auto: " + new Date().toISOString();
     playersPreviewData.status = "Saved";
-    await firestore.collection("ADMIN").doc("GameWeekPreview").set(playersPreviewData);
+    await firestore.collection("ADMIN").doc("GameWeekPreview_" + gameDate).set(playersPreviewData);
 
     // now generate the email text and send it
     var emailPrefix = "Auto generated teams."
@@ -1590,8 +1645,11 @@ app.use('/', authRouter)
       return;
     }
 
+    // get any combined payments
+    var combinePayments = (preferences.combinePayments) ? preferences.combinePayments : "";
+
     // read the teams from the playersPreviewData
-    var playersPreviewData = await getGameWeekPreviewTeams();
+    var playersPreviewData = await getGameWeekPreviewTeams(nextMonday);
 
     // check if preview of teams has already been generated
     var previewDate = new Date(playersPreviewData.gameWeek);
@@ -1626,7 +1684,7 @@ app.use('/', authRouter)
     const dom = new JSDOM(`<!DOCTYPE html>`);
     const document = dom.window.document;
     var panelcontentouter = document.createElement("DIV");
-    var paymentsDiv = teamUtils.addPaymentsTableRows(outstandingPayments, true, false, document, panelcontentouter);
+    var paymentsDiv = teamUtils.addPaymentsTableRows(outstandingPayments, true, false, document, panelcontentouter, combinePayments);
     emailDetails.emailBody = emailDetails.emailBody.replace("***PAYMENTS WILL GO HERE - DO NOT DELETE THIS LINE***"
       , "Also, outstanding payments..." + paymentsDiv.innerHTML).replaceAll("\n", '<br>');``
 
@@ -1638,9 +1696,6 @@ app.use('/', authRouter)
     };
     console.log(mailOptions);
     var emailResult = teamUtils.sendEmailToList(mailOptions, req.hostname);
-
-    // finally delete the old gameweek preview - email has been sent
-    //await firestore.collection("ADMIN").doc("GameWeekPreview").delete();
 
     // clear the text prefix - assumed it is only needed for one email
     if (preferences.emailTeamsPrefix) {
@@ -1659,7 +1714,8 @@ app.use('/', authRouter)
   var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
   console.log('GOT UPDATE GAME WEEK PREVIEW POST FROM EMAIL:', ip, req.body);
   try {
-    await firestore.collection("ADMIN").doc("GameWeekPreview").set(req.body, { merge: true });
+    var gateDate = req.body.gameDate;
+    await firestore.collection("ADMIN").doc("GameWeekPreview_" + gateDate).set(req.body, { merge: true });
     res.json({'result': 'OK'})
   } catch (err) {
     console.error(err);
@@ -1682,7 +1738,7 @@ app.use('/', authRouter)
     var pageData = {};
 
     // get preview teams (if saved)
-    var playersPreviewData = await getGameWeekPreviewTeams();
+    var playersPreviewData = await getGameWeekPreviewTeams(nextMondayRequestedDate);
     // check if preview of teams has already been generated, and is on the same day
     if (!teamUtils.datesAreOnSameDay(new Date(playersPreviewData.gameWeek), nextMondayRequestedDate)) {
       // no saved teams found for day requested, calculate next game teams
@@ -2409,6 +2465,12 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
   var playerAliasMaps = await getDefinedPlayerAliasMaps(true);
   var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
   var officialPlayerName = teamUtils.getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
+  if (!officialPlayerName) {
+    console.log("ERROR: Player not in alias list.  Payee Name:", payeeName, "Official Player Name:", officialPlayerName);
+    return false;
+  }
+
+  var returnStatus = {"gameList": [], "status": false};
 
   try {
     // read list of outstanding payments for the player
@@ -2442,6 +2504,9 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
               console.log('Moving transaction from open to closed ledger:', officialPlayerName, amountLeft, thisTransaction.amount, JSON.stringify(thisTransaction));
               amountLeft += thisTransaction.amount;
               thisTransaction.paid = transactionId;
+              var gameDateString = new Date(transactionName.replace("charge_", ""));
+              gameDateString = gameDateString.toLocaleDateString('en-GB', localeDateOptions).replace(",", "");
+              returnStatus["gameList"].push(gameDateString);
               // add it to the closed ledger
               var closedTransaction = {};
               closedTransaction[transactionName] = thisTransaction;
@@ -2465,10 +2530,12 @@ async function receivePaymentEmail(payeeName, amount, transactionId, transaction
 
       console.log('Got playerLedgerData for:', officialPlayerName, JSON.stringify(playerLedgerData));
     }
-    return true;
+    returnStatus.status = true;
+    return returnStatus;
   } catch (err) {
     console.error(err);
-    return false;
+    returnStatus.status = false;
+    return returnStatus;
   }
 }
 
@@ -2663,7 +2730,7 @@ async function calculateNextGameTeams(date = new Date()) {
     //console.log("mondaysDates:", mondaysDates, nextMondayOptionIndex);
 
     // read the teams from the playersPreviewData
-    var playersPreviewData = await getGameWeekPreviewTeams();
+    var playersPreviewData = await getGameWeekPreviewTeams(nextMonday);
 
     // change the algorithm for all players and regenerate teams
     var algorithmRange = 12;
@@ -2704,9 +2771,10 @@ async function getAllDataFromDB() {
   return allCollectionDocs;
 }
 
-async function getGameWeekPreviewTeams() {
+async function getGameWeekPreviewTeams(date) {
   // read the teams from the playersPreviewData
-  var playersPreviewDoc = await firestore.collection("ADMIN").doc("GameWeekPreview").get();
+  var gameDate = teamUtils.getStandardReverseDateFormat(nextMonday);
+  var playersPreviewDoc = await firestore.collection("ADMIN").doc("GameWeekPreview_" + gameDate).get();
   var playersPreviewData = playersPreviewDoc.data();
   //console.log("SAVED PREVIEW", playersPreviewData);
   if (!playersPreviewData) {
@@ -2719,6 +2787,24 @@ async function getGameWeekPreviewTeams() {
     playersPreviewData.status = "New";
   }
   return playersPreviewData;
+}
+
+// return a map of GameWeekPreview data: weekNo => data
+async function getGameWeekPreviewTeamsHistoric() {
+  var playersPreviewDataMap = {};
+  // read the teams from the playersPreviewData
+  const adminCollection = firestore.collection("ADMIN");
+  const allAdminDocs = await adminCollection.get();
+  allAdminDocs.forEach(doc => {
+    var docId = doc.id;
+    var docData = doc.data();
+    if (docId.startsWith("GameWeekPreview_")) {
+      //console.log("Got GameWeekPreview_", docId, docData.gameDate);
+      var gameDate = docId.replace("GameWeekPreview_", ""); //e.g. 2026-10-05
+      playersPreviewDataMap[gameDate] = docData;
+    }
+  });
+  return playersPreviewDataMap;
 }
 
 // get the array index that matches the game-week for a given date
@@ -2789,4 +2875,26 @@ async function getBankHolidayJson() {
   }
 
   return bankHolidaysCache;
+}
+
+async function getPlayerToken(playerName) {
+  var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+  var aliasesData = aliasesDoc.data();
+  var token;
+  if (aliasesData[playerName]) {
+    token = aliasesData[playerName].token;
+  }
+
+  if (!token) {
+    console.log("No token found so generated new one for player:", playerName)
+    const crypto = require('crypto');
+    function generateToken() {
+      return crypto.randomBytes(32).toString('hex'); // 64-char random string
+    }
+    token = generateToken();
+    // now save the token
+    aliasesData[playerName].token = token;
+    await firestore.collection("ADMIN").doc("_aliases").set(aliasesData); 
+  }
+  return token;
 }

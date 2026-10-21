@@ -74,16 +74,16 @@ if (typeof module != "undefined") {
 
   // returns a string of the date in format YYYY-MM-DD
   function getStandardReverseDateFormat(thisDate) {    
-    var dayString = "" + exactDate.getDate();
-    //var dayString = exactDate.getDate().toString();
-    if (dayString.length == 1) { dayString = "0" + dayString; }
-    //dayString.padStart(2, "0"); // pad single digit (e.g. 5) with a leading zero (05)
-    var monthString = "" + (exactDate.getMonth()+1);
-    if (monthString.length == 1) { monthString = "0" + monthString; }
-    
-    var exactDateString = exactDate.getFullYear() + "-" + monthString + "-" + dayString;
-    return exactDateString;
+    // generate new name to include the timestamp
+    var gameDate = new Date(thisDate);
+    var monthDateNumericFormat = new Intl.DateTimeFormat('en', { month: '2-digit' });
+    var gameMonth = monthDateNumericFormat.format(gameDate);
+    var gameYear = gameDate.getFullYear();
+    var gameDay = (gameDate.getDate() < 10) ? "0" + gameDate.getDate() : gameDate.getDate();
+    var dateString = gameYear + "-" + gameMonth + "-" + gameDay;
+    return dateString;
   }
+
 
   // get exact Monday date for a given month (2024-07-01) and index (3 = fourth Monday)
   function getExactDateFromMonthAndIndex(monthDate, mondayIndex) {
@@ -602,19 +602,22 @@ function generateStandbyPlayers(sortedPlayers, sortedPlayerNamesThisWeek, forceP
     let totalRed = 0;
     let totalBlue = 0;
 
+    var maxPerTeam = Math.floor(sortedPlayers.length/2);
+
     for (const player of sortedPlayers) {
       var totalPlayerCount = redPlayers.length + bluePlayers.length;
       if (!standbyPlayers.includes(player)) {
         if (totalPlayerCount < 12) {
           // Choose the team with the lower total GPG so far
-          if (redPlayers.length < 6 && (totalRed <= totalBlue || bluePlayers.length >= 6)) {
+          if (redPlayers.length < 6 && 
+            (bluePlayers.length == maxPerTeam || totalRed <= totalBlue || bluePlayers.length >= 6)) {
             redPlayers.push(player);
             totalRed += Number(playersGamesPlayedRatio[player].algorithm6ratio);
-            //console.log("Team A", player, totalRed);
+            //console.log("Team A", player, totalRed, forceNextColour);
           } else {
             bluePlayers.push(player);
             totalBlue += Number(playersGamesPlayedRatio[player].algorithm6ratio);
-            //console.log("Team B", player, totalBlue);
+            //console.log("Team B", player, totalBlue, forceNextColour);
           }
         } else {
           standbyPlayers.push(player);
@@ -809,6 +812,7 @@ function parsePaypalEmail(bodyText) {
   var transactionId;
   var transactionDate;
   var amount;
+  var note = "";
   // replace any tabs with newlines and loop through each line
   bodyTextArray = bodyText.replace(/\t/g,'\n').split('\n');
   for (i=0; i<bodyTextArray.length; i++) {
@@ -829,10 +833,13 @@ function parsePaypalEmail(bodyText) {
       } else if (thisString.match("GBP")) {
         // get only the numbers in the string
         amount = Number(thisString.replace(/[^0-9.]/g, ''));
+      } else if (thisString.match(/Note from/)) {
+        // get whole value of this line
+        note = thisString;
       }
     }
   }
-  var parsedData = { "payeeName": payeeName, "amountFromPayee": amountFromPayee, "transactionId": transactionId, "transactionDate": transactionDate, "amount": amount};
+  var parsedData = { "payeeName": payeeName, "amountFromPayee": amountFromPayee, "transactionId": transactionId, "transactionDate": transactionDate, "amount": amount, "note": note};
   //console.log("Parsed paypal email:", parsedData);
   return parsedData;
 }
@@ -1059,7 +1066,8 @@ function checkNotProto(key) {
   return true;
 }
 
-function addPaymentsTableRows(paymentsMap, showEditTotals = true, showExpandableWeekCharges = false, document, divElement) {
+function addPaymentsTableRows(paymentsMap, showEditTotals = true, showExpandableWeekCharges = false
+  , document, divElement, combinePayments = "") {
   var overallGamesTotal = 0;
   var overallOwesTotal = 0;
   var overallPaidTotal = 0;
@@ -1089,7 +1097,30 @@ function addPaymentsTableRows(paymentsMap, showEditTotals = true, showExpandable
   //tdPaidHeader.appendChild(document.createTextNode("Paid (£)"));
   panelcontentouter.appendChild(tbl);
 
+  //console.log("PP combinePayments", combinePayments)
+  //console.log("PP paymentsMap", paymentsMap)
+  var combinePaymentsArray = combinePayments.split(',');
+  var combinePaymentsMap = {};
+  for (let i = 0; i < combinePaymentsArray.length; i++) {
+    var name1 = combinePaymentsArray[i].split('=')[0];
+    var name2 = combinePaymentsArray[i].split('=')[1];
+    combinePaymentsMap[name1] = name2;
+  }
+
+  var alreadyProcessed = [];
   Object.keys(paymentsMap).forEach(function(playerName) {
+    //console.log("A", playerName);
+    if (combinePaymentsMap[playerName]) {
+      var includePlayerName = combinePaymentsMap[playerName];
+      //console.log("PLPLPL", playerName, includePlayerName);
+      var player2amountOwed = paymentsMap[playerName]["amountOwed"];
+      var player2amountPaid = paymentsMap[playerName]["amountPaid"];
+      var player2outstandingBalance = paymentsMap[playerName]["outstandingBalance"];
+      alreadyProcessed.push(includePlayerName);
+    }
+
+
+
     // create new row for table
     var numberOfGames = paymentsMap[playerName]["numberOfGames"];
     if (numberOfGames > 0) {

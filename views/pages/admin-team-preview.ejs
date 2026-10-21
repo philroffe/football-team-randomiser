@@ -329,11 +329,13 @@
 
       function updatePlayerChoice() {
         var algorithmUnit = ALGORITHM_UNITS[algorithmType]; // constant from generateTeamUtils
+        var gameWeekDate = new Date(gameWeek);
         currentState = {};
         currentState.redPlayers = [];
         currentState.bluePlayers = [];
         currentState.standbyPlayers = [];
-        currentState.gameWeek = new Date(gameWeek).toLocaleDateString('en-GB', localeDateOptions);
+        currentState.gameWeek = gameWeekDate.toLocaleDateString('en-GB', localeDateOptions);
+        currentState.gameDate = getStandardReverseDateFormat(gameWeekDate);
         currentState.status = "Saved";
         currentState.ratios = { "algorithmUnit": algorithmUnit, "redRatioTotal": 0, "blueRatioTotal": 0 };
         // clone all players list to use for validation

@@ -25,8 +25,13 @@ elif [ "$OPTION" = "test" ] ; then
   . .env-local
   npm run test
   exit 0
+elif [ "$OPTION" = "deploy" ] ; then
+  . .env-local
+  gcloud artifacts repositories delete gae-standard --location=europe-west2
+  gcloud app deploy .app-prod.yaml --no-cache
+  exit 0
 else
-  echo "Command Options: [start|stop|backup|restore|test]"
+  echo "Command Options: [start|stop|backup|restore|test|deploy]"
   echo "Running 'start' (default)"
 fi
 

@@ -133,11 +133,11 @@
       var panelcontentouter = document.getElementById("paymentsEntryDiv");
       if (Object.keys(outstandingPaymentsMap).length > 0) {
         panelcontentouter.appendChild(document.createTextNode("Outstanding Balances:"));
-        addPaymentsTableRows(outstandingPaymentsMap, false, true, document, panelcontentouter);
+        addPaymentsTableRows(outstandingPaymentsMap, false, true, document, panelcontentouter, combinePayments);
         panelcontentouter.appendChild(document.createElement("br"));
       }
       panelcontentouter.appendChild(document.createTextNode("This Month:"));
-      addPaymentsTableRows(outstandingPaymentsThisMonthMap, true, true, document, panelcontentouter);
+      addPaymentsTableRows(outstandingPaymentsThisMonthMap, true, true, document, panelcontentouter, combinePayments);
 }
 
 function togglePaymentVisbility(e) {

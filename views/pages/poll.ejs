@@ -188,8 +188,12 @@
     if (!paydetailsMap) { paydetailsMap = {}; }
     var outstandingPaymentsMap = pagedata.data.outstandingPayments;
     if (!outstandingPaymentsMap) { outstandingPaymentsMap = {}; }
-    var playersPreviewData = pagedata.data.playersPreviewData;
-    if (!playersPreviewData) { playersPreviewData = {}; }
+    var playersPreviewDataHistoric = pagedata.data.playersPreviewDataHistoric;
+    if (!playersPreviewDataHistoric) { playersPreviewDataHistoric = {}; }
+    var combinePayments = pagedata.data.combinePayments;
+    if (!combinePayments) { combinePayments = ""; }
+
+    console.log("combinePayments", combinePayments);
     /*
     console.log("players", players);
     console.log("attendanceMap", attendanceMap);
@@ -876,7 +880,11 @@ function addPlayerListToTab(tabName) {
     document.getElementById("closeMonthGeneratePaymentsButton").disabled = true;
     document.getElementById("closeMonthGeneratePaymentsButton").setAttribute("weekNumber", weekNumber);
     // make the copy-from-preview button available if the preview dates match the current editing week
-    if (playersPreviewData.gameWeek) {
+    var gameDateString = ("" + mondaysDates[weekNumber]).padStart(2, '0');
+    var gameWeek = pagedata.data.gameid.replace(/01$/, "") + gameDateString;
+    //console.log("Looking up playersPreviewData for gameWeek:", gameWeek);
+    var playersPreviewData = playersPreviewDataHistoric[gameWeek];
+    if (playersPreviewData && playersPreviewData.gameWeek) {
       var previewGameWeekDate = playersPreviewData.gameWeek.split(" ")[1];
       if (mondaysDates[weekNumber] == previewGameWeekDate) {
         document.getElementById("copyAttendanceFromPreviewButton").innerHTML = "Copy from Preview - " + playersPreviewData.gameWeek;
@@ -960,15 +968,19 @@ function addPlayerListToTab(tabName) {
 
     function copyAttendanceFromPreview() {
       //console.log("playerNameIdMap", playerNameIdMap)
-      //console.log("red players", playersPreviewData.redPlayers);
-      //console.log("blue players", playersPreviewData.bluePlayers);
-
       var attendancePlayerNameIdMap = playerNameIdMap[ATTENDANCE];
 
       // check which weekEdit button is active
       for (var weekNumber = 0; weekNumber < mondaysDates.length; weekNumber ++) {
         var weekEditButton = document.getElementById("week" + weekNumber + "Edit" + ATTENDANCE); 
         if (weekEditButton.getAttribute("toggleStatus") == "save") {
+          // get the playersPreviewData for this week
+          var gameDateString = ("" + mondaysDates[weekNumber]).padStart(2, '0');
+          var gameWeek = pagedata.data.gameid.replace(/01$/, "") + gameDateString;
+          //console.log("Looking up playersPreviewData for gameWeek:", gameWeek);
+          var playersPreviewData = playersPreviewDataHistoric[gameWeek];
+          //console.log("red players", playersPreviewData.redPlayers);
+          //console.log("blue players", playersPreviewData.bluePlayers);
 
           for (var j = 0; j < playersPreviewData.redPlayers.length; j ++) {
             var playerName = playersPreviewData.redPlayers[j];

@@ -61,6 +61,7 @@
         <br><input type="text" id="payeeAmount" placeholder="Amount" data-lpignore=true>
         <br><input type="text" id="payeeTransactionId" placeholder="Transaction ID" data-lpignore=true>
         <br><input type="text" id="payeeTransactionDate" placeholder="Transaction Date (YYYY-MM-DD)" data-lpignore=true>
+        <input type="hidden" id="paypalEmailParsedData" name="paypalEmailParsedData" value="" />
         <!-- Buttons -->
         <br><button id="addManualPaymentButton" style="background-color: #90EE90;float:left;" type="button" onclick="addManualPayment();">Add</button>
         <button id="refundPaymentButton" style="background-color: #90EE90;float:left;" type="button" onclick="refundPayment();">Refund</button>
@@ -529,6 +530,8 @@
       document.getElementById("payeeAmount").value = amount;
       document.getElementById("payeeTransactionId").value = transactionId;
       document.getElementById("payeeTransactionDate").value = transactionDate;
+      document.getElementById("paypalEmailParsedData").value = data;
+      //console.log("dddd=", data)
 
       var subscribeType = document.getElementsByName("transactionType")[0];
       if (transactionType == "PAYMENT") {
@@ -546,6 +549,7 @@
       details.amount = document.getElementById("payeeAmount").value.trim();
       details.transactionId = document.getElementById("payeeTransactionId").value.trim();
       details.transactionDate = document.getElementById("payeeTransactionDate").value.trim();
+      details.paypalEmailParsedData = document.getElementById("paypalEmailParsedData").value;
 
       // now send the POST request with the data
       var xmlhttp = new XMLHttpRequest();
@@ -556,7 +560,7 @@
           document.getElementById("response").innerHTML = "Success!";
           //document.getElementById("submit").disabled = true;
         } else if (this.readyState == 4) {
-          document.getElementById("response").innerHTML = "Error!  Something went wrong - check logs to see why it failed";
+          document.getElementById("response").innerHTML = "Error: " + this.responseText;
         }
       };
       xmlhttp.open("POST", "/services/payment-manual");
@@ -665,6 +669,8 @@
       document.getElementById("payeeAmount").value = parsedData.amount;
       document.getElementById("payeeTransactionId").value = parsedData.transactionId;
       document.getElementById("payeeTransactionDate").value = parsedData.transactionDate;
+      document.getElementById("paypalEmailParsedData").value = JSON.stringify(parsedData);
+      console.log("dddd=", JSON.stringify(parsedData))
     }
     
 
