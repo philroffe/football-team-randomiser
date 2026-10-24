@@ -895,35 +895,35 @@ app.use('/', authRouter)
       var emailDetails = { "parsed_status": "NEW", "type": docNamePrefix, "parsedData": parsedData, "data": body}
       const docRef = firestore.collection("INBOUND_EMAILS").doc(docNamePrefix + "_" + new Date().toISOString());
       docRef.set(emailDetails);
+    });
 
-      ////////////////////////////
-      // Now that the email has been saved, auto process the payment if the amount is the same as what is owed
-      var payeeName = parsedData.payeeName;
-      var payeeAmount = parsedData.amount;
-      // read the list of players and aliases
-      var playerAliasMaps = await getDefinedPlayerAliasMaps();
-      var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
-      var officialPlayerName = teamUtils.getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
+    ////////////////////////////
+    // Now that the email has been saved, auto process the payment if the amount is the same as what is owed
+    var payeeName = parsedData.payeeName;
+    var payeeAmount = parsedData.amount;
+    // read the list of players and aliases
+    var playerAliasMaps = await getDefinedPlayerAliasMaps();
+    var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+    var officialPlayerName = teamUtils.getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
 
-      // check the total amount owed
-      if (officialPlayerName) {
-        var totalOwes = 0;
-        const playerOpenLedgerDocRef = firestore.collection("OPEN_LEDGER").doc(officialPlayerName);
-        var playerLedgerDoc = await playerOpenLedgerDocRef.get();
-        if (playerLedgerDoc.data()) {
-          var playerLedgerData = playerLedgerDoc.data();
-          if (Object.keys(playerLedgerData).length > 0) {
-            Object.keys(playerLedgerData).sort().forEach( async function(transactionName) {
-              if (transactionName.startsWith("charge_")) {
-                totalOwes += playerLedgerData[transactionName].amount;
-              }
-            });
-          }
+    // check the total amount owed
+    if (officialPlayerName) {
+      var totalOwes = 0;
+      const playerOpenLedgerDocRef = firestore.collection("OPEN_LEDGER").doc(officialPlayerName);
+      var playerLedgerDoc = await playerOpenLedgerDocRef.get();
+      if (playerLedgerDoc.data()) {
+        var playerLedgerData = playerLedgerDoc.data();
+        if (Object.keys(playerLedgerData).length > 0) {
+          Object.keys(playerLedgerData).sort().forEach( async function(transactionName) {
+            if (transactionName.startsWith("charge_")) {
+              totalOwes += playerLedgerData[transactionName].amount;
+            }
+          });
         }
-        // now mark off the games for that payment if the amount paid equals the amount owned
-        if (totalOwes == payeeAmount) {
-          receivePaymentEmail(officialPlayerName, parsedData.amount, parsedData.transactionId, parsedData.transactionDate);
-        }
+      }
+      // now mark off the games for that payment if the amount paid equals the amount owned
+      if (totalOwes == payeeAmount) {
+        receivePaymentEmail(officialPlayerName, parsedData.amount, parsedData.transactionId, parsedData.transactionDate);
       }
     }
     res.json({'result': 'OK'});
