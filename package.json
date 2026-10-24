@@ -50,5 +50,9 @@
     "heroku",
     "express"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "allowScripts": {
+    "protobufjs@7.6.6": true,
+    "unrs-resolver@1.12.2": true
+  }
 }
