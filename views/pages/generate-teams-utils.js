@@ -809,7 +809,7 @@ function parsePaypalEmail(bodyText) {
   // now loop through and extract the relevant text
   var payeeName;
   var amountFromPayee;
-  var transactionId;
+  var transactionId = "";
   var transactionDate;
   var amount;
   var note = "";

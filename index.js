@@ -471,50 +471,11 @@ app.use('/', authRouter)
         console.log('Charge...:', payeeName, transactionDate);
     }
 
+        console.log('returnStatus.status...:', returnStatus.status, returnStatus);
     if (returnStatus.status) {
-      //send email to player
-      //var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
-      //var aliasesData = aliasesDoc.data();
-      // read the list of players and aliases
-      var playerAliasMaps = await getDefinedPlayerAliasMaps();
-      var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
-      var playerEmailMaps = await getDefinedPlayerEmailMaps();
-      var playerToEmailMap = playerEmailMaps["playerToEmailMap"];
-
-      // now send the email
-      //var playerName = payeeName;
-      var playerName = teamUtils.getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
-      var email = playerToEmailMap[playerName]; 
-      var token = await getPlayerToken(playerName);
-      if (email && playerName) {
-        var emailSubject = "Payment Received [Footie, Goodwin, 6pm Mondays]";
-        var paymentHistoryLink = "https://tensile-spirit-360708.nw.r.appspot.com/payment-history?token=" + token;
-        var emailBody = "Hi " + playerName + ",";
-          emailBody += "<br><br>Your footie payment has been processed - thanks.";
-          if (paypalEmailParsedData.amount && paypalEmailParsedData.transactionId == transactionId) {
-            // came from paypal so add original amount
-            emailBody += "<br><br>Original Amount recieved: £" + paypalEmailParsedData.amount;
-          }
-          emailBody += "<br><br>Amount processed: £" + amount;
-          emailBody += "<br>Transaction ID: " + transactionId;
-          emailBody += "<br>Transaction Date: " + transactionDate.toLocaleDateString("en-GB");
-          emailBody += "<br><br>Games:<br>" + returnStatus.gameList.toString().replaceAll(",", " (paid)<br>") + " (paid)";
-          emailBody += "<br><br>To see all of your charges and payments history:<br>" + paymentHistoryLink + "<br>";
-          emailBody += "<br>Cheers,<br>Phil"
-          /////////////TODO//////////////////
-          //// Works. I've changed receivePaymentEmail() to return a map with status etc, need to do the same for other methods (refund, admin-charges etc)
-          ///////////////////////////////////
-          // BK14 HJF
-        var mailOptions = {
-          from: GOOGLE_MAIL_FROM_NAME,
-          to: email,
-          subject: emailSubject,
-          html: emailBody
-        };
-        // now send the email
-        var emailResult = teamUtils.sendEmailToList(mailOptions, req.hostname);
-      }
-
+      var transactionData = { "payeeName": payeeName, "amount": amount, "transactionType": transactionType
+        , "transactionId": transactionId, "transactionDate": transactionDate, "returnStatus": returnStatus };
+      sendPaymentEmailReceipt(payeeName, transactionData, paypalEmailParsedData);
       res.json({'result': 'OK'})
     } else {
       console.error("ERROR: Failed to save manual payment - discarding...\n" + JSON.stringify(req.body));
@@ -868,14 +829,25 @@ app.use('/', authRouter)
   console.log('GOT /_ah/mail/payment@... PAYMENT POST FROM EMAIL:', ip, req.body);
   try {
     var body;
-    var streamData = "";
+    var parsedData = {};
+    //var streamData = "";
+    /*
     await req.on('readable', function() {
       streamData += req.read();
     });
     req.on('end', function() {
+      */
+      // Wait until the entire request body has been received.
+      const chunks = [];
+
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+
+      const streamData = Buffer.concat(chunks).toString('utf8');
+
       // done so convert from quoted-printable mime type
       body = mimelib.decodeQuotedPrintable(streamData);
-      var parsedData = {};
       // store the data for future processing
       var docNamePrefix = "PAYMENT_ERROR_EMAIL";
       if (body.includes("no-reply@sheffield.ac.uk")) {
@@ -888,6 +860,7 @@ app.use('/', authRouter)
           const text = convert(body, options);
           //console.log("Plain Text", text);
           parsedData = teamUtils.parsePaypalEmail(text);
+          console.log("parsedData", parsedData);
         } catch (err) {
           // do nothing
         }
@@ -895,16 +868,18 @@ app.use('/', authRouter)
       var emailDetails = { "parsed_status": "NEW", "type": docNamePrefix, "parsedData": parsedData, "data": body}
       const docRef = firestore.collection("INBOUND_EMAILS").doc(docNamePrefix + "_" + new Date().toISOString());
       docRef.set(emailDetails);
-    });
+    //});
 
     ////////////////////////////
     // Now that the email has been saved, auto process the payment if the amount is the same as what is owed
-    var payeeName = parsedData.payeeName;
+
+    console.log("parsedData 2", parsedData);
+    var payeeNameParsed = parsedData.payeeName;
     var payeeAmount = parsedData.amount;
     // read the list of players and aliases
     var playerAliasMaps = await getDefinedPlayerAliasMaps();
     var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
-    var officialPlayerName = teamUtils.getOfficialNameFromAlias(cleanName, aliasToPlayerMap);
+    var officialPlayerName = teamUtils.getOfficialNameFromAlias(payeeNameParsed, aliasToPlayerMap);
 
     // check the total amount owed
     if (officialPlayerName) {
@@ -916,14 +891,20 @@ app.use('/', authRouter)
         if (Object.keys(playerLedgerData).length > 0) {
           Object.keys(playerLedgerData).sort().forEach( async function(transactionName) {
             if (transactionName.startsWith("charge_")) {
-              totalOwes += playerLedgerData[transactionName].amount;
+              totalOwes -= playerLedgerData[transactionName].amount;
             }
           });
         }
       }
       // now mark off the games for that payment if the amount paid equals the amount owned
+      console.log("totalOwes", totalOwes, "payeeAmount", payeeAmount);
       if (totalOwes == payeeAmount) {
-        receivePaymentEmail(officialPlayerName, parsedData.amount, parsedData.transactionId, parsedData.transactionDate);
+        var returnStatus = await receivePaymentEmail(officialPlayerName, parsedData.amount, 
+          parsedData.transactionId, parsedData.transactionDate);
+        parsedData.returnStatus = returnStatus;
+        //var transactionData = { "payeeName": payeeName, "amount": amount, "transactionType": transactionType,
+          //"transactionId": transactionId, "transactionDate": transactionDate, "returnStatus": returnStatus };
+        sendPaymentEmailReceipt(officialPlayerName, parsedData, parsedData);
       }
     }
     res.json({'result': 'OK'});
@@ -2927,4 +2908,50 @@ async function getPlayerToken(playerName) {
     await firestore.collection("ADMIN").doc("_aliases").set(aliasesData); 
   }
   return token;
+}
+
+async function sendPaymentEmailReceipt(payeeName, transactionData, paypalEmailParsedData) {
+  console.log("PPP", payeeName, transactionData, paypalEmailParsedData)
+      //send email to player
+      //var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
+      //var aliasesData = aliasesDoc.data();
+      // read the list of players and aliases
+      var playerAliasMaps = await getDefinedPlayerAliasMaps();
+      var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+      var playerEmailMaps = await getDefinedPlayerEmailMaps();
+      var playerToEmailMap = playerEmailMaps["playerToEmailMap"];
+
+      // now send the email
+      //var playerName = payeeName;
+      var playerName = teamUtils.getOfficialNameFromAlias(payeeName, aliasToPlayerMap);
+      var email = playerToEmailMap[playerName]; 
+      var token = await getPlayerToken(playerName);
+      if (email && playerName) {
+        var emailSubject = "Payment Received [Footie, Goodwin, 6pm Mondays]";
+        var paymentHistoryLink = "https://tensile-spirit-360708.nw.r.appspot.com/payment-history?token=" + token;
+        var emailBody = "Hi " + playerName + ",";
+          emailBody += "<br><br>Your footie payment has been processed - thanks.";
+          if (paypalEmailParsedData.amount && paypalEmailParsedData.transactionId == transactionData.transactionId) {
+            // came from paypal so add original amount
+            emailBody += "<br><br>Original Amount recieved: £" + paypalEmailParsedData.amount;
+          }
+          emailBody += "<br><br>Amount processed: £" + transactionData.amount;
+          emailBody += "<br>Transaction ID: " + transactionData.transactionId;
+          emailBody += "<br>Transaction Date: " + transactionData.transactionDate.toLocaleDateString("en-GB");
+          emailBody += "<br><br>Games:<br>" + transactionData.returnStatus.gameList.toString().replaceAll(",", " (paid)<br>") + " (paid)";
+          emailBody += "<br><br>To see all of your charges and payments history:<br>" + paymentHistoryLink + "<br>";
+          emailBody += "<br>Cheers,<br>Phil"
+          /////////////TODO//////////////////
+          //// Works. I've changed receivePaymentEmail() to return a map with status etc, need to do the same for other methods (refund, admin-charges etc)
+          ///////////////////////////////////
+          // BK14 HJF
+        var mailOptions = {
+          from: GOOGLE_MAIL_FROM_NAME,
+          to: email,
+          subject: emailSubject,
+          html: emailBody
+        };
+        // now send the email
+        var emailResult = teamUtils.sendEmailToList(mailOptions, "req.hostname");
+      }
 }
