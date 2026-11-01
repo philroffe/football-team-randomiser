@@ -215,8 +215,8 @@ app.use('/', authRouter)
       }
       var thisDate = gameYear + "-" + gameMonth + "-" + gameDay;
 
-      var playerList = attendanceData[weekNumber].players;
-      if (playerList) {
+      if (attendanceData[weekNumber] && attendanceData[weekNumber].players) {
+        var playerList = attendanceData[weekNumber].players;
         Object.keys(playerList).forEach(await function(playerName) {
           // check a real player (not the scores) and that the player actually played
           if ((playerName != "scores") && (playerList[playerName] > 0)) {
@@ -245,12 +245,18 @@ app.use('/', authRouter)
     }
 
     // delete any GameWeekPreviews from this month
-    const allAdminDocs = await firestore.collection("ADMIN").get();
-    for (const doc in allAdminDocs) {
-      if (doc.id.startsWith("GameWeekPreview_" + gameYear + "-" + gameMonth)) {
-        await firestore.collection("ADMIN").doc(doc.id).delete();
-        console.log("Deleting:", doc.id);
-      }
+    const adminCollection = await firestore.collection("ADMIN");
+    var docArrayToDelete = [];
+    await adminCollection.get().then((querySnapshot) => {
+      querySnapshot.docs.map((doc) => {
+        if (doc.id.startsWith("GameWeekPreview_" + gameYear + "-" + gameMonth)) {
+          docArrayToDelete.push(doc.id);
+        }
+      })
+    })
+    for (i=0; i<docArrayToDelete.length; i++) {
+      //console.log("Deleting:", docArrayToDelete[i]);
+      await firestore.collection("ADMIN").doc(docArrayToDelete[i]).delete();
     }
 
     res.json({'result': 'OK'})
@@ -1363,6 +1369,42 @@ app.use('/', authRouter)
         }
 
         if (teamsUpdateNeeded) {
+          var redRatioTotal = 0;
+          var blueRatioTotal = 0;
+          try {
+            // update team xG and ratios (a bit of a painful way to do it and bad code)
+            var dateRange = 12; // default to 12 months
+            var allAttendanceData = await queryDatabaseAndCalcGamesPlayedRatio(nextMonday, dateRange);
+            // read the list of players and aliases
+            var playerAliasMaps = await getDefinedPlayerAliasMaps();
+            var aliasToPlayerMap = playerAliasMaps["aliasToPlayerMap"];
+            var algorithmType = "algorithm6";
+            var algorithmName = "ParityGPG";
+            var algorithmRange = 12;
+            var nextMondayOptionIndex = 0;
+            var rowdata = await queryDatabaseAndBuildPlayerList(gameId);
+            var players = rowdata.players;
+            var playersGamesPlayedRatio = teamUtils.changeAlgorithmForPlayers(algorithmType, algorithmName, players, playersPreviewData, 
+              allAttendanceData, aliasToPlayerMap, nextMondayOptionIndex, algorithmRange);
+            //console.log("playersGamesPlayedRatio", playersGamesPlayedRatio);
+            for (var i = 0; i < playersPreviewData.redPlayers.length; i ++) {
+              var tmpPlayerName = playersPreviewData.redPlayers[i];
+              var playerRatio = playersGamesPlayedRatio[tmpPlayerName][algorithmType + "ratio"];
+              redRatioTotal += Number(playerRatio);
+              //console.log("RED - Calc Player Ratio", tmpPlayerName, playerRatio, redRatioTotal);
+            }
+            for (var i = 0; i < playersPreviewData.bluePlayers.length; i ++) {
+              var tmpPlayerName = playersPreviewData.bluePlayers[i];
+              var playerRatio = playersGamesPlayedRatio[tmpPlayerName][algorithmType + "ratio"];
+              blueRatioTotal += Number(playerRatio);
+              //console.log("BLUE - Calc Player Ratio", tmpPlayerName, playerRatio, blueRatioTotal);
+            }
+          } catch (err) {
+            // consider the ratios as nice-to-have, so ignore any error and carry on
+          }
+          playersPreviewData.ratios.redRatioTotal = redRatioTotal.toFixed(2);
+          playersPreviewData.ratios.blueRatioTotal = blueRatioTotal.toFixed(2);
+
           // save updated teams
           playersPreviewData.status = "Saved";
           await firestore.collection("ADMIN").doc("GameWeekPreview_" + playersPreviewData.gameDate).set(playersPreviewData);
@@ -2911,7 +2953,7 @@ async function getPlayerToken(playerName) {
 }
 
 async function sendPaymentEmailReceipt(payeeName, transactionData, paypalEmailParsedData) {
-  console.log("PPP", payeeName, transactionData, paypalEmailParsedData)
+  //console.log("PPP", payeeName, transactionData, paypalEmailParsedData)
       //send email to player
       //var aliasesDoc = await firestore.collection("ADMIN").doc("_aliases").get();
       //var aliasesData = aliasesDoc.data();
@@ -2944,7 +2986,6 @@ async function sendPaymentEmailReceipt(payeeName, transactionData, paypalEmailPa
           /////////////TODO//////////////////
           //// Works. I've changed receivePaymentEmail() to return a map with status etc, need to do the same for other methods (refund, admin-charges etc)
           ///////////////////////////////////
-          // BK14 HJF
         var mailOptions = {
           from: GOOGLE_MAIL_FROM_NAME,
           to: email,
