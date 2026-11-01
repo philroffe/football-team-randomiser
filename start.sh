@@ -27,6 +27,7 @@ elif [ "$OPTION" = "test" ] ; then
   exit 0
 elif [ "$OPTION" = "deploy" ] ; then
   . .env-local
+  gcloud app versions list --format="value(version.id)" --sort-by="~version.createTime" | tail -n +3 | xargs -r gcloud app versions delete
   gcloud artifacts repositories delete gae-standard --location=europe-west2
   gcloud app deploy .app-prod.yaml --no-cache
   exit 0
